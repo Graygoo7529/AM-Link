@@ -14,10 +14,10 @@
 - 相同 `user_id + request_id` 和相同请求体可安全重试，不重复写入；不同请求体复用同一 ID 返回 HTTP 409；
 - 支持 `Authorization: Token`、`Authorization: Bearer`、`X-Api-Key` 和本地无鉴权模式；
 - SQLite/WAL 为事务真源，`Memory.md` 与 daily Markdown 是可重建投影。
-- Add 增强模式先用 lexical/embedding 召回相关旧节点和 links，再由 `gpt-4o-mini` 生成严格 schema 的 fact proposal，并在同用户事务内应用 entity/concept/fact、typed links、supersede/tombstone 和有效期；
-- Search 增强模式先初召回，再让一次 `gpt-4o-mini` 调用同时生成查询计划和候选 ID 偏好，不生成答案；随后融合 FTS、`embedding-3`、逐种子两跳 links 和节点质量特征；
+- Add 增强模式先用 lexical/embedding 召回相关旧节点和 links，再由 `gpt-4o-mini` 生成严格 schema 的 fact proposal；模型只能 supersede/tombstone 本轮已召回的同用户稳定 ID，并在事务内应用 entity/concept/fact、typed links 和有效期；
+- Search 增强模式先初召回并执行一次有界一跳 link inspect，再让一次 `gpt-4o-mini` 调用同时生成查询计划和候选 ID 偏好，不生成答案；随后用扩展查询重做语义召回并融合 FTS、`embedding-3`、links 和节点质量特征；
 - 结构化节点使用 `canonical_key` 复用同一事实，Search 按 `evidence_group_id` 去重；中文查询补充连续词和二元/三元片段，planner 不可用时仍可确定性识别当前/历史查询；
-- Search 图扩展保留最多两跳的 `GraphPath`、关系和 source event 覆盖，并按路径质量参与重排；同源 fact/entity/concept 只占一个结构化结果位置，同时保留直接 raw 证据；
+- Search 图扩展保留 `GraphPath`、关系和 source event 覆盖，并按路径质量参与重排；普通查询最多两跳，明确 multi-hop 查询最多三跳，以覆盖 `raw -> fact -> entity/concept -> related fact`；同源 fact/entity/concept 只占一个结构化结果位置，同时保留直接 raw 证据；
 - 英文问句检索会过滤高置信模板词和助动词，减少 `what/did/the` 对 FTS、LIKE 和相关性分数的干扰；
 - 消息中的明确日期、相对日、上下周星期和上下月会在有 source timestamp 时解析为保守日期范围，Search 可按该范围召回证据；无锚点时只保留原始时间表达；
 - `AML_ENRICHMENT_MODE=sync` 是默认模式；设为 `async` 时 Add 只等待 raw/FTS 硬提交，持久化 worker 后台执行 maintenance/embedding，进程重启后可继续消费 pending/failed job；
@@ -25,6 +25,7 @@
 - 提供 `python -m aml_memory.locomo` 转换器，可将 LoCoMo 原始 JSON 转为受控的 20-message Add/Search 回放 manifest；LoCoMo 自评记录见 [docs/LoCoMo回放.md](docs/LoCoMo回放.md)。
 - raw、结构化节点、FTS、向量和图查询均显式限制 `user_id`；同用户 Add 全流程串行，不同用户可以并行；
 - 模型或 embedding 故障时返回 raw/lexical 证据，错误日志只记录用户哈希、请求 ID 和错误类型。
+- maintenance JSON 首次 schema 不合法时只允许一次同模型修复重试，反馈仅含字段路径和错误类型；越界 mutation、HTTP/provider 错误和第二次非法响应继续按既有降级语义处理。
 
 默认关闭外部模型，适合协议 Smoke 和故障降级；正式 Full 配置必须设置 `AML_LLM_ENABLED=true`，确保 Add/Search 都实际调用固定的 `gpt-4o-mini`。增强链路已经实现，但在公开评测回放、64/32 并发压测和官方 Smoke 完成前，仍不应视为最终校准版本。
 
@@ -54,7 +55,7 @@ $env:ZHIPU_API_KEY = "set-in-your-shell-or-secret-manager"
 ## Docker 启动
 
 ```powershell
-docker build -t aml-memory:0.1.0 .
+docker build -t aml-memory:0.2.0 .
 docker run --rm -p 8080:8080 -v aml-memory-data:/data `
   -e AML_AUTH_SCHEME=bearer `
   -e AML_API_KEY=replace-with-a-long-random-key `
@@ -63,7 +64,7 @@ docker run --rm -p 8080:8080 -v aml-memory-data:/data `
   -e OPENAI_API_KEY=replace-at-runtime `
   -e AML_EMBEDDING_ENABLED=true `
   -e ZHIPU_API_KEY=replace-at-runtime `
-  aml-memory:0.1.0
+  aml-memory:0.2.0
 ```
 
 镜像使用单个 Uvicorn worker。SQLite 和 Markdown 投影依赖共享本地卷，不能直接横向扩为多个无状态实例；需要横向扩容时应先按设计文档迁移到 PostgreSQL/共享索引。
@@ -149,7 +150,7 @@ Search 返回证据而不是最终答案：
 .\.venv\Scripts\python -m pytest
 ```
 
-45 项测试覆盖协议响应、Add 后立即 Search、幂等冲突、用户隔离、三种鉴权、相关 maintenance context、结构化维护、失败重试、版本/tombstone、跨用户 mutation 拒绝、候选级 query plan、两跳图扩展、GraphPath 路径传播、向量融合、canonical/evidence 去重、source-event 结构折叠、旧库字段迁移、中文检索、英文问句停用词、时间表达和 temporal Search、planner-free 历史状态过滤、sync/async enrichment、maintenance 阈值批处理、过期失败任务保护、批量失败重试 watermark 推进、deadline 降级、回放指标、LoCoMo 转换、session 切片与脏 evidence 规范化、索引重建、30 天清理、调试模型保护、提供方协议和故障降级。
+52 项测试覆盖协议响应、Add 后立即 Search、幂等冲突、用户隔离、三种鉴权、相关 maintenance context、检索约束 mutation、结构化维护、schema 修复边界、失败重试、版本/tombstone、跨用户 mutation 拒绝、inspect-first query plan、两/三跳图扩展、GraphPath 路径传播、扩展向量查询及降级、canonical/evidence 去重、source-event 结构折叠、旧库字段迁移、中文检索、英文问句停用词、时间表达和 temporal Search、planner-free 历史状态过滤、sync/async enrichment、maintenance 阈值批处理、过期失败任务保护、批量失败重试 watermark 推进、deadline 降级、回放指标、LoCoMo 转换、session 切片与脏 evidence 规范化、索引重建、30 天清理、调试模型保护、提供方协议和故障降级。
 
 需要更换 embedding 维度或修复索引时，可在服务停止写入后执行全量或单用户重建。新向量全部计算成功后才会在事务中替换旧索引：
 

@@ -458,17 +458,64 @@ class MemoryService:
             if query_temporal
             else []
         )
-        initial_by_id = {
+        initial_by_id: dict[str, SearchResult] = {
             item.id: item
             for item in [*initial_lexical, *initial_semantic, *initial_temporal]
         }
+        direct_candidates = list(initial_by_id.values())
+        inspect_seed_ids = list(
+            dict.fromkeys(
+                [item.id for item in initial_lexical[:12]]
+                + [item.id for item in initial_semantic[:12]]
+                + [item.id for item in initial_temporal[:12]]
+            )
+        )[:20]
+        initial_inspect_paths = (
+            self.repository.expand_link_paths(
+                user_id=request.user_id,
+                seed_ids=inspect_seed_ids,
+                limit=min(40, candidate_limit),
+                max_hops=1,
+                fanout_per_seed=4,
+                include_superseded=initial_include_superseded,
+                query_text=" ".join([request.query, *(request.options or [])]),
+            )
+            if planner_enabled and inspect_seed_ids and time.monotonic() < deadline
+            else []
+        )
+        linked_candidates: list[SearchResult] = []
+        for path in initial_inspect_paths:
+            if path.result.id not in initial_by_id:
+                initial_by_id[path.result.id] = path.result
+                linked_candidates.append(path.result)
+        planner_pool = [
+            *direct_candidates[:30],
+            *linked_candidates[:10],
+            *direct_candidates[30:],
+        ][:40]
+        planner_features = (
+            self.repository.get_ranking_features(
+                request.user_id, [item.id for item in planner_pool]
+            )
+            if planner_enabled
+            else {}
+        )
+        linked_ids = {item.id for item in linked_candidates}
         planner_candidates = [
             {
                 "id": item.id,
                 "content": item.content[:800],
                 "created_at": item.created_at,
+                "kind": (
+                    planner_features[item.id].kind
+                    if item.id in planner_features
+                    else None
+                ),
+                "retrieval_source": (
+                    "link_inspect" if item.id in linked_ids else "direct"
+                ),
             }
-            for item in list(initial_by_id.values())[:40]
+            for item in planner_pool
         ]
         extra_terms: tuple[str, ...] = ()
         include_superseded = detected_intent in {"historical", "temporal"}
@@ -518,15 +565,22 @@ class MemoryService:
             )
 
         semantic = initial_semantic
-        if (
-            query_vector is not None
-            and include_superseded != initial_include_superseded
-            and time.monotonic() < deadline
-        ):
+        if query_vector is not None and (
+            extra_terms or include_superseded != initial_include_superseded
+        ) and time.monotonic() < deadline:
             try:
+                semantic_query_vector = query_vector
+                if extra_terms:
+                    expanded_query = "\n".join(
+                        [request.query, *(request.options or []), *extra_terms]
+                    )[:2400]
+                    self._increment_metric("embedding_search_calls")
+                    semantic_query_vector = self.embedding_provider.embed(
+                        [expanded_query]
+                    )[0]
                 semantic = self.repository.semantic_search(
                     user_id=request.user_id,
-                    query_vector=query_vector,
+                    query_vector=semantic_query_vector,
                     model=self.embedding_provider.model,
                     dimensions=self.embedding_provider.dimensions,
                     limit=candidate_limit,
@@ -548,16 +602,19 @@ class MemoryService:
             )
         seed_ids = list(
             dict.fromkeys(
-                [item.id for item in lexical[:20]]
+                [*preferred_ids]
+                + [item.id for item in lexical[:20]]
                 + [item.id for item in semantic[:20]]
                 + [item.id for item in temporal[:20]]
             )
-        )
+        )[:20]
         graph_paths = (
             self.repository.expand_link_paths(
                 user_id=request.user_id,
                 seed_ids=seed_ids,
                 limit=candidate_limit,
+                max_hops=3 if intent == "multi_hop" else 2,
+                fanout_per_seed=6 if intent == "multi_hop" else 8,
                 include_superseded=include_superseded,
                 query_text=" ".join(
                     [request.query, *(request.options or []), *extra_terms]

@@ -1,16 +1,24 @@
 from __future__ import annotations
 
+import json
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from .providers import JsonModelProvider
 from .repository import EventRecord, LinkRecord, NodeRecord
 from .temporal import extract_temporal_hint
 
 
-MAINTENANCE_PROMPT_VERSION = "maintenance-v1"
-SEARCH_PLAN_PROMPT_VERSION = "search-plan-v1"
+MAINTENANCE_PROMPT_VERSION = "maintenance-v2"
+SEARCH_PLAN_PROMPT_VERSION = "search-plan-v2"
 
 
 class GeneratedModel(BaseModel):
@@ -30,6 +38,30 @@ class FactProposal(GeneratedModel):
     valid_to: str | None = Field(default=None, max_length=80)
     confidence: float = Field(default=0.8, ge=0, le=1)
     supersedes_memory_ids: list[str] = Field(default_factory=list, max_length=20)
+
+    @model_validator(mode="before")
+    @classmethod
+    def remove_empty_misplaced_plan_field(cls, value: object) -> object:
+        if not isinstance(value, dict) or "tombstone_memory_ids" not in value:
+            return value
+        misplaced = value["tombstone_memory_ids"]
+        if misplaced not in (None, []):
+            return value
+        normalized = dict(value)
+        normalized.pop("tombstone_memory_ids")
+        return normalized
+
+    @field_validator(
+        "entities", "concepts", "supersedes_memory_ids", mode="before"
+    )
+    @classmethod
+    def normalize_optional_lists(cls, value: object) -> object:
+        return [] if value is None else value
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def normalize_optional_confidence(cls, value: object) -> object:
+        return 0.8 if value is None else value
 
     @field_validator("source_ordinals")
     @classmethod
@@ -65,6 +97,11 @@ class MaintenancePlan(GeneratedModel):
     facts: list[FactProposal] = Field(default_factory=list, max_length=20)
     tombstone_memory_ids: list[str] = Field(default_factory=list, max_length=20)
 
+    @field_validator("facts", "tombstone_memory_ids", mode="before")
+    @classmethod
+    def normalize_optional_lists(cls, value: object) -> object:
+        return [] if value is None else value
+
     @field_validator("tombstone_memory_ids")
     @classmethod
     def validate_tombstone_ids(cls, value: list[str]) -> list[str]:
@@ -80,6 +117,23 @@ class SearchPlan(GeneratedModel):
     intent: Literal["current", "historical", "temporal", "multi_hop", "general"] = (
         "general"
     )
+
+    @field_validator(
+        "retrieval_queries",
+        "keywords",
+        "entity_names",
+        "time_hints",
+        "preferred_memory_ids",
+        mode="before",
+    )
+    @classmethod
+    def normalize_optional_lists(cls, value: object) -> object:
+        return [] if value is None else value
+
+    @field_validator("intent", mode="before")
+    @classmethod
+    def normalize_optional_intent(cls, value: object) -> object:
+        return "general" if value is None else value
 
     @field_validator("retrieval_queries")
     @classmethod
@@ -114,16 +168,23 @@ class MemoryMaintainer:
             "prompt_version": MAINTENANCE_PROMPT_VERSION,
             "new_events": [_event_payload(event) for event in events],
             "working_memory": working_memory,
+            "mutable_memory_ids": [node.memory_id for node in context],
             "existing_memories": [
                 {
                     "memory_id": node.memory_id,
                     "kind": node.kind,
                     "title": node.title,
                     "content": node.content[:1200],
+                    "canonical_key": node.canonical_key,
+                    "evidence_group_id": node.evidence_group_id,
                     "event_time": node.event_time,
                     "valid_from": node.valid_from,
                     "valid_to": node.valid_to,
+                    "confidence": node.confidence,
+                    "activity": node.activity,
                     "status": node.status,
+                    "version": node.version,
+                    "source_event_ids": _source_event_ids(node.source_event_ids),
                 }
                 for node in context
             ],
@@ -141,7 +202,23 @@ class MemoryMaintainer:
             system_prompt=_MAINTENANCE_SYSTEM_PROMPT,
             payload=payload,
         )
-        return MaintenancePlan.model_validate(response)
+        try:
+            plan = MaintenancePlan.model_validate(response)
+        except ValidationError as error:
+            retry_payload = {
+                **payload,
+                "schema_retry": {
+                    "attempt": 2,
+                    "validation_errors": _validation_feedback(error),
+                },
+            }
+            response = self.provider.generate_json(
+                system_prompt=_MAINTENANCE_SYSTEM_PROMPT,
+                payload=retry_payload,
+            )
+            plan = MaintenancePlan.model_validate(response)
+        _validate_maintenance_scope(plan, context)
+        return plan
 
 
 class QueryPlanner:
@@ -173,7 +250,12 @@ class QueryPlanner:
 _MAINTENANCE_SYSTEM_PROMPT = """You maintain an evidence-backed memory store.
 Return only one JSON object matching required_output. Create concise facts that remain
 useful beyond the current exchange. Every fact must cite source_ordinals from new_events.
-Use existing memory IDs only for supersedes/tombstones. Never invent facts, IDs, or times.
+Inspect existing_memories before creating a parallel memory. When an existing fact has
+the same durable meaning, reuse its canonical_key exactly; reuse existing entity/concept
+titles for the same identity. supersedes_memory_ids and tombstone_memory_ids may contain
+only IDs listed in mutable_memory_ids. Never invent facts, IDs, or times.
+If schema_retry is present, correct only the reported JSON shape and still follow all
+evidence and mutation constraints. Do not repeat invalid nulls, types, or extra fields.
 Keep relative times verbatim. Set valid_from/valid_to only when supported by evidence.
 When a fact depends on a date phrase, preserve that exact phrase in time_expression.
 Entities are named people/places/organizations/items; concepts are reusable topics.
@@ -212,3 +294,42 @@ def _event_payload(event: EventRecord) -> dict[str, object]:
         "temporal_hint": hint.as_dict() if hint else None,
         "session_id": event.session_id,
     }
+
+
+def _source_event_ids(value: str) -> list[str]:
+    try:
+        decoded = json.loads(value)
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(decoded, list):
+        return []
+    return list(
+        dict.fromkeys(item for item in decoded if isinstance(item, str) and item)
+    )
+
+
+def _validate_maintenance_scope(
+    plan: MaintenancePlan, context: tuple[NodeRecord, ...]
+) -> None:
+    allowed_ids = {node.memory_id for node in context}
+    referenced_ids = set(plan.tombstone_memory_ids)
+    for fact in plan.facts:
+        referenced_ids.update(fact.supersedes_memory_ids)
+    if not referenced_ids.issubset(allowed_ids):
+        raise ValueError(
+            "maintenance mutations may reference only retrieved memory IDs"
+        )
+
+
+def _validation_feedback(error: ValidationError) -> list[dict[str, str]]:
+    return [
+        {
+            "path": ".".join(str(part) for part in item["loc"]),
+            "type": str(item["type"]),
+        }
+        for item in error.errors(
+            include_url=False,
+            include_context=False,
+            include_input=False,
+        )
+    ][:20]

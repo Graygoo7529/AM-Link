@@ -8,10 +8,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from aml_memory.api import create_app
+from aml_memory.maintenance import FactProposal, MemoryMaintainer
 from aml_memory.models import SearchResult
 from aml_memory.providers import ProviderError
 from aml_memory.repository import (
     GraphPath,
+    NodeRecord,
     SQLiteMemoryRepository,
     stable_memory_id,
     stable_structured_id,
@@ -253,6 +255,130 @@ class CanonicalFactProvider(FakeModelProvider):
         }
 
 
+class OutOfScopeMutationProvider(FakeModelProvider):
+    def generate_json(
+        self, *, system_prompt: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        self.payloads.append(payload)
+        return {
+            "facts": [],
+            "tombstone_memory_ids": ["fact_not_retrieved"],
+        }
+
+
+class InvalidThenValidMaintenanceProvider(FakeModelProvider):
+    def __init__(self) -> None:
+        super().__init__()
+        self.maintenance_attempts = 0
+
+    def generate_json(
+        self, *, system_prompt: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        if payload["task"] == "maintenance":
+            self.maintenance_attempts += 1
+            if self.maintenance_attempts == 1:
+                self.payloads.append(payload)
+                self.tasks.append("maintenance")
+                return {
+                    "facts": [],
+                    "tombstone_memory_ids": [],
+                    "unexpected": True,
+                }
+            assert payload["schema_retry"] == {
+                "attempt": 2,
+                "validation_errors": [
+                    {"path": "unexpected", "type": "extra_forbidden"}
+                ],
+            }
+        return super().generate_json(system_prompt=system_prompt, payload=payload)
+
+
+class NullListMaintenanceProvider(FakeModelProvider):
+    def generate_json(
+        self, *, system_prompt: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        if payload["task"] != "maintenance":
+            return super().generate_json(system_prompt=system_prompt, payload=payload)
+        self.payloads.append(payload)
+        self.tasks.append("maintenance")
+        return {
+            "facts": [
+                {
+                    "title": "Preferred vehicle",
+                    "content": "The user's preferred vehicle is an automobile.",
+                    "source_ordinals": [0],
+                    "entities": None,
+                    "concepts": None,
+                    "confidence": None,
+                    "supersedes_memory_ids": None,
+                }
+            ],
+            "tombstone_memory_ids": None,
+        }
+
+
+class LinkInspectModelProvider(FakeModelProvider):
+    def __init__(self) -> None:
+        super().__init__()
+        self.maintenance_calls = 0
+        self.preferred_link_id: str | None = None
+
+    def generate_json(
+        self, *, system_prompt: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        self.payloads.append(payload)
+        task = str(payload["task"])
+        self.tasks.append(task)
+        if task == "search_plan":
+            linked = next(
+                candidate
+                for candidate in payload["candidates"]
+                if candidate["retrieval_source"] == "link_inspect"
+            )
+            self.preferred_link_id = str(linked["id"])
+            return {
+                "retrieval_queries": [],
+                "keywords": [],
+                "entity_names": [],
+                "time_hints": [],
+                "preferred_memory_ids": [self.preferred_link_id],
+                "intent": "multi_hop",
+            }
+        self.maintenance_calls += 1
+        if self.maintenance_calls == 1:
+            title = "Alice employment"
+            content = "Alice works at Lab A."
+            concepts = ["Employment"]
+        else:
+            title = "Alice mentoring"
+            content = "Alice mentors Bob."
+            concepts = ["Mentoring"]
+        return {
+            "facts": [
+                {
+                    "title": title,
+                    "content": content,
+                    "canonical_key": f"alice:{self.maintenance_calls}",
+                    "source_ordinals": [0],
+                    "entities": ["Alice"],
+                    "concepts": concepts,
+                    "event_time": None,
+                    "confidence": 0.95,
+                    "supersedes_memory_ids": [],
+                }
+            ],
+            "tombstone_memory_ids": [],
+        }
+
+
+class FailsExpandedQueryEmbedding(FakeEmbeddingProvider):
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        if len(self.calls) >= 3:
+            self.calls.append(texts)
+            raise ProviderError("synthetic expanded query outage")
+        return super().embed(texts)
+
+
 def enhanced_settings(tmp_path: Path) -> Settings:
     return Settings(
         db_path=tmp_path / "memory.db",
@@ -317,7 +443,8 @@ def test_enhanced_add_search_is_structured_vectorized_and_idempotent(
         item["id"].startswith(("fact_", "ent_", "con_"))
         for item in found.json()["data"]
     ) == 1
-    assert len(embeddings.calls) == 3
+    assert len(embeddings.calls) == 4
+    assert "automobile preference" in embeddings.calls[-1][0]
     assert any("automobile" in item["content"].lower() for item in found.json()["data"])
     assert model.closed and embeddings.closed
 
@@ -326,7 +453,7 @@ def test_enhanced_add_search_is_structured_vectorized_and_idempotent(
         "llm_maintenance_calls": 1,
         "llm_search_calls": 1,
         "embedding_context_calls": 1,
-        "embedding_search_calls": 1,
+        "embedding_search_calls": 2,
         "embedding_index_calls": 1,
         "embedding_index_texts": 4,
     }
@@ -378,6 +505,228 @@ def test_enhanced_add_search_is_structured_vectorized_and_idempotent(
     assert len(list((user_root / "fact").glob("*.md"))) == 1
     assert len(list((user_root / "entity").glob("*.md"))) == 1
     assert len(list((user_root / "concept").glob("*.md"))) == 1
+
+
+def test_maintenance_mutations_are_limited_to_retrieved_memory_ids() -> None:
+    provider = OutOfScopeMutationProvider()
+    maintainer = MemoryMaintainer(provider)
+    context = (
+        NodeRecord(
+            memory_id="fact_retrieved",
+            user_id="run:user-1",
+            kind="fact",
+            title="Known fact",
+            content="Known fact with evidence.",
+            event_time=None,
+            valid_from=None,
+            valid_to=None,
+            created_at="2026-08-01T00:00:00Z",
+            updated_at="2026-08-01T00:00:00Z",
+            confidence=0.9,
+            activity=1.0,
+            status="active",
+            version=2,
+            source_event_ids='["mem_source"]',
+            canonical_key="known:key",
+            evidence_group_id="group_known",
+            time_expression=None,
+            resolved_time_start=None,
+            resolved_time_end=None,
+            time_precision=None,
+        ),
+    )
+
+    with pytest.raises(ValueError, match="retrieved memory IDs"):
+        maintainer.plan(
+            events=(),
+            context=context,
+            links=(),
+            working_memory="# Working Memory\n",
+        )
+
+    payload = provider.payloads[0]
+    assert payload["mutable_memory_ids"] == ["fact_retrieved"]
+    assert payload["existing_memories"][0]["canonical_key"] == "known:key"
+    assert payload["existing_memories"][0]["source_event_ids"] == ["mem_source"]
+
+
+def test_maintenance_retries_one_schema_failure_without_relaxing_validation(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(
+        db_path=tmp_path / "memory.db",
+        markdown_view_dir=None,
+        llm_enabled=True,
+        openai_api_key="fake-model-key",
+    )
+    provider = InvalidThenValidMaintenanceProvider()
+    with TestClient(create_app(settings, model_provider=provider)) as client:
+        added = client.post("/v1/memory/add", json=add_payload())
+
+    assert added.status_code == 200
+    assert provider.maintenance_attempts == 2
+    with sqlite3.connect(settings.db_path) as connection:
+        assert connection.execute(
+            "SELECT status FROM maintenance_runs"
+        ).fetchone()[0] == "completed"
+        assert connection.execute(
+            "SELECT COUNT(*) FROM memory_nodes WHERE kind = 'fact'"
+        ).fetchone()[0] == 1
+
+
+def test_maintenance_normalizes_null_optional_lists_without_schema_retry(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(
+        db_path=tmp_path / "memory.db",
+        markdown_view_dir=None,
+        llm_enabled=True,
+        openai_api_key="fake-model-key",
+    )
+    provider = NullListMaintenanceProvider()
+    with TestClient(create_app(settings, model_provider=provider)) as client:
+        added = client.post("/v1/memory/add", json=add_payload())
+
+    assert added.status_code == 200
+    assert provider.tasks == ["maintenance"]
+    with sqlite3.connect(settings.db_path) as connection:
+        assert connection.execute(
+            "SELECT status FROM maintenance_runs"
+        ).fetchone()[0] == "completed"
+        assert connection.execute(
+            "SELECT confidence FROM memory_nodes WHERE kind = 'fact'"
+        ).fetchone()[0] == 0.8
+
+
+def test_fact_accepts_only_empty_misplaced_plan_tombstone_field() -> None:
+    base = {
+        "title": "Known fact",
+        "content": "Known fact content.",
+        "source_ordinals": [0],
+    }
+    accepted = FactProposal.model_validate(
+        {**base, "tombstone_memory_ids": []}
+    )
+    assert accepted.title == "Known fact"
+
+    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+        FactProposal.model_validate(
+            {**base, "tombstone_memory_ids": ["fact_should_not_be_ignored"]}
+        )
+
+
+def test_search_planner_sees_link_inspect_candidates_and_can_seed_them(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(
+        db_path=tmp_path / "memory.db",
+        markdown_view_dir=None,
+        llm_enabled=True,
+        openai_api_key="fake-model-key",
+    )
+    provider = LinkInspectModelProvider()
+    with TestClient(create_app(settings, model_provider=provider)) as client:
+        assert client.post(
+            "/v1/memory/add",
+            json=add_payload(content="Alice works at Lab A."),
+        ).status_code == 200
+        assert client.post(
+            "/v1/memory/add",
+            json=add_payload(
+                request_id="run:add-2", content="Alice mentors Bob."
+            ),
+        ).status_code == 200
+        found = client.post(
+            "/v1/memory/search",
+            json={
+                "query": "What is connected to Lab A?",
+                "options": None,
+                "user_id": "run:user-1",
+                "top_k": 20,
+            },
+        )
+
+    assert found.status_code == 200
+    planner_payload = provider.payloads[-1]
+    assert any(
+        candidate["retrieval_source"] == "link_inspect"
+        for candidate in planner_payload["candidates"]
+    )
+    assert provider.preferred_link_id is not None
+    assert any("Alice mentors Bob" in item["content"] for item in found.json()["data"])
+
+
+def test_expanded_embedding_failure_degrades_to_initial_semantic_results(
+    tmp_path: Path,
+) -> None:
+    settings = enhanced_settings(tmp_path)
+    embeddings = FailsExpandedQueryEmbedding()
+    with TestClient(
+        create_app(
+            settings,
+            model_provider=FakeModelProvider(),
+            embedding_provider=embeddings,
+        )
+    ) as client:
+        assert client.post("/v1/memory/add", json=add_payload()).status_code == 200
+        found = client.post(
+            "/v1/memory/search",
+            json={
+                "query": "Which car does the user prefer?",
+                "options": None,
+                "user_id": "run:user-1",
+                "top_k": 10,
+            },
+        )
+
+    assert found.status_code == 200
+    assert found.json()["data"]
+    assert len(embeddings.calls) == 4
+
+
+def test_search_graph_depth_is_intent_bounded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    application = create_app(
+        Settings(
+            db_path=tmp_path / "memory.db",
+            markdown_view_dir=None,
+            llm_enabled=True,
+            openai_api_key="fake-model-key",
+        ),
+        model_provider=FakeModelProvider(),
+    )
+    with TestClient(application) as client:
+        assert client.post("/v1/memory/add", json=add_payload()).status_code == 200
+        repository = application.state.memory_service.repository
+        original = repository.expand_link_paths
+        observed_hops: list[int] = []
+
+        def tracking_expand_link_paths(**kwargs: Any) -> list[GraphPath]:
+            observed_hops.append(int(kwargs["max_hops"]))
+            return original(**kwargs)
+
+        monkeypatch.setattr(repository, "expand_link_paths", tracking_expand_link_paths)
+        assert client.post(
+            "/v1/memory/search",
+            json={
+                "query": "Why is automobile related?",
+                "options": None,
+                "user_id": "run:user-1",
+                "top_k": 10,
+            },
+        ).status_code == 200
+        assert observed_hops[-2:] == [1, 3]
+        assert client.post(
+            "/v1/memory/search",
+            json={
+                "query": "automobile",
+                "options": None,
+                "user_id": "run:user-1",
+                "top_k": 10,
+            },
+        ).status_code == 200
+        assert observed_hops[-2:] == [1, 2]
 
 
 def test_maintenance_threshold_batches_pending_adds(tmp_path: Path) -> None:
