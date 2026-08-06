@@ -1,0 +1,4 @@
+"""Agent Memory Leaderboard Add/Search service."""
+
+__version__ = "0.1.0"
+

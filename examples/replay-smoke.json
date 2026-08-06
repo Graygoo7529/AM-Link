@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "temporal-travel",
+      "adds": [
+        {
+          "request_id": "replay:temporal:add-1",
+          "messages": [
+            {
+              "role": "user",
+              "timestamp": 1704067200000,
+              "content": "I will visit Shanghai next Monday."
+            }
+          ],
+          "user_id": "replay:temporal:user-1",
+          "session_id": "replay:temporal:session-1"
+        }
+      ],
+      "searches": [
+        {
+          "id": "next-monday",
+          "request": {
+            "query": "What happens next Monday?",
+            "options": ["Shanghai", "Beijing"],
+            "user_id": "replay:temporal:user-1",
+            "top_k": 10
+          },
+          "expected": [
+            {"contains_any": ["Shanghai"]}
+          ],
+          "category": "temporal"
+        }
+      ]
+    },
+    {
+      "id": "multi-hop-project",
+      "adds": [
+        {
+          "request_id": "replay:multi:add-1",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Alice manages Project Aurora."
+            },
+            {
+              "role": "user",
+              "content": "Project Aurora uses Rust."
+            }
+          ],
+          "user_id": "replay:multi:user-1",
+          "session_id": "replay:multi:session-1"
+        }
+      ],
+      "searches": [
+        {
+          "id": "manager-language-chain",
+          "request": {
+            "query": "Which language is used by the project Alice manages?",
+            "options": ["Rust", "Python"],
+            "user_id": "replay:multi:user-1",
+            "top_k": 10
+          },
+          "expected": [
+            {"contains_any": ["Alice manages Project Aurora"]},
+            {"contains_any": ["Project Aurora uses Rust"]}
+          ],
+          "category": "multi_hop"
+        }
+      ]
+    }
+  ]
+}
