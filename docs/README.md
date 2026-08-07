@@ -19,10 +19,11 @@
 | [回放评测.md](./回放评测.md) | Add/Search 回放 manifest、指标定义、命令和 Smoke 记录 |
 | [LoCoMo回放.md](./LoCoMo回放.md) | 赛事数据可得性、LoCoMo 转换方法、真实 HTTP baseline 和 embedding 对照状态 |
 | [最终优化计划.md](./最终优化计划.md) | TinySoul Memory 机制提炼、最后一轮 Add/Search 优化范围与验收门槛 |
+| [扩大验证与可靠性优化.md](./扩大验证与可靠性优化.md) | 10 conversation、正式 provider、并发负载、失败矩阵和后续质量门槛 |
 | [../设计理念.md](../设计理念.md) | 完整 Add/Search 设计、数据模型和技术路线 |
 
 ## 当前快照
 
-截至 2026-08-07：协议核心、SQLite/WAL 真源、幂等、user_id 隔离、固定 gpt-4o-mini 的 Add/Search 调用、检索约束 maintenance、结构化 fact/version/link、embedding-3 增量索引、inspect-first planning、普通两跳/multi-hop 三跳 graph、evidence group 去重、canonical fact key、中文短语 token、确定性时间范围、sync/async enrichment job、Add/Search deadline、Markdown 投影和故障降级均已实现并通过 52 项自动化测试。
+截至 2026-08-07：协议核心、SQLite/WAL 真源、幂等、user_id 隔离、固定 gpt-4o-mini 的 Add/Search 调用、检索约束 maintenance、结构化 fact/version/link、embedding-3 增量索引、inspect-first planning、普通两跳/multi-hop 三跳 graph、evidence group 去重、source evidence 伴随召回、canonical fact key、确定性时间范围、sync/async enrichment job、绝对 deadline、有界失败恢复、worker 异常隔离、稳定同分排序、Markdown 投影和故障降级均已实现并通过 61 项自动化测试。
 
-默认配置仍关闭外部模型，只用于 Smoke；正式 Full 必须启用 LLM。智增增 `gpt-4o-mini` 和智谱 `embedding-3` 的协议探针、完整 Add/Search、5 Add / 6 Search LoCoMo 切片和最终 v7 真实增强 smoke 均已通过；v7 生成 3 fact、2 entity、4 concept、10 links 和 12 vectors，maintenance/enrichment 全部完成。回放工具、LoCoMo lexical 基线和公网 HTTPS 部署已完成；赛事固定 Smoke 数据未公开下载，仍需通过官方入口验证。maintenance 大样本稳定性、64/32 并发压测、Docker 实际构建仍未完成。
+默认配置仍关闭外部模型，只用于 Smoke/降级；正式 Full 必须启用 LLM。10 conversation lexical 的 399 Add / 480 Search 已在两套全新数据库得到完全一致结果，Recall@10 `0.439438`、MRR `0.292152`；正式 provider 扩大切片 10 Add / 18 Search 全部成功，Recall@10 `0.662037`、MRR `0.618546`。隔离 HTTP 服务完成 64 并发 Add、32 并发幂等重放和 256 并发 Search，均无失败。公网 HTTPS 已部署；赛事固定 Smoke 仍需在官方入口验证，Docker 仍需在具备 Docker CLI 的干净环境实际 build。

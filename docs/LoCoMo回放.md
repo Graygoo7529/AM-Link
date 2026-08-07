@@ -163,3 +163,38 @@ LoCoMo 是可复现的替代基线。原作者仓库公开 `data/locomo10.json`�
 - `B:\tmp\locomo-local-lexical-report.json`
 - `B:\tmp\locomo-local-embedding-net-report.json`
 - `B:\tmp\locomo-local-full-debug-report.json`
+
+## v0.3.0 扩大回放
+
+### 全部 10 conversation 的确定性回放
+
+在当前 lexical 降级链路上，对相同 399 Add / 480 Search manifest 使用两套全新 SQLite 独立回放。两次所有请求均为 HTTP 200，480 个查询的结果 ID/顺序差异为 0：
+
+| 指标 | 旧 10-conversation 基线 | v0.3.0 A | v0.3.0 B |
+| --- | ---: | ---: | ---: |
+| Recall@1 | 0.108736 | 0.150869 | 0.150869 |
+| Recall@5 | 0.279083 | 0.359918 | 0.359918 |
+| Recall@10 | 0.366417 | 0.439438 | 0.439438 |
+| MRR | 0.235646 | 0.292152 | 0.292152 |
+| duplicate rate | 0.0 | 0.0 | 0.0 |
+| Search p95 | 28.905 ms | 30.829 ms | 30.829 ms |
+
+相对旧基线，Recall@10 绝对提升 `0.073021`，MRR 绝对提升 `0.056506`。改进来自查询词过滤、稳定同分排序和当前融合逻辑；该回放没有结构化 provider 生成的 links，不能用于证明 links 的单独收益。
+
+### 正式 provider 的 2-conversation 切片
+
+选取 `conv-26`、`conv-30` 的前 4 个 session，每类保留少量 QA，共 10 Add / 18 Search，`top_k=100`：
+
+| 指标 | lexical | `gpt-4o-mini + embedding-3` |
+| --- | ---: | ---: |
+| Recall@1 | 0.282407 | 0.421296 |
+| Recall@5 | 0.550926 | 0.578704 |
+| Recall@10 | 0.592593 | 0.662037 |
+| MRR | 0.506635 | 0.618546 |
+| multi-hop Recall@10 | 0.5 | 0.5 |
+| chain coverage@10 | 0.5 | 0.0 |
+| Search p95 | 12.646 ms | 14,001.413 ms |
+
+完整增强链路所有请求成功，无 warning；数据库包含 153 daily、12 fact、3 entity、8 concept、46 links、176 vectors，10 个 maintenance/enrichment job 全部 completed。结构化事实通常能排在前列，但对应的多条 raw source 未必同时进入前十，因此下一步应做互补 evidence group 选择，而不是简单增加图 hop。
+
+同一存储上的 planner 重跑受上游模型输出波动影响，因此表中完整链路可用于确认可用性和总体效果，不能把小样本的每项变化严格归因为某一个重排特征。完整故障和并发结果见 [扩大验证与可靠性优化](./扩大验证与可靠性优化.md)。

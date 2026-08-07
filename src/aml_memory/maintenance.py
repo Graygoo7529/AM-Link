@@ -17,7 +17,7 @@ from .repository import EventRecord, LinkRecord, NodeRecord
 from .temporal import extract_temporal_hint
 
 
-MAINTENANCE_PROMPT_VERSION = "maintenance-v2"
+MAINTENANCE_PROMPT_VERSION = "maintenance-v3"
 SEARCH_PLAN_PROMPT_VERSION = "search-plan-v2"
 
 
@@ -254,6 +254,9 @@ Inspect existing_memories before creating a parallel memory. When an existing fa
 the same durable meaning, reuse its canonical_key exactly; reuse existing entity/concept
 titles for the same identity. supersedes_memory_ids and tombstone_memory_ids may contain
 only IDs listed in mutable_memory_ids. Never invent facts, IDs, or times.
+Resolve dialogue speaker or addressee names only when new_events or working_memory provides
+evidence. When supported, include the explicit person's name in the fact content and entity
+instead of leaving a first-person fact anonymous. Never infer identity from role alone.
 If schema_retry is present, correct only the reported JSON shape and still follow all
 evidence and mutation constraints. Do not repeat invalid nulls, types, or extra fields.
 Keep relative times verbatim. Set valid_from/valid_to only when supported by evidence.

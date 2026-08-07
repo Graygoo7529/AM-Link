@@ -21,13 +21,16 @@
 - 英文问句检索会过滤高置信模板词和助动词，减少 `what/did/the` 对 FTS、LIKE 和相关性分数的干扰；
 - 消息中的明确日期、相对日、上下周星期和上下月会在有 source timestamp 时解析为保守日期范围，Search 可按该范围召回证据；无锚点时只保留原始时间表达；
 - `AML_ENRICHMENT_MODE=sync` 是默认模式；设为 `async` 时 Add 只等待 raw/FTS 硬提交，持久化 worker 后台执行 maintenance/embedding，进程重启后可继续消费 pending/failed job；
+- Add/Search 的外部 provider 调用、容量等待、批处理和退避共享请求绝对 deadline；网络中断、408/425/429/5xx 有界重试，超过预算立即降级，不会在每次重试时重新获得完整超时；
+- sync/async enrichment 的失败任务均可由后台 worker 恢复，默认最多 5 次；恢复时按当前 watermark 重建该用户派生节点和向量，避免旧任务覆盖新状态或无限重试；
+- lexical、semantic、temporal 和 graph 同分候选使用稳定 ID/时间/序号裁决；高置信结构事实会把其直接 source event 作为伴随证据提升，但不凭空生成 Search 内容；
 - 提供 `python -m aml_memory.replay` 回放工具，可对本地或公网 API 记录 recall@k、MRR、重复率、时间/多跳覆盖、分类型召回、延迟和 provider 调用次数；
 - 提供 `python -m aml_memory.locomo` 转换器，可将 LoCoMo 原始 JSON 转为受控的 20-message Add/Search 回放 manifest；LoCoMo 自评记录见 [docs/LoCoMo回放.md](docs/LoCoMo回放.md)。
 - raw、结构化节点、FTS、向量和图查询均显式限制 `user_id`；同用户 Add 全流程串行，不同用户可以并行；
 - 模型或 embedding 故障时返回 raw/lexical 证据，错误日志只记录用户哈希、请求 ID 和错误类型。
 - maintenance JSON 首次 schema 不合法时只允许一次同模型修复重试，反馈仅含字段路径和错误类型；越界 mutation、HTTP/provider 错误和第二次非法响应继续按既有降级语义处理。
 
-默认关闭外部模型，适合协议 Smoke 和故障降级；正式 Full 配置必须设置 `AML_LLM_ENABLED=true`，确保 Add/Search 都实际调用固定的 `gpt-4o-mini`。增强链路已经实现，但在公开评测回放、64/32 并发压测和官方 Smoke 完成前，仍不应视为最终校准版本。
+默认关闭外部模型，适合协议 Smoke 和故障降级；正式 Full 配置必须设置 `AML_LLM_ENABLED=true`，确保 Add/Search 都实际调用固定的 `gpt-4o-mini`。增强链路已完成 LoCoMo 扩大回放和本地 HTTP 并发验证；赛事固定 Smoke 仍必须在提交入口执行。
 
 代理调试时可以显式使用已验证的 `gpt-5.4-mini`，但必须同时打开 `AML_ALLOW_NONOFFICIAL_LLM_MODEL=true`；该开关只用于本地联调，正式 Full 前必须恢复 `gpt-4o-mini` 并关闭开关。
 
@@ -55,7 +58,7 @@ $env:ZHIPU_API_KEY = "set-in-your-shell-or-secret-manager"
 ## Docker 启动
 
 ```powershell
-docker build -t aml-memory:0.2.0 .
+docker build -t aml-memory:0.3.0 .
 docker run --rm -p 8080:8080 -v aml-memory-data:/data `
   -e AML_AUTH_SCHEME=bearer `
   -e AML_API_KEY=replace-with-a-long-random-key `
@@ -64,7 +67,7 @@ docker run --rm -p 8080:8080 -v aml-memory-data:/data `
   -e OPENAI_API_KEY=replace-at-runtime `
   -e AML_EMBEDDING_ENABLED=true `
   -e ZHIPU_API_KEY=replace-at-runtime `
-  aml-memory:0.2.0
+  aml-memory:0.3.0
 ```
 
 镜像使用单个 Uvicorn worker。SQLite 和 Markdown 投影依赖共享本地卷，不能直接横向扩为多个无状态实例；需要横向扩容时应先按设计文档迁移到 PostgreSQL/共享索引。
@@ -127,6 +130,7 @@ Search 返回证据而不是最终答案：
 | `AML_MAINTENANCE_EVENT_THRESHOLD` | `1` | maintenance 触发所需的未整理事件数；默认 1 保持每次 Add 的正式行为 |
 | `AML_MAINTENANCE_CHAR_THRESHOLD` | `1` | maintenance 触发所需的未整理字符数；事件数或字符数任一达到即触发 |
 | `AML_ENRICHMENT_MODE` | `sync` | `sync` 或 `async`；async 将模型/embedding 增强移到持久化 worker |
+| `AML_ENRICHMENT_MAX_ATTEMPTS` | `5` | 后台 enrichment 失败任务的最大处理次数，允许 1 至 20 |
 | `AML_ADD_DEADLINE_SECONDS` | `120` | Add 可选增强阶段总预算；raw/FTS 硬提交不受影响 |
 | `AML_SEARCH_DEADLINE_SECONDS` | `30` | Search embedding/planner/graph 可选阶段总预算 |
 | `AML_LLM_ENABLED` | `false` | 启用 Add maintenance 和 Search query planning；Full 必须为 true |
@@ -150,7 +154,7 @@ Search 返回证据而不是最终答案：
 .\.venv\Scripts\python -m pytest
 ```
 
-52 项测试覆盖协议响应、Add 后立即 Search、幂等冲突、用户隔离、三种鉴权、相关 maintenance context、检索约束 mutation、结构化维护、schema 修复边界、失败重试、版本/tombstone、跨用户 mutation 拒绝、inspect-first query plan、两/三跳图扩展、GraphPath 路径传播、扩展向量查询及降级、canonical/evidence 去重、source-event 结构折叠、旧库字段迁移、中文检索、英文问句停用词、时间表达和 temporal Search、planner-free 历史状态过滤、sync/async enrichment、maintenance 阈值批处理、过期失败任务保护、批量失败重试 watermark 推进、deadline 降级、回放指标、LoCoMo 转换、session 切片与脏 evidence 规范化、索引重建、30 天清理、调试模型保护、提供方协议和故障降级。
+61 项测试覆盖协议响应、Add 后立即 Search、幂等冲突、用户隔离、三种鉴权、相关 maintenance context、检索约束 mutation、结构化维护、schema 修复边界、失败重试、版本/tombstone、跨用户 mutation 拒绝、inspect-first query plan、两/三跳图扩展、GraphPath 路径传播、扩展向量查询及降级、canonical/evidence 去重、source-event 结构折叠、直接 source 伴随召回、稳定同分排序、旧库字段迁移、中文检索、英文问句停用词、时间表达和 temporal Search、planner-free 历史状态过滤、sync/async enrichment、失败任务恢复与最大尝试次数、worker 瞬态异常隔离、maintenance 阈值批处理、watermark 推进、绝对 deadline、provider 容量等待/网络异常、并发 Add/Search、回放指标、LoCoMo 转换、索引重建、30 天清理和故障降级。
 
 需要更换 embedding 维度或修复索引时，可在服务停止写入后执行全量或单用户重建。新向量全部计算成功后才会在事务中替换旧索引：
 

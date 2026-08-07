@@ -548,6 +548,7 @@ class SQLiteMemoryRepository:
         request_id: str,
         model: str,
         prompt_version: str,
+        increment_enrichment_attempt: bool = True,
     ) -> bool:
         now = utc_now()
         with self._connect() as connection:
@@ -561,15 +562,16 @@ class SQLiteMemoryRepository:
                 (model, prompt_version, now, user_id, request_id),
             )
             if cursor.rowcount == 1:
-                connection.execute(
-                    """
-                    UPDATE enrichment_jobs
-                    SET status = 'running', attempts = attempts + 1,
-                        error_type = NULL, started_at = ?, completed_at = NULL
-                    WHERE user_id = ? AND request_id = ? AND kind = 'add'
-                    """,
-                    (now, user_id, request_id),
-                )
+                if increment_enrichment_attempt:
+                    connection.execute(
+                        """
+                        UPDATE enrichment_jobs
+                        SET status = 'running', attempts = attempts + 1,
+                            error_type = NULL, started_at = ?, completed_at = NULL
+                        WHERE user_id = ? AND request_id = ? AND kind = 'add'
+                        """,
+                        (now, user_id, request_id),
+                    )
         return cursor.rowcount == 1
 
     def _refresh_working_memory(
@@ -1002,20 +1004,29 @@ class SQLiteMemoryRepository:
             ).fetchone()
         return row["status"] if row else None
 
-    def pending_enrichment_jobs(self, *, limit: int = 8) -> tuple[tuple[str, str], ...]:
+    def pending_enrichment_jobs(
+        self,
+        *,
+        limit: int = 8,
+        max_attempts: int = 5,
+        include_pending: bool = True,
+    ) -> tuple[tuple[str, str, str], ...]:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT user_id, request_id
+                SELECT user_id, request_id, status
                 FROM enrichment_jobs
-                WHERE kind = 'add' AND status IN ('pending', 'failed')
-                  AND available_at <= ?
+                WHERE kind = 'add'
+                  AND (status = 'failed' OR (? = 1 AND status = 'pending'))
+                  AND available_at <= ? AND attempts < ?
                 ORDER BY created_at, job_id
                 LIMIT ?
                 """,
-                (utc_now(), limit),
+                (int(include_pending), utc_now(), max_attempts, limit),
             ).fetchall()
-        return tuple((row["user_id"], row["request_id"]) for row in rows)
+        return tuple(
+            (row["user_id"], row["request_id"], row["status"]) for row in rows
+        )
 
     def start_maintenance(
         self,
@@ -1598,6 +1609,7 @@ class SQLiteMemoryRepository:
                 WHERE e.user_id = ? AND n.user_id = ?
                   AND e.model = ? AND e.dimensions = ?
                   AND {status_filter}
+                ORDER BY e.memory_id, e.chunk_no
                 """,
                 (user_id, user_id, model, dimensions),
             ).fetchall()
@@ -1609,7 +1621,15 @@ class SQLiteMemoryRepository:
             previous = best.get(row["memory_id"])
             if previous is None or similarity > previous[0]:
                 best[row["memory_id"]] = (similarity, row)
-        ranked = sorted(best.values(), key=lambda item: item[0], reverse=True)[:limit]
+        ranked = sorted(
+            best.values(),
+            key=lambda item: (
+                item[0],
+                item[1]["event_time"] or item[1]["created_at"] or "",
+                item[1]["memory_id"],
+            ),
+            reverse=True,
+        )[:limit]
         return [
             SearchResult(
                 id=row["memory_id"],
@@ -1648,7 +1668,8 @@ class SQLiteMemoryRepository:
                         substr(n.event_time, 1, 10),
                         substr(n.valid_from, 1, 10)
                       ) IS NOT NULL
-                ORDER BY COALESCE(n.resolved_time_start, n.event_time, n.created_at)
+                ORDER BY COALESCE(n.resolved_time_start, n.event_time, n.created_at),
+                         n.memory_id
                 LIMIT 2000
                 """,
                 (user_id,),
@@ -1774,6 +1795,7 @@ class SQLiteMemoryRepository:
                                 query_text, str(row["relation"]).replace("_", " ")
                             ),
                             row["created_at"] or "",
+                            row["memory_id"],
                         ),
                         reverse=True,
                     )[:fanout_per_seed]
@@ -1864,11 +1886,15 @@ class SQLiteMemoryRepository:
                                bm25(memory_fts) AS text_rank
                         FROM memory_fts
                         JOIN memory_nodes AS n ON n.memory_id = memory_fts.memory_id
+                        LEFT JOIN raw_events AS r ON r.memory_id = n.memory_id
                         WHERE memory_fts MATCH ?
                           AND memory_fts.user_id = ?
                           AND n.user_id = ?
                           AND {status_filter}
-                        ORDER BY text_rank ASC, n.created_at DESC
+                        ORDER BY text_rank ASC,
+                                 COALESCE(n.event_time, n.created_at) DESC,
+                                 COALESCE(r.sequence_no, 0) DESC,
+                                 n.memory_id
                         LIMIT ?
                         """,
                         (fts_query, request.user_id, request.user_id, limit * 3),
@@ -1878,17 +1904,23 @@ class SQLiteMemoryRepository:
             candidates = [row for row in rows if not _seen(row, seen)]
             if len(candidates) < limit and tokens:
                 like_tokens = tokens[:5]
-                conditions = " OR ".join("lower(content) LIKE ?" for _ in like_tokens)
+                conditions = " OR ".join(
+                    "lower(n.content) LIKE ?" for _ in like_tokens
+                )
                 parameters: list[object] = [request.user_id]
                 parameters.extend(f"%{token.lower()}%" for token in like_tokens)
                 parameters.append(limit * 5)
                 fallback_rows = connection.execute(
                     f"""
-                    SELECT memory_id, content, event_time, created_at, 0 AS text_rank
+                    SELECT n.memory_id, n.content, n.event_time, n.created_at,
+                           0 AS text_rank
                     FROM memory_nodes AS n
-                    WHERE user_id = ? AND {status_filter}
+                    LEFT JOIN raw_events AS r ON r.memory_id = n.memory_id
+                    WHERE n.user_id = ? AND {status_filter}
                       AND ({conditions})
-                    ORDER BY COALESCE(event_time, created_at) DESC
+                    ORDER BY COALESCE(n.event_time, n.created_at) DESC,
+                             COALESCE(r.sequence_no, 0) DESC,
+                             n.memory_id
                     LIMIT ?
                     """,
                     parameters,
@@ -1906,7 +1938,14 @@ class SQLiteMemoryRepository:
             )
             for index, row in enumerate(candidates)
         ]
-        scored.sort(key=lambda item: item.score or 0.0, reverse=True)
+        scored.sort(
+            key=lambda item: (
+                item.score or 0.0,
+                item.created_at or "",
+                item.id,
+            ),
+            reverse=True,
+        )
         return scored[:limit]
 
 

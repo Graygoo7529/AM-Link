@@ -5,6 +5,8 @@ import math
 import random
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any, Protocol
 
 import httpx
@@ -14,6 +16,10 @@ RETRYABLE_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
 
 
 class ProviderError(RuntimeError):
+    pass
+
+
+class ProviderDeadlineExceeded(ProviderError):
     pass
 
 
@@ -52,6 +58,8 @@ class OpenAICompatibleJsonModel:
         self.model = model
         self.max_output_tokens = max_output_tokens
         self.max_retries = max_retries
+        self._timeout_seconds = timeout_seconds
+        self._deadline_state = threading.local()
         self._semaphore = threading.BoundedSemaphore(max_concurrency)
         self._client = httpx.Client(
             base_url=base_url.rstrip("/"),
@@ -78,7 +86,9 @@ class OpenAICompatibleJsonModel:
                 },
             ],
         }
-        response = self._post_with_retry("/chat/completions", body)
+        response = self._post_with_retry(
+            "/chat/completions", body, deadline=self._current_deadline()
+        )
         try:
             content = response.json()["choices"][0]["message"]["content"]
             parsed = json.loads(content)
@@ -88,15 +98,25 @@ class OpenAICompatibleJsonModel:
             raise ProviderError("model JSON response must be an object")
         return parsed
 
-    def _post_with_retry(self, path: str, body: dict[str, Any]) -> httpx.Response:
-        with self._semaphore:
+    def _post_with_retry(
+        self,
+        path: str,
+        body: dict[str, Any],
+        *,
+        deadline: float | None,
+    ) -> httpx.Response:
+        with _capacity_slot(self._semaphore, deadline):
             for attempt in range(self.max_retries + 1):
                 try:
-                    response = self._client.post(path, json=body)
-                except (httpx.TimeoutException, httpx.NetworkError) as error:
+                    response = self._client.post(
+                        path,
+                        json=body,
+                        timeout=_request_timeout(self._timeout_seconds, deadline),
+                    )
+                except httpx.TransportError as error:
                     if attempt >= self.max_retries:
                         raise ProviderError("model provider request failed") from error
-                    _backoff(attempt)
+                    _backoff(attempt, deadline=deadline)
                     continue
                 if response.status_code < 400:
                     return response
@@ -107,8 +127,20 @@ class OpenAICompatibleJsonModel:
                     raise ProviderError(
                         f"model provider returned HTTP {response.status_code}"
                     )
-                _backoff(attempt)
+                _backoff(attempt, deadline=deadline)
         raise ProviderError("model provider retry loop exhausted")
+
+    @contextmanager
+    def deadline_scope(self, deadline: float | None) -> Iterator[None]:
+        previous = getattr(self._deadline_state, "value", None)
+        self._deadline_state.value = deadline
+        try:
+            yield
+        finally:
+            self._deadline_state.value = previous
+
+    def _current_deadline(self) -> float | None:
+        return getattr(self._deadline_state, "value", None)
 
     def close(self) -> None:
         self._client.close()
@@ -132,6 +164,8 @@ class ZhipuEmbeddingProvider:
         self.dimensions = dimensions
         self.batch_size = batch_size
         self.max_retries = max_retries
+        self._timeout_seconds = timeout_seconds
+        self._deadline_state = threading.local()
         self._semaphore = threading.BoundedSemaphore(max_concurrency)
         self._client = httpx.Client(
             base_url=base_url.rstrip("/"),
@@ -143,25 +177,38 @@ class ZhipuEmbeddingProvider:
     def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
+        deadline = self._current_deadline()
         vectors: list[list[float]] = []
         for start in range(0, len(texts), self.batch_size):
-            vectors.extend(self._embed_batch(texts[start : start + self.batch_size]))
+            vectors.extend(
+                self._embed_batch(
+                    texts[start : start + self.batch_size], deadline=deadline
+                )
+            )
         return vectors
 
-    def _embed_batch(self, texts: list[str]) -> list[list[float]]:
+    def _embed_batch(
+        self, texts: list[str], *, deadline: float | None
+    ) -> list[list[float]]:
         body = {
             "model": self.model,
             "input": texts,
             "dimensions": self.dimensions,
         }
-        with self._semaphore:
+        with _capacity_slot(self._semaphore, deadline):
             for attempt in range(self.max_retries + 1):
                 try:
-                    response = self._client.post("/embeddings", json=body)
-                except (httpx.TimeoutException, httpx.NetworkError) as error:
+                    response = self._client.post(
+                        "/embeddings",
+                        json=body,
+                        timeout=_request_timeout(self._timeout_seconds, deadline),
+                    )
+                except httpx.TransportError as error:
                     if attempt >= self.max_retries:
-                        raise ProviderError("embedding provider request failed") from error
-                    _backoff(attempt)
+                        raise ProviderError(
+                            "embedding provider request failed"
+                        ) from error
+                    _backoff(attempt, deadline=deadline)
                     continue
                 if response.status_code < 400:
                     break
@@ -172,7 +219,7 @@ class ZhipuEmbeddingProvider:
                     raise ProviderError(
                         f"embedding provider returned HTTP {response.status_code}"
                     )
-                _backoff(attempt)
+                _backoff(attempt, deadline=deadline)
             else:
                 raise ProviderError("embedding provider retry loop exhausted")
 
@@ -186,6 +233,18 @@ class ZhipuEmbeddingProvider:
         if any(len(vector) != self.dimensions for vector in vectors):
             raise ProviderError("embedding provider returned the wrong dimensions")
         return vectors
+
+    @contextmanager
+    def deadline_scope(self, deadline: float | None) -> Iterator[None]:
+        previous = getattr(self._deadline_state, "value", None)
+        self._deadline_state.value = deadline
+        try:
+            yield
+        finally:
+            self._deadline_state.value = previous
+
+    def _current_deadline(self) -> float | None:
+        return getattr(self._deadline_state, "value", None)
 
     def close(self) -> None:
         self._client.close()
@@ -203,6 +262,52 @@ def _normalize_vector(values: Any) -> list[float]:
     return [value / norm for value in vector]
 
 
-def _backoff(attempt: int) -> None:
+@contextmanager
+def provider_deadline(
+    provider: JsonModelProvider | EmbeddingProvider,
+    deadline: float | None,
+) -> Iterator[None]:
+    scope = getattr(provider, "deadline_scope", None)
+    if scope is None:
+        yield
+        return
+    with scope(deadline):
+        yield
+
+
+@contextmanager
+def _capacity_slot(
+    semaphore: threading.BoundedSemaphore, deadline: float | None
+) -> Iterator[None]:
+    if deadline is None:
+        acquired = semaphore.acquire()
+    else:
+        remaining = deadline - time.monotonic()
+        acquired = remaining > 0 and semaphore.acquire(timeout=remaining)
+    if not acquired:
+        raise ProviderDeadlineExceeded(
+            "provider deadline exceeded while waiting for capacity"
+        )
+    try:
+        yield
+    finally:
+        semaphore.release()
+
+
+def _request_timeout(configured: float, deadline: float | None) -> float:
+    if deadline is None:
+        return configured
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise ProviderDeadlineExceeded("provider deadline exceeded")
+    return max(0.001, min(configured, remaining))
+
+
+def _backoff(attempt: int, *, deadline: float | None) -> None:
     delay = min(0.25 * (2**attempt), 2.0) + random.uniform(0.0, 0.1)
+    if deadline is not None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ProviderDeadlineExceeded("provider deadline exceeded during retry")
+        delay = min(delay, remaining)
     time.sleep(delay)

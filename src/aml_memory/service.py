@@ -13,7 +13,7 @@ from .maintenance import (
 )
 from .models import AddRequest, AddResponse, SearchRequest, SearchResponse, SearchResult
 from .projection import MarkdownProjector
-from .providers import EmbeddingProvider, JsonModelProvider
+from .providers import EmbeddingProvider, JsonModelProvider, provider_deadline
 from .repository import (
     EmbeddingChunk,
     EventRecord,
@@ -38,6 +38,7 @@ class MemoryService:
         enrichment_mode: str = "sync",
         maintenance_event_threshold: int = 1,
         maintenance_char_threshold: int = 1,
+        enrichment_max_attempts: int = 5,
         add_deadline_seconds: float = 120.0,
         search_deadline_seconds: float = 30.0,
         model_provider: JsonModelProvider | None = None,
@@ -49,6 +50,7 @@ class MemoryService:
         self.enrichment_mode = enrichment_mode
         self.maintenance_event_threshold = maintenance_event_threshold
         self.maintenance_char_threshold = maintenance_char_threshold
+        self.enrichment_max_attempts = enrichment_max_attempts
         self.add_deadline_seconds = add_deadline_seconds
         self.search_deadline_seconds = search_deadline_seconds
         self.model_provider = model_provider
@@ -81,7 +83,13 @@ class MemoryService:
             self._metrics[key] = self._metrics.get(key, 0) + amount
 
     def start_worker(self) -> None:
-        if self.enrichment_mode != "async" or self._worker_thread is not None:
+        if self._worker_thread is not None:
+            return
+        if (
+            self.enrichment_mode != "async"
+            and self.maintainer is None
+            and self.embedding_provider is None
+        ):
             return
         self._worker_stop.clear()
         self._worker_thread = threading.Thread(
@@ -98,14 +106,31 @@ class MemoryService:
             self._worker_thread = None
 
     def _worker_loop(self) -> None:
+        idle_wait = 0.5 if self.enrichment_mode == "async" else 2.0
         while not self._worker_stop.is_set():
-            processed = self.process_pending_enrichment(limit=4)
-            self._worker_stop.wait(0.1 if processed else 0.5)
+            try:
+                processed = self.process_pending_enrichment(
+                    limit=4,
+                    include_pending=self.enrichment_mode == "async",
+                )
+            except Exception as error:  # pragma: no cover - branch asserted via loop
+                LOGGER.warning(
+                    "enrichment worker iteration failed error_type=%s",
+                    type(error).__name__,
+                )
+                processed = 0
+            self._worker_stop.wait(0.1 if processed else idle_wait)
 
-    def process_pending_enrichment(self, *, limit: int = 8) -> int:
+    def process_pending_enrichment(
+        self, *, limit: int = 8, include_pending: bool = True
+    ) -> int:
         processed = 0
-        for user_id, request_id in self.repository.pending_enrichment_jobs(
-            limit=limit
+        for user_id, request_id, previous_status in (
+            self.repository.pending_enrichment_jobs(
+                limit=limit,
+                max_attempts=self.enrichment_max_attempts,
+                include_pending=include_pending,
+            )
         ):
             lock_index = _user_lock_index(user_id, len(self._user_locks))
             with self._user_locks[lock_index]:
@@ -118,6 +143,7 @@ class MemoryService:
                     user_id=user_id,
                     request_id=request_id,
                     events=events,
+                    recovery=previous_status == "failed",
                 )
                 if self.projector.enabled:
                     try:
@@ -194,6 +220,7 @@ class MemoryService:
         user_id: str,
         request_id: str,
         events: tuple[EventRecord, ...],
+        recovery: bool = False,
     ) -> tuple[NodeRecord, ...]:
         deadline = time.monotonic() + self.add_deadline_seconds
         structured_nodes: tuple[NodeRecord, ...] = ()
@@ -211,11 +238,27 @@ class MemoryService:
                 model=self.maintainer.provider.model,
                 prompt_version=MAINTENANCE_PROMPT_VERSION,
             )
+            if (
+                not started
+                and self.repository.maintenance_status(user_id, request_id)
+                == "failed"
+            ):
+                started = self.repository.claim_failed_maintenance(
+                    user_id=user_id,
+                    request_id=request_id,
+                    model=self.maintainer.provider.model,
+                    prompt_version=MAINTENANCE_PROMPT_VERSION,
+                    increment_enrichment_attempt=False,
+                )
             if started:
                 structured_nodes = self._run_maintenance(
                     user_id=user_id,
                     request_id=request_id,
                     events=maintenance_events,
+                    watermark_request_id=(
+                        maintenance_events[-1].request_id if recovery else None
+                    ),
+                    deadline=deadline,
                 )
             if self.repository.maintenance_status(user_id, request_id) == "failed":
                 enrichment_error = "maintenance_failed"
@@ -238,12 +281,23 @@ class MemoryService:
             if time.monotonic() >= deadline:
                 enrichment_error = enrichment_error or "add_deadline_exceeded"
             else:
-                raw_nodes = self.repository.get_nodes_by_ids(
-                    user_id,
-                    [event.memory_id for event in events],
+                index_nodes = (
+                    self.repository.get_indexable_nodes(user_id)
+                    if recovery
+                    else (
+                        *self.repository.get_nodes_by_ids(
+                            user_id,
+                            [event.memory_id for event in events],
+                        ),
+                        *structured_nodes,
+                    )
                 )
                 try:
-                    self._index_nodes((*raw_nodes, *structured_nodes))
+                    self._index_nodes(
+                        index_nodes,
+                        replace_user=recovery,
+                        deadline=deadline,
+                    )
                 except Exception as error:
                     enrichment_error = type(error).__name__
                     LOGGER.warning(
@@ -273,6 +327,7 @@ class MemoryService:
             raise RuntimeError("LLM maintenance is disabled")
         lock_index = _user_lock_index(user_id, len(self._user_locks))
         with self._user_locks[lock_index]:
+            deadline = time.monotonic() + self.add_deadline_seconds
             events = self.repository.pending_maintenance_events(user_id)
             if not events:
                 return False
@@ -289,13 +344,14 @@ class MemoryService:
                 request_id=request_id,
                 events=events,
                 watermark_request_id=events[-1].request_id,
+                deadline=deadline,
             )
             if self.embedding_provider is not None and nodes:
                 try:
                     raw_nodes = self.repository.get_nodes_by_ids(
                         user_id, [event.memory_id for event in events]
                     )
-                    self._index_nodes((*raw_nodes, *nodes))
+                    self._index_nodes((*raw_nodes, *nodes), deadline=deadline)
                 except Exception as error:
                     LOGGER.warning(
                         "maintenance retry embedding degraded user_scope=%s "
@@ -336,6 +392,7 @@ class MemoryService:
         request_id: str,
         events: tuple[EventRecord, ...],
         watermark_request_id: str | None = None,
+        deadline: float | None = None,
     ) -> tuple[NodeRecord, ...]:
         try:
             context_text = "\n".join(event.content for event in events)[:2400]
@@ -343,7 +400,8 @@ class MemoryService:
             if self.embedding_provider is not None:
                 try:
                     self._increment_metric("embedding_context_calls")
-                    context_vector = self.embedding_provider.embed([context_text])[0]
+                    with provider_deadline(self.embedding_provider, deadline):
+                        context_vector = self.embedding_provider.embed([context_text])[0]
                     preferred_ids = tuple(
                         item.id
                         for item in self.repository.semantic_search(
@@ -368,12 +426,13 @@ class MemoryService:
                 preferred_ids=preferred_ids,
             )
             self._increment_metric("llm_maintenance_calls")
-            plan = self.maintainer.plan(
-                events=events,
-                context=context_nodes,
-                links=context_links,
-                working_memory=self.repository.get_working_memory(user_id),
-            )
+            with provider_deadline(self.maintainer.provider, deadline):
+                plan = self.maintainer.plan(
+                    events=events,
+                    context=context_nodes,
+                    links=context_links,
+                    working_memory=self.repository.get_working_memory(user_id),
+                )
             return self.repository.apply_maintenance(
                 user_id=user_id,
                 request_id=request_id,
@@ -431,9 +490,10 @@ class MemoryService:
             query_parts = [request.query, *(request.options or [])]
             try:
                 self._increment_metric("embedding_search_calls")
-                query_vector = self.embedding_provider.embed(
-                    ["\n".join(query_parts)[:2400]]
-                )[0]
+                with provider_deadline(self.embedding_provider, deadline):
+                    query_vector = self.embedding_provider.embed(
+                        ["\n".join(query_parts)[:2400]]
+                    )[0]
                 initial_semantic = self.repository.semantic_search(
                     user_id=request.user_id,
                     query_vector=query_vector,
@@ -524,11 +584,12 @@ class MemoryService:
         if self.query_planner is not None and time.monotonic() < deadline:
             try:
                 self._increment_metric("llm_search_calls")
-                plan = self.query_planner.plan(
-                    query=request.query,
-                    options=request.options,
-                    candidates=planner_candidates,
-                )
+                with provider_deadline(self.query_planner.provider, deadline):
+                    plan = self.query_planner.plan(
+                        query=request.query,
+                        options=request.options,
+                        candidates=planner_candidates,
+                    )
                 extra_terms = tuple(
                     dict.fromkeys(
                         [
@@ -575,9 +636,10 @@ class MemoryService:
                         [request.query, *(request.options or []), *extra_terms]
                     )[:2400]
                     self._increment_metric("embedding_search_calls")
-                    semantic_query_vector = self.embedding_provider.embed(
-                        [expanded_query]
-                    )[0]
+                    with provider_deadline(self.embedding_provider, deadline):
+                        semantic_query_vector = self.embedding_provider.embed(
+                            [expanded_query]
+                        )[0]
                 semantic = self.repository.semantic_search(
                     user_id=request.user_id,
                     query_vector=semantic_query_vector,
@@ -665,7 +727,11 @@ class MemoryService:
         return rebuilt_users, rebuilt_nodes
 
     def _index_nodes(
-        self, nodes: tuple[NodeRecord, ...], *, replace_user: bool = False
+        self,
+        nodes: tuple[NodeRecord, ...],
+        *,
+        replace_user: bool = False,
+        deadline: float | None = None,
     ) -> None:
         if self.embedding_provider is None or not nodes:
             return
@@ -681,7 +747,8 @@ class MemoryService:
                 )
         self._increment_metric("embedding_index_calls")
         self._increment_metric("embedding_index_texts", len(chunks))
-        vectors = self.embedding_provider.embed([chunk.content for chunk in chunks])
+        with provider_deadline(self.embedding_provider, deadline):
+            vectors = self.embedding_provider.embed([chunk.content for chunk in chunks])
         self.repository.replace_embeddings(
             user_id=nodes[0].user_id,
             chunks=chunks,
@@ -758,6 +825,14 @@ def _fuse_rankings(
     ):
         for rank, item in enumerate(ranking, start=1):
             scores[item.id] = scores.get(item.id, 0.0) + weight / (60 + rank)
+    _boost_direct_fact_evidence(
+        scores,
+        features,
+        model_ranking,
+        lexical,
+        semantic,
+        path_ranking,
+    )
     for memory_id, feature in features.items():
         if memory_id not in scores:
             continue
@@ -778,7 +853,11 @@ def _fuse_rankings(
     maximum = max(scores.values(), default=1.0)
     ordered_ids = sorted(
         scores,
-        key=lambda memory_id: (scores[memory_id], by_id[memory_id].created_at or ""),
+        key=lambda memory_id: (
+            scores[memory_id],
+            by_id[memory_id].created_at or "",
+            memory_id,
+        ),
         reverse=True,
     )
     results: list[SearchResult] = []
@@ -796,6 +875,25 @@ def _fuse_rankings(
         if len(results) >= limit:
             break
     return results
+
+
+def _boost_direct_fact_evidence(
+    scores: dict[str, float],
+    features: dict[str, RankingFeatures],
+    *rankings: list[SearchResult],
+) -> None:
+    priority_ids = list(
+        dict.fromkeys(item.id for ranking in rankings for item in ranking[:8])
+    )[:12]
+    for parent_rank, memory_id in enumerate(priority_ids):
+        feature = features.get(memory_id)
+        if feature is None or feature.kind != "fact":
+            continue
+        parent_bonus = 0.012 / (1.0 + parent_rank * 0.25)
+        for source_rank, source_id in enumerate(feature.source_event_ids[:4]):
+            if source_id not in scores:
+                continue
+            scores[source_id] += parent_bonus / (1.0 + source_rank * 0.25)
 
 
 def _rank_graph_paths(paths: list[GraphPath]) -> list[SearchResult]:
@@ -824,6 +922,7 @@ def _rank_graph_paths(paths: list[GraphPath]) -> list[SearchResult]:
             key=lambda memory_id: (
                 scores[memory_id],
                 by_id[memory_id].created_at or "",
+                memory_id,
             ),
             reverse=True,
         )

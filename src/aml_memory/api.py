@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import sqlite3
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
@@ -19,6 +21,9 @@ from .providers import (
 from .repository import SQLiteMemoryRepository
 from .service import MemoryService
 from .settings import Settings
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def create_app(
@@ -66,6 +71,7 @@ def create_app(
             effective_settings.maintenance_event_threshold
         ),
         maintenance_char_threshold=effective_settings.maintenance_char_threshold,
+        enrichment_max_attempts=effective_settings.enrichment_max_attempts,
         add_deadline_seconds=effective_settings.add_deadline_seconds,
         search_deadline_seconds=effective_settings.search_deadline_seconds,
         model_provider=(
@@ -93,7 +99,7 @@ def create_app(
 
     application = FastAPI(
         title="AML Memory Add/Search",
-        version="0.2.0",
+        version="0.3.0",
         lifespan=lifespan,
     )
 
@@ -117,6 +123,19 @@ def create_app(
         return JSONResponse(
             status_code=409,
             content={"detail": {"reason": str(error)}},
+        )
+
+    @application.exception_handler(sqlite3.OperationalError)
+    async def storage_temporarily_unavailable_handler(
+        request: Request, _error: sqlite3.OperationalError
+    ) -> JSONResponse:
+        LOGGER.warning(
+            "storage temporarily unavailable path=%s error_type=OperationalError",
+            request.url.path,
+        )
+        return JSONResponse(
+            status_code=503,
+            content={"detail": {"reason": "storage_temporarily_unavailable"}},
         )
 
     @application.get("/health")

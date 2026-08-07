@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -8,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from aml_memory.api import create_app
 from aml_memory.projection import user_scope_hash
-from aml_memory.repository import _query_tokens
+from aml_memory.repository import _query_tokens, stable_memory_id
 from aml_memory.settings import Settings
 
 
@@ -321,3 +322,136 @@ def test_protocol_validation_rejects_unknown_fields_and_invalid_top_k(
 
     assert extra_field.status_code == 422
     assert invalid_top_k.status_code == 422
+
+
+def test_storage_contention_error_is_safe_and_retryable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    application = create_app(make_settings(tmp_path))
+    with TestClient(application) as client:
+        monkeypatch.setattr(
+            application.state.memory_service.repository,
+            "search",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                sqlite3.OperationalError("database is locked: secret path")
+            ),
+        )
+        response = client.post(
+            "/v1/memory/search", json=search_payload(query="anything")
+        )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": {"reason": "storage_temporarily_unavailable"}
+    }
+    assert "secret path" not in response.text
+
+
+def test_concurrent_official_shape_preserves_idempotency_and_isolation(
+    tmp_path: Path,
+) -> None:
+    settings = make_settings(tmp_path)
+    application = create_app(settings)
+    user_count = 64
+
+    with TestClient(application) as client:
+        payloads = [
+            add_payload(
+                user_id=f"eval:load:user-{index}",
+                request_id=f"eval:load:add-{index}",
+                content=f"Private marker-{index} belongs only to user-{index}.",
+            )
+            for index in range(user_count)
+        ]
+        with ThreadPoolExecutor(max_workers=64) as executor:
+            add_responses = list(
+                executor.map(
+                    lambda payload: client.post("/v1/memory/add", json=payload),
+                    payloads,
+                )
+            )
+        assert all(response.status_code == 200 for response in add_responses)
+
+        replay_payload = add_payload(
+            user_id="eval:load:user-0",
+            request_id="eval:load:add-0",
+            content="Private marker-0 belongs only to user-0.",
+        )
+        with ThreadPoolExecutor(max_workers=32) as executor:
+            replay_responses = list(
+                executor.map(
+                    lambda _index: client.post(
+                        "/v1/memory/add", json=replay_payload
+                    ),
+                    range(32),
+                )
+            )
+        assert all(response.status_code == 200 for response in replay_responses)
+
+        searches = [
+            search_payload(
+                user_id=f"eval:load:user-{index % user_count}",
+                query=f"marker-{index % user_count}",
+                top_k=100,
+            )
+            for index in range(128)
+        ]
+        with ThreadPoolExecutor(max_workers=128) as executor:
+            search_responses = list(
+                executor.map(
+                    lambda payload: client.post(
+                        "/v1/memory/search", json=payload
+                    ),
+                    searches,
+                )
+            )
+
+    assert all(response.status_code == 200 for response in search_responses)
+    for index, response in enumerate(search_responses):
+        data = response.json()["data"]
+        expected_user = index % user_count
+        assert 0 < len(data) <= 100
+        assert all(f"user-{expected_user}" in item["content"] for item in data)
+    with sqlite3.connect(settings.db_path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM add_requests").fetchone()[0] == 64
+        assert connection.execute("SELECT COUNT(*) FROM raw_events").fetchone()[0] == 64
+
+
+def test_equal_score_events_use_stable_source_order_across_databases(
+    tmp_path: Path,
+) -> None:
+    payload = {
+        "request_id": "eval:stable:add-1",
+        "messages": [
+            {"role": "user", "content": f"Shared topic detail {index}"}
+            for index in range(5)
+        ],
+        "user_id": "eval:stable:user-1",
+        "session_id": "eval:stable:session-1",
+    }
+    ranked_ids: list[list[str]] = []
+    for database_name in ("first.db", "second.db"):
+        settings = make_settings(
+            tmp_path,
+            db_path=tmp_path / database_name,
+            markdown_view_dir=None,
+        )
+        with TestClient(create_app(settings)) as client:
+            assert client.post("/v1/memory/add", json=payload).status_code == 200
+            response = client.post(
+                "/v1/memory/search",
+                json={
+                    "query": "Shared topic",
+                    "options": None,
+                    "user_id": "eval:stable:user-1",
+                    "top_k": 5,
+                },
+            )
+        assert response.status_code == 200
+        ranked_ids.append([item["id"] for item in response.json()["data"]])
+
+    expected = [
+        stable_memory_id("eval:stable:user-1", "eval:stable:add-1", ordinal)
+        for ordinal in reversed(range(5))
+    ]
+    assert ranked_ids == [expected, expected]

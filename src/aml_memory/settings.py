@@ -28,6 +28,7 @@ class Settings:
     maintenance_event_threshold: int = 1
     maintenance_char_threshold: int = 1
     enrichment_mode: str = "sync"
+    enrichment_max_attempts: int = 5
     add_deadline_seconds: float = 120.0
     search_deadline_seconds: float = 30.0
     llm_model: str = OFFICIAL_LLM_MODEL
@@ -73,6 +74,9 @@ class Settings:
             enrichment_mode=os.environ.get(
                 "AML_ENRICHMENT_MODE", "sync"
             ).strip().lower(),
+            enrichment_max_attempts=int(
+                os.environ.get("AML_ENRICHMENT_MAX_ATTEMPTS", "5")
+            ),
             add_deadline_seconds=float(
                 os.environ.get("AML_ADD_DEADLINE_SECONDS", "120")
             ),
@@ -154,6 +158,8 @@ class Settings:
                 "AML_ENRICHMENT_MODE must be one of "
                 f"{sorted(SUPPORTED_ENRICHMENT_MODES)}"
             )
+        if not 1 <= self.enrichment_max_attempts <= 20:
+            raise ValueError("AML_ENRICHMENT_MAX_ATTEMPTS must be between 1 and 20")
         if self.add_deadline_seconds <= 0:
             raise ValueError("AML_ADD_DEADLINE_SECONDS must be positive")
         if self.search_deadline_seconds <= 0:

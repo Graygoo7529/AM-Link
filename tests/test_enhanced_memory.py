@@ -14,11 +14,12 @@ from aml_memory.providers import ProviderError
 from aml_memory.repository import (
     GraphPath,
     NodeRecord,
+    RankingFeatures,
     SQLiteMemoryRepository,
     stable_memory_id,
     stable_structured_id,
 )
-from aml_memory.service import _rank_graph_paths
+from aml_memory.service import _fuse_rankings, _rank_graph_paths
 from aml_memory.settings import Settings
 
 
@@ -377,6 +378,69 @@ class FailsExpandedQueryEmbedding(FakeEmbeddingProvider):
             self.calls.append(texts)
             raise ProviderError("synthetic expanded query outage")
         return super().embed(texts)
+
+
+def test_high_ranked_fact_brings_existing_direct_evidence_forward() -> None:
+    fact = SearchResult(id="fact", content="Caroline prefers counseling.")
+    source = SearchResult(id="source", content="I want to pursue counseling.")
+    distractor = SearchResult(id="distractor", content="Counseling workshop.")
+    features = {
+        "fact": RankingFeatures(
+            kind="fact",
+            confidence=0.9,
+            activity=0.0,
+            status="active",
+            event_time=None,
+            valid_from=None,
+            valid_to=None,
+            evidence_group_id="fact-group",
+            source_event_ids=("source",),
+            resolved_time_start=None,
+            resolved_time_end=None,
+        ),
+        "source": RankingFeatures(
+            kind="daily",
+            confidence=1.0,
+            activity=0.0,
+            status="active",
+            event_time=None,
+            valid_from=None,
+            valid_to=None,
+            evidence_group_id="source-group",
+            source_event_ids=("source",),
+            resolved_time_start=None,
+            resolved_time_end=None,
+        ),
+        "distractor": RankingFeatures(
+            kind="daily",
+            confidence=1.0,
+            activity=0.0,
+            status="active",
+            event_time=None,
+            valid_from=None,
+            valid_to=None,
+            evidence_group_id="distractor-group",
+            source_event_ids=("distractor",),
+            resolved_time_start=None,
+            resolved_time_end=None,
+        ),
+    }
+
+    ranked = _fuse_rankings(
+        [fact, distractor, source],
+        [],
+        [],
+        [source],
+        [],
+        [fact],
+        features,
+        intent="multi_hop",
+        limit=3,
+    )
+
+    ranked_ids = [item.id for item in ranked]
+    assert set(ranked_ids[:2]) == {"fact", "source"}
+    assert ranked_ids.index("source") < ranked_ids.index("distractor")
 
 
 def enhanced_settings(tmp_path: Path) -> Settings:
@@ -1413,3 +1477,110 @@ def test_tombstoned_fact_is_removed_from_all_retrieval_indexes(tmp_path: Path) -
         assert connection.execute(
             "SELECT COUNT(*) FROM memory_embeddings WHERE memory_id = ?", (fact_id,)
         ).fetchone()[0] == 0
+
+
+def test_failed_sync_enrichment_recovers_through_bounded_worker_path(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(
+        db_path=tmp_path / "memory.db",
+        markdown_view_dir=None,
+        llm_enabled=True,
+        openai_api_key="fake-model-key",
+        enrichment_max_attempts=3,
+    )
+    provider = RecoveringModelProvider()
+    application = create_app(settings, model_provider=provider)
+
+    with TestClient(application) as client:
+        service = application.state.memory_service
+        service.stop_worker()
+        assert client.post("/v1/memory/add", json=add_payload()).status_code == 200
+        with sqlite3.connect(settings.db_path) as connection:
+            connection.execute(
+                "UPDATE enrichment_jobs SET available_at = "
+                "'2020-01-01T00:00:00.000Z'"
+            )
+        assert service.process_pending_enrichment(
+            limit=1, include_pending=False
+        ) == 1
+
+    with sqlite3.connect(settings.db_path) as connection:
+        assert connection.execute(
+            "SELECT status, attempts FROM enrichment_jobs"
+        ).fetchone() == ("completed", 2)
+        assert connection.execute(
+            "SELECT status FROM maintenance_runs"
+        ).fetchone()[0] == "completed"
+        assert connection.execute(
+            "SELECT COUNT(*) FROM memory_nodes WHERE kind = 'fact'"
+        ).fetchone()[0] == 1
+
+
+def test_persistent_enrichment_failure_stops_at_configured_attempt_limit(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(
+        db_path=tmp_path / "memory.db",
+        markdown_view_dir=None,
+        llm_enabled=True,
+        openai_api_key="fake-model-key",
+        enrichment_max_attempts=3,
+    )
+    application = create_app(settings, model_provider=FailingModelProvider())
+
+    with TestClient(application) as client:
+        service = application.state.memory_service
+        service.stop_worker()
+        assert client.post("/v1/memory/add", json=add_payload()).status_code == 200
+        for _attempt in range(2):
+            with sqlite3.connect(settings.db_path) as connection:
+                connection.execute(
+                    "UPDATE enrichment_jobs SET available_at = "
+                    "'2020-01-01T00:00:00.000Z'"
+                )
+            service.process_pending_enrichment(limit=1, include_pending=False)
+        with sqlite3.connect(settings.db_path) as connection:
+            connection.execute(
+                "UPDATE enrichment_jobs SET available_at = "
+                "'2020-01-01T00:00:00.000Z'"
+            )
+        assert service.process_pending_enrichment(
+            limit=1, include_pending=False
+        ) == 0
+
+    with sqlite3.connect(settings.db_path) as connection:
+        assert connection.execute(
+            "SELECT status, attempts FROM enrichment_jobs"
+        ).fetchone() == ("failed", 3)
+
+
+def test_enrichment_worker_survives_a_transient_iteration_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    application = create_app(
+        Settings(db_path=tmp_path / "memory.db", markdown_view_dir=None)
+    )
+    with TestClient(application):
+        service = application.state.memory_service
+        service.stop_worker()
+        service._worker_stop.clear()
+        attempts = 0
+
+        def process_once_then_stop(*, limit: int, include_pending: bool) -> int:
+            nonlocal attempts
+            assert limit == 4
+            assert not include_pending
+            attempts += 1
+            if attempts == 1:
+                raise sqlite3.OperationalError("temporary storage failure")
+            service._worker_stop.set()
+            return 0
+
+        monkeypatch.setattr(
+            service, "process_pending_enrichment", process_once_then_stop
+        )
+        monkeypatch.setattr(service._worker_stop, "wait", lambda _seconds: False)
+        service._worker_loop()
+
+        assert attempts == 2
