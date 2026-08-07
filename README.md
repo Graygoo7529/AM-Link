@@ -1,191 +1,270 @@
-# Agent Memory Add/Search
+# AM-Link
 
-面向 Agent Memory Leaderboard 的 Add/Search 记忆服务。当前版本同时提供零外部依赖的 Smoke/降级模式，以及固定 `gpt-4o-mini`、`embedding-3` 的增强模式。
+AM-Link 是一个面向 Agent Memory Leaderboard 的证据优先 Add/Search 记忆服务。它把对话原文作为不可变真源，在其上增量维护 fact、entity、concept、typed links、时间状态和向量索引；Search 返回可审计的记忆证据，不生成最终答案。
 
-完整设计、取舍和后续技术路线见 [设计理念.md](./设计理念.md)。接口字段以主办方的 [Evaluation Protocol](https://agentmemories.ai/evaluation) 和公开 [评测仓库](https://github.com/AML-memory/agent-memory-leaderboard) 为准。
+当前发布版本：`0.3.0`
 
-执行状态和可复现验收记录见 [docs/README.md](./docs/README.md)。
+项目仓库：[Graygoo7529/AM-Link](https://github.com/Graygoo7529/AM-Link)
 
-## 当前能力
+赛事参考：[Agent Memory Challenge](https://agentmemories.ai/competition/) · [API/Rules](https://agentmemories.ai/rules)
+CI：GitHub Actions 负责在 Linux runner 中构建 Docker；本地开发不需要安装 Docker。
 
-- `POST /v1/memory/add`：在 HTTP 200 前原子提交原始事件、工作记忆和基础检索索引；
-- `POST /v1/memory/search`：按 `user_id` 检索证据，返回不超过 `top_k` 的 `data` 数组；
-- `GET /health`：无需鉴权；
-- 相同 `user_id + request_id` 和相同请求体可安全重试，不重复写入；不同请求体复用同一 ID 返回 HTTP 409；
-- 支持 `Authorization: Token`、`Authorization: Bearer`、`X-Api-Key` 和本地无鉴权模式；
-- SQLite/WAL 为事务真源，`Memory.md` 与 daily Markdown 是可重建投影。
-- Add 增强模式先用 lexical/embedding 召回相关旧节点和 links，再由 `gpt-4o-mini` 生成严格 schema 的 fact proposal；模型只能 supersede/tombstone 本轮已召回的同用户稳定 ID，并在事务内应用 entity/concept/fact、typed links 和有效期；
-- Search 增强模式先初召回并执行一次有界一跳 link inspect，再让一次 `gpt-4o-mini` 调用同时生成查询计划和候选 ID 偏好，不生成答案；随后用扩展查询重做语义召回并融合 FTS、`embedding-3`、links 和节点质量特征；
-- 结构化节点使用 `canonical_key` 复用同一事实，Search 按 `evidence_group_id` 去重；中文查询补充连续词和二元/三元片段，planner 不可用时仍可确定性识别当前/历史查询；
-- Search 图扩展保留 `GraphPath`、关系和 source event 覆盖，并按路径质量参与重排；普通查询最多两跳，明确 multi-hop 查询最多三跳，以覆盖 `raw -> fact -> entity/concept -> related fact`；同源 fact/entity/concept 只占一个结构化结果位置，同时保留直接 raw 证据；
-- 英文问句检索会过滤高置信模板词和助动词，减少 `what/did/the` 对 FTS、LIKE 和相关性分数的干扰；
-- 消息中的明确日期、相对日、上下周星期和上下月会在有 source timestamp 时解析为保守日期范围，Search 可按该范围召回证据；无锚点时只保留原始时间表达；
-- `AML_ENRICHMENT_MODE=sync` 是默认模式；设为 `async` 时 Add 只等待 raw/FTS 硬提交，持久化 worker 后台执行 maintenance/embedding，进程重启后可继续消费 pending/failed job；
-- Add/Search 的外部 provider 调用、容量等待、批处理和退避共享请求绝对 deadline；网络中断、408/425/429/5xx 有界重试，超过预算立即降级，不会在每次重试时重新获得完整超时；
-- sync/async enrichment 的失败任务均可由后台 worker 恢复，默认最多 5 次；恢复时按当前 watermark 重建该用户派生节点和向量，避免旧任务覆盖新状态或无限重试；
-- lexical、semantic、temporal 和 graph 同分候选使用稳定 ID/时间/序号裁决；高置信结构事实会把其直接 source event 作为伴随证据提升，但不凭空生成 Search 内容；
-- 提供 `python -m aml_memory.replay` 回放工具，可对本地或公网 API 记录 recall@k、MRR、重复率、时间/多跳覆盖、分类型召回、延迟和 provider 调用次数；
-- 提供 `python -m aml_memory.locomo` 转换器，可将 LoCoMo 原始 JSON 转为受控的 20-message Add/Search 回放 manifest；LoCoMo 自评记录见 [docs/LoCoMo回放.md](docs/LoCoMo回放.md)。
-- raw、结构化节点、FTS、向量和图查询均显式限制 `user_id`；同用户 Add 全流程串行，不同用户可以并行；
-- 模型或 embedding 故障时返回 raw/lexical 证据，错误日志只记录用户哈希、请求 ID 和错误类型。
-- maintenance JSON 首次 schema 不合法时只允许一次同模型修复重试，反馈仅含字段路径和错误类型；越界 mutation、HTTP/provider 错误和第二次非法响应继续按既有降级语义处理。
+## 项目定位
 
-默认关闭外部模型，适合协议 Smoke 和故障降级；正式 Full 配置必须设置 `AML_LLM_ENABLED=true`，确保 Add/Search 都实际调用固定的 `gpt-4o-mini`。增强链路已完成 LoCoMo 扩大回放和本地 HTTP 并发验证；赛事固定 Smoke 仍必须在提交入口执行。
+AM-Link 只负责两件事：
 
-代理调试时可以显式使用已验证的 `gpt-5.4-mini`，但必须同时打开 `AML_ALLOW_NONOFFICIAL_LLM_MODEL=true`；该开关只用于本地联调，正式 Full 前必须恢复 `gpt-4o-mini` 并关闭开关。
+1. `Add`：持久化记忆并完成可检索的内部维护；
+2. `Search`：在指定 `user_id` 范围内返回排序后的证据。
 
-当前实现不使用 pi SDK。Add 和 Search 各使用一次有 schema、并发和超时边界的模型调用；图扩展由确定性代码执行。这样更容易审计模型是否固定、控制成本，并避免自由 Agent 循环突破 1200 秒客户端超时。后续只有在公开回放证明多步 Agent 显著提高召回时才引入，并继续受固定模型、最大步数和总 deadline 约束。
+最终回答由赛事平台统一生成。服务不会把 query 改写成答案，不读取评测金标，也不在 Search 中运行自由 Agent 循环。
 
-## 本地启动
+## Add/Search 协议
 
-Python 3.10 及以上：
+### Add
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python -m pip install -e ".[dev]"
-$env:AML_AUTH_SCHEME = "bearer"
-$env:AML_API_KEY = "local-secret"
-$env:AML_LLM_ENABLED = "true"
-$env:OPENAI_BASE_URL = "https://api.zhizengzeng.com/v1"
-$env:OPENAI_API_KEY = "set-in-your-shell-or-secret-manager"
-$env:AML_EMBEDDING_ENABLED = "true"
-$env:ZHIPU_API_KEY = "set-in-your-shell-or-secret-manager"
-.\.venv\Scripts\python -m aml_memory
+`POST /v1/memory/add`，请求字段与赛事同步契约一致：
+
+```json
+{
+  "request_id": "eval:run_abc123:dataset:conv-0:chunk-0",
+  "messages": [
+    {
+      "role": "user",
+      "timestamp": 1704067200000,
+      "content": "memory text"
+    }
+  ],
+  "user_id": "eval:run_abc123:dataset:conv-0",
+  "session_id": "eval:run_abc123:sample:0"
+}
 ```
 
-默认监听 `http://127.0.0.1:8080`。开发环境可将 `AML_AUTH_SCHEME` 设为 `none`；正式提交必须启用鉴权。
-
-## Docker 启动
-
-```powershell
-docker build -t aml-memory:0.3.0 .
-docker run --rm -p 8080:8080 -v aml-memory-data:/data `
-  -e AML_AUTH_SCHEME=bearer `
-  -e AML_API_KEY=replace-with-a-long-random-key `
-  -e AML_LLM_ENABLED=true `
-  -e OPENAI_BASE_URL=https://api.zhizengzeng.com/v1 `
-  -e OPENAI_API_KEY=replace-at-runtime `
-  -e AML_EMBEDDING_ENABLED=true `
-  -e ZHIPU_API_KEY=replace-at-runtime `
-  aml-memory:0.3.0
-```
-
-镜像使用单个 Uvicorn worker。SQLite 和 Markdown 投影依赖共享本地卷，不能直接横向扩为多个无状态实例；需要横向扩容时应先按设计文档迁移到 PostgreSQL/共享索引。
-
-## Add 示例
-
-```powershell
-curl.exe -X POST http://127.0.0.1:8080/v1/memory/add `
-  -H "Authorization: Bearer local-secret" `
-  -H "Content-Type: application/json" `
-  -d '{"request_id":"run-1:chunk-0","messages":[{"role":"user","timestamp":1704067200000,"content":"I will visit Shanghai next Monday."}],"user_id":"run-1:user-0","session_id":"run-1:session-0"}'
-```
-
-成功响应：
+成功响应必须是 `HTTP 200`，并且只有在原文已经持久化、可立即被 Search 找到后才返回：
 
 ```json
 {
   "success": true,
-  "request_id": "run-1:chunk-0",
-  "user_id": "run-1:user-0",
-  "session_id": "run-1:session-0"
+  "request_id": "eval:run_abc123:dataset:conv-0:chunk-0",
+  "user_id": "eval:run_abc123:dataset:conv-0",
+  "session_id": "eval:run_abc123:sample:0"
 }
 ```
 
-## Search 示例
+同一 `user_id + request_id` 的相同 payload 可安全重放；payload 不同则返回 `409`。服务不返回 `202`、task ID 或轮询地址。
 
-```powershell
-curl.exe -X POST http://127.0.0.1:8080/v1/memory/search `
-  -H "Authorization: Bearer local-secret" `
-  -H "Content-Type: application/json" `
-  -d '{"query":"Where will the user go next Monday?","options":["Shanghai","Beijing"],"user_id":"run-1:user-0","top_k":100}'
+### Search
+
+`POST /v1/memory/search`：
+
+```json
+{
+  "query": "Which answer best matches the memory?",
+  "options": ["A. First answer", "B. Second answer"],
+  "user_id": "eval:run_abc123:dataset:conv-0",
+  "top_k": 100
+}
 ```
 
-Search 返回证据而不是最终答案：
+响应必须是按相关性排序的 `data` 数组；无结果时返回空数组。每条结果至少包含非空 `id` 和 `content`，可选 `score`、`created_at`：
 
 ```json
 {
   "data": [
     {
-      "id": "mem_...",
-      "content": "[2024-01-01T00:00:00.000Z][user][session: run-1:session-0] I will visit Shanghai next Monday.",
-      "score": 0.85,
-      "created_at": "2024-01-01T00:00:00.000Z"
+      "id": "mem_01H...",
+      "content": "remembered fact text",
+      "score": 0.87,
+      "created_at": "2026-07-01T12:00:00Z"
     }
   ]
 }
 ```
 
+正式评测的 `top_k` 为 `100`。`user_id` 是唯一检索隔离边界；`session_id` 只用于来源组织，不作为 Search 过滤条件。
+
+### Health 与鉴权
+
+- `GET /health`：无需鉴权，返回 `{"status":"ok"}`；
+- Add/Search 支持 `Authorization: Bearer ...`、`Authorization: Token ...` 和 `X-Api-Key: ...`；
+- `AML_AUTH_SCHEME=none` 只适用于本地开发或公开 Smoke，正式服务必须启用独立 Memory System Key；
+- 生产 URL 使用 HTTPS，URL 中不包含密钥。
+
+## ADD/SEARCH 架构
+
+### Add 路径
+
+1. 按用户加锁，SQLite/WAL 事务写入 raw event、working memory、daily/FTS；
+2. `sync` 模式下调用一次固定 `gpt-4o-mini` maintenance，输出严格校验的 fact/entity/concept/link mutation；
+3. Repository 只允许 mutation 引用本轮同用户召回的稳定 ID，并在事务内处理 version、supersedes、tombstone 和 source evidence；
+4. 可选调用 `embedding-3`，按 2400 字符分块、200 字符重叠建立向量索引；
+5. Markdown 是可重建投影，不是真源。provider 或投影失败时保留 raw/FTS，任务进入可恢复的 enrichment 状态。
+
+### Search 路径
+
+1. FTS/lexical、embedding 和时间候选初召回；
+2. planner 前执行一次有界一跳 link inspect；
+3. 一次 `gpt-4o-mini` query plan 只产生扩展词、intent 和候选 ID 偏好，不产生答案；
+4. 重新执行 lexical/semantic/status 检索，按 intent 进行最多两跳普通图扩展或最多三跳 multi-hop 扩展；
+5. 融合 lexical、semantic、temporal、graph、路径质量和节点质量，按 `evidence_group_id` 去重并稳定排序；
+6. 返回已保存的 fact/raw/source evidence，不返回内部推理或生成答案。
+
+memory links 在 inspect、GraphPath、fact-source evidence 伴随召回和关系重排中使用。曾测试过的 novelty 互补选择会牺牲真实 provider 的 Recall/MRR，已删除，不属于当前版本。
+
+## 运行模式
+
+| 模式 | LLM | Embedding | 用途 |
+| --- | --- | --- | --- |
+| Smoke/降级 | 关闭 | 关闭 | 协议、自测、provider 故障时的 lexical 保底 |
+| Full 候选 | `gpt-4o-mini` | `embedding-3` | 正式评测前的增强模式 |
+
+正式 Full 使用：
+
+```text
+AML_ENRICHMENT_MODE=sync
+AML_LLM_ENABLED=true
+AML_LLM_MODEL=gpt-4o-mini
+AML_EMBEDDING_ENABLED=true
+AML_EMBEDDING_MODEL=embedding-3
+```
+
+不要把 `AML_ENRICHMENT_MODE=async` 用于官方 Full：async 会在后台执行增强，而官方要求 Add 返回时记忆已经可检索。`gpt-5.4-mini` 或其他模型只允许本地调试，不能用于 Full。
+
 ## 配置
 
-| 环境变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `AML_DB_PATH` | `data/aml_memory.db` | SQLite 文件路径 |
-| `AML_MARKDOWN_VIEW_DIR` | `data/markdown` | Markdown 投影目录；空字符串可关闭 |
-| `AML_AUTH_SCHEME` | `none` | `none`、`token`、`bearer` 或 `x-api-key` |
-| `AML_API_KEY` | 空 | 启用鉴权时必填 |
-| `AML_MAX_TOP_K` | `100` | 服务端结果上限，最大 100 |
-| `AML_WORKING_MEMORY_EVENT_LIMIT` | `40` | 工作记忆保留的近期事件数 |
-| `AML_WORKING_MEMORY_CHAR_LIMIT` | `16000` | 工作记忆字符上限 |
-| `AML_MAINTENANCE_EVENT_THRESHOLD` | `1` | maintenance 触发所需的未整理事件数；默认 1 保持每次 Add 的正式行为 |
-| `AML_MAINTENANCE_CHAR_THRESHOLD` | `1` | maintenance 触发所需的未整理字符数；事件数或字符数任一达到即触发 |
-| `AML_ENRICHMENT_MODE` | `sync` | `sync` 或 `async`；async 将模型/embedding 增强移到持久化 worker |
-| `AML_ENRICHMENT_MAX_ATTEMPTS` | `5` | 后台 enrichment 失败任务的最大处理次数，允许 1 至 20 |
-| `AML_ADD_DEADLINE_SECONDS` | `120` | Add 可选增强阶段总预算；raw/FTS 硬提交不受影响 |
-| `AML_SEARCH_DEADLINE_SECONDS` | `30` | Search embedding/planner/graph 可选阶段总预算 |
-| `AML_LLM_ENABLED` | `false` | 启用 Add maintenance 和 Search query planning；Full 必须为 true |
-| `AML_LLM_MODEL` | `gpt-4o-mini` | 比赛模型锁，配置为其他值会拒绝启动 |
-| `OPENAI_BASE_URL` | `https://api.zhizengzeng.com/v1` | 智增增 OpenAI 兼容 API 根地址，调用 `/chat/completions` |
-| `OPENAI_API_KEY` | 空 | 启用 LLM 时必填，只从环境读取 |
-| `AML_LLM_TIMEOUT_SECONDS` | `90` | 单次模型 HTTP 超时 |
-| `AML_LLM_MAX_OUTPUT_TOKENS` | `2500` | 单次结构化响应 token 上限 |
-| `AML_LLM_MAX_RETRIES` | `2` | 408/425/429/5xx 与网络错误的最大重试次数 |
-| `AML_LLM_MAX_CONCURRENCY` | `16` | 进程内模型并发上限 |
-| `AML_EMBEDDING_ENABLED` | `false` | 启用 `embedding-3` 向量索引和语义召回 |
-| `AML_EMBEDDING_MODEL` | `embedding-3` | embedding 模型锁 |
-| `AML_EMBEDDING_DIMENSIONS` | `512` | 向量维度，允许 256 至 2048 |
-| `AML_EMBEDDING_BATCH_SIZE` | `64` | 单次 embedding 文本数上限 |
-| `ZHIPU_BASE_URL` | `https://open.bigmodel.cn/api/paas/v4` | 智谱 API 根地址 |
-| `ZHIPU_API_KEY` | 空 | 启用 embedding 时必填，只从环境读取 |
+所有密钥只从进程环境或部署平台 Secret 注入，不写入仓库、镜像层、SQLite、Markdown 或日志。配置模板见 [.env.example](./.env.example)。
 
-## 测试
+### 存储与服务
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `AML_DB_PATH` | `data/aml_memory.db` | SQLite/WAL 真源 |
+| `AML_MARKDOWN_VIEW_DIR` | `data/markdown` | Markdown 投影目录；空值关闭 |
+| `AML_AUTH_SCHEME` | `none` | `none`、`token`、`bearer`、`x-api-key` |
+| `AML_API_KEY` | 空 | 启用鉴权时必填 |
+| `AML_MAX_TOP_K` | `100` | 服务端上限，最大 100 |
+| `AML_WORKING_MEMORY_EVENT_LIMIT` | `40` | working memory 近期事件上限 |
+| `AML_WORKING_MEMORY_CHAR_LIMIT` | `16000` | maintenance 上下文字符上限 |
+| `AML_ENRICHMENT_MODE` | `sync` | `sync` 或 `async`；Full 使用 `sync` |
+| `AML_ENRICHMENT_MAX_ATTEMPTS` | `5` | enrichment 最大尝试次数 |
+| `AML_ADD_DEADLINE_SECONDS` | `120` | Add 可选增强总预算 |
+| `AML_SEARCH_DEADLINE_SECONDS` | `30` | Search 可选增强总预算 |
+
+### LLM 与 embedding
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `AML_LLM_ENABLED` | `false` | 启用 Add maintenance 和 Search planner |
+| `AML_LLM_MODEL` | `gpt-4o-mini` | 赛事模型锁 |
+| `OPENAI_BASE_URL` | `https://api.zhizengzeng.com/v1` | OpenAI-compatible `/chat/completions` 根地址 |
+| `OPENAI_API_KEY` | 空 | LLM provider key |
+| `AML_LLM_TIMEOUT_SECONDS` | `90` | 单次 provider HTTP 超时 |
+| `AML_LLM_MAX_OUTPUT_TOKENS` | `2500` | 结构化输出预算 |
+| `AML_LLM_MAX_RETRIES` | `2` | provider 有界重试次数 |
+| `AML_LLM_MAX_CONCURRENCY` | `16` | 进程内 LLM 并发上限 |
+| `AML_EMBEDDING_ENABLED` | `false` | 启用语义索引和召回 |
+| `AML_EMBEDDING_MODEL` | `embedding-3` | embedding 模型锁 |
+| `ZHIPU_BASE_URL` | `https://open.bigmodel.cn/api/paas/v4` | 智谱 `/embeddings` 根地址 |
+| `ZHIPU_API_KEY` | 空 | embedding provider key |
+| `AML_EMBEDDING_DIMENSIONS` | `512` | 允许 256 至 2048 |
+| `AML_EMBEDDING_BATCH_SIZE` | `64` | 单批文本数上限 |
+| `AML_EMBEDDING_TIMEOUT_SECONDS` | `60` | embedding HTTP 超时 |
+| `AML_EMBEDDING_MAX_RETRIES` | `2` | embedding 有界重试次数 |
+| `AML_EMBEDDING_MAX_CONCURRENCY` | `32` | 进程内 embedding 并发上限 |
+
+## 本地开发
+
+要求 Python 3.10+。本地开发和协议 Smoke 不需要 Docker：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python -m pip install -e ".[dev]"
+$env:AML_AUTH_SCHEME = "none"
+$env:AML_DB_PATH = "B:\tmp\aml-memory-dev.db"
+$env:AML_LLM_ENABLED = "false"
+$env:AML_EMBEDDING_ENABLED = "false"
+.\.venv\Scripts\python -m aml_memory
+```
+
+默认监听 `http://127.0.0.1:8080`。开发完成后可用 `curl.exe` 调用上面的 Add/Search 路径。不要把 provider key 写入 PowerShell 历史、源码或 `.env` 文件。
+
+## Docker 与 CI
+
+Dockerfile 使用单个 Uvicorn worker 和 `/data` 持久卷。官方代码提交要求 Docker 启动说明，但本地开发不要求安装 Docker；仓库的 GitHub Actions 会在 Linux runner 中执行真实 build。
+
+```bash
+docker build -t aml-memory:0.3.0 .
+docker run --rm -p 8080:8080 -v aml-memory-data:/data \
+  -e AML_AUTH_SCHEME=bearer \
+  -e AML_API_KEY=replace-at-runtime \
+  -e AML_LLM_ENABLED=true \
+  -e OPENAI_API_KEY=replace-at-runtime \
+  -e AML_EMBEDDING_ENABLED=true \
+  -e ZHIPU_API_KEY=replace-at-runtime \
+  aml-memory:0.3.0
+```
+
+不要在 `docker build` 时传入任何 key；所有密钥只在 `docker run`、systemd Secret 或平台 Secret 中注入。SQLite 不能通过多个无状态副本共享写入；横向扩容前应迁移到共享事务数据库和向量索引。
+
+## 公网自部署
+
+自部署 API 需要：
+
+- 公网可访问的 HTTPS Add/Search URL 和无需鉴权的 Health URL；
+- 独立 Memory System Key；
+- `AML_ENRICHMENT_MODE=sync`、`AML_LLM_ENABLED=true`、固定 `gpt-4o-mini`；
+- SQLite/Markdown 持久盘、备份、证书自动续期和服务重启策略；
+- 提交后至少 30 天保持稳定，并在评测结束后 30 天内删除评测数据及派生副本。
+
+当前部署实例（用于 API 参赛路线）：
+
+```text
+Health:  https://121.43.49.84/health
+Add:     https://121.43.49.84/v1/memory/add
+Search:  https://121.43.49.84/v1/memory/search
+Auth:    Authorization: Bearer <Memory System Key>
+Version: 0.3.0
+```
+
+不要在公开材料中写入 Memory System Key、Eval/Leaderboard Key 或 provider key。Eval/Leaderboard Key 只用于赛事网站创建 Smoke/Full 任务；Memory System Key 只用于平台访问 Add/Search。
+
+## 测试与评测
 
 ```powershell
 .\.venv\Scripts\python -m pytest
+.\.venv\Scripts\python -m compileall -q src
+.\.venv\Scripts\python -m pip check
 ```
 
-61 项测试覆盖协议响应、Add 后立即 Search、幂等冲突、用户隔离、三种鉴权、相关 maintenance context、检索约束 mutation、结构化维护、schema 修复边界、失败重试、版本/tombstone、跨用户 mutation 拒绝、inspect-first query plan、两/三跳图扩展、GraphPath 路径传播、扩展向量查询及降级、canonical/evidence 去重、source-event 结构折叠、直接 source 伴随召回、稳定同分排序、旧库字段迁移、中文检索、英文问句停用词、时间表达和 temporal Search、planner-free 历史状态过滤、sync/async enrichment、失败任务恢复与最大尝试次数、worker 瞬态异常隔离、maintenance 阈值批处理、watermark 推进、绝对 deadline、provider 容量等待/网络异常、并发 Add/Search、回放指标、LoCoMo 转换、索引重建、30 天清理和故障降级。
-
-需要更换 embedding 维度或修复索引时，可在服务停止写入后执行全量或单用户重建。新向量全部计算成功后才会在事务中替换旧索引：
+当前仓库有 61 项自动化测试，覆盖协议、鉴权、幂等、user 隔离、maintenance mutation、时间、links、embedding、provider deadline/retry、并发、失败恢复、LoCoMo 转换和降级。LoCoMo 回放工具：
 
 ```powershell
-$env:AML_EMBEDDING_ENABLED = "true"
-$env:ZHIPU_API_KEY = "set-in-your-shell-or-secret-manager"
-.\.venv\Scripts\python -m aml_memory.reindex
-.\.venv\Scripts\python -m aml_memory.reindex --user-id "opaque-user-id"
+.\.venv\Scripts\python -m aml_memory.locomo --help
+.\.venv\Scripts\python -m aml_memory.replay --help
 ```
 
-模型暂时故障后，可在代理恢复且确认该 request 的 raw 数据仍在库中时显式重试 maintenance；普通 Add 重放不会触发重试：
+公开 LoCoMo 只能作为自评，不替代主办方 Smoke/Full。Full 受理后版本冻结，不能因为结果不理想替换实现。
 
-```powershell
-$env:AML_LLM_ENABLED = "true"
-$env:OPENAI_API_KEY = "set-in-your-shell-or-secret-manager"
-.\.venv\Scripts\python -m aml_memory.retry_maintenance `
-  --user-id "opaque-user-id" --request-id "eval:run:chunk-0"
-```
+## 原创性与来源披露
 
-评测结束后按主办方要求删除原始及派生数据，清理命令必须使用明确的 UTC 截止时间并纳入部署定时任务：
+AM-Link 是参赛者 **Graygoo7529** 的原创实现，当前仓库中的 Python、SQLite、FastAPI、maintenance、retrieval、GraphPath、provider 适配和部署代码均为本项目独立编写。
 
-```powershell
-.\.venv\Scripts\python -m aml_memory.purge_memory `
-  --before "2026-09-07T00:00:00.000Z"
-```
+设计灵感来自参赛者正在开发的另一个个人原创 Agent 项目 **TinySoul-Agent**。TinySoul-Agent 不是第三方依赖，也没有把其源代码、私有数据、密钥或运行服务复制进本仓库；本项目只在设计层面提炼并重新实现了以下思想：稳定 memory link 身份、先 inspect/recall 再 mutation、source evidence 可追溯、结构化记忆生命周期和 Markdown 可解释投影。AM-Link 针对比赛的 Add/Search 合同重新设计了 FastAPI/SQLite/WAL、固定模型调用、事务边界、user 隔离、provider deadline/retry、降级和评测回放，不是 TinySoul-Agent 的代码打包或接口移植。
 
-## 正式提交检查
+LoCoMo 仅用于本地自评，原始数据和评测答案不进入提交仓库；相关来源和许可证记录在 [docs/LoCoMo回放.md](./docs/LoCoMo回放.md)。赛事私有数据不在本项目中保存或硬编码。
 
-- 使用公开仓库与固定 commit，保留本 README、Dockerfile、依赖和方法说明；
-- 先运行主办方 Smoke，确认 Add/Search 路径、鉴权头和 Health URL；
-- 正式服务启用 HTTPS 和独立 Memory System Key，不把任何 Key 写入镜像；
-- 使用持久卷并备份 SQLite；不要使用会丢失本地卷的自动扩缩容；
-- Full 前完成第二阶段召回质量验证；正式 Full 的 `top_k` 为 100，客户端可能并发调用并重试；
-- 学术自行部署需要按主办方要求保持公网接口稳定可访问；学术代码提交由平台按仓库说明构建，不在仓库中提供 Eval Key。
+## 参赛提交清单
+
+1. 提交 Evaluation Access Request，选择 `Textual Memory`、`Academic Methods` 和自部署 API；
+2. 提供固定版本、公开仓库、Add/Search/Health URL、鉴权方式和运行说明；
+3. 审核通过后取得 Eval/Leaderboard Key，运行官方 Smoke；
+4. Smoke 通过后固定 commit、模型、provider 配置和 Run Label，再提交唯一 Full；
+5. 保持公网服务稳定至少 30 天，保留必要审计信息并按官方要求删除评测数据；
+6. 提交材料中披露原创性、TinySoul-Agent 的个人原创关系、LoCoMo 来源和所有第三方 provider/依赖。
+
+完整设计和执行记录：
+
+- [设计理念.md](./设计理念.md)
+- [docs/README.md](./docs/README.md)
+- [docs/官方要求核对.md](./docs/官方要求核对.md)
+- [docs/提供方与运行模式.md](./docs/提供方与运行模式.md)
+- [docs/验收记录.md](./docs/验收记录.md)
