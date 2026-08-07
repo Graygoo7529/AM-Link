@@ -195,6 +195,6 @@ LoCoMo 是可复现的替代基线。原作者仓库公开 `data/locomo10.json`�
 | chain coverage@10 | 0.5 | 0.0 |
 | Search p95 | 12.646 ms | 14,001.413 ms |
 
-完整增强链路所有请求成功，无 warning；数据库包含 153 daily、12 fact、3 entity、8 concept、46 links、176 vectors，10 个 maintenance/enrichment job 全部 completed。结构化事实通常能排在前列，但对应的多条 raw source 未必同时进入前十，因此下一步应做互补 evidence group 选择，而不是简单增加图 hop。
+完整增强链路所有请求成功，无 warning；数据库包含 153 daily、12 fact、3 entity、8 concept、46 links、176 vectors，10 个 maintenance/enrichment job 全部 completed。结构化事实通常能排在前列，但对应的多条 raw source 未必同时进入前十；随后进行的真实 provider 互补 evidence group 选择 A/B 反而使 Recall/MRR 和 multi-hop chain coverage 回退，因此该实验已删除，当前保持 evidence group 去重和 source 伴随召回。
 
 同一存储上的 planner 重跑受上游模型输出波动影响，因此表中完整链路可用于确认可用性和总体效果，不能把小样本的每项变化严格归因为某一个重排特征。完整故障和并发结果见 [扩大验证与可靠性优化](./扩大验证与可靠性优化.md)。
