@@ -1,0 +1,171 @@
+﻿{
+    "benchmark_type":  "textual",
+    "contract_version":  "textual-v1",
+    "benchmark_contract":  "ldbd-textual-official-suite-v1",
+    "adapter_protocol_version":  "track-adapter-v1",
+    "adapter_api":  {
+                        "health":  {
+                                       "method":  "GET",
+                                       "path":  "/health",
+                                       "response":  {
+                                                        "status":  "ok|unavailable"
+                                                    }
+                                   },
+                        "start":  {
+                                      "method":  "POST",
+                                      "path":  "/v1/runs",
+                                      "status_code":  202,
+                                      "required":  [
+                                                       "dispatch_id",
+                                                       "attempt",
+                                                       "system_id",
+                                                       "phase",
+                                                       "target",
+                                                       "models",
+                                                       "top_k"
+                                                   ],
+                                      "optional":  [
+                                                       "options",
+                                                       "resume_from"
+                                                   ],
+                                      "target_required":  [
+                                                              "add_url",
+                                                              "search_url"
+                                                          ],
+                                      "target_optional":  [
+                                                              "auth",
+                                                              "add_status_url",
+                                                              "health_url"
+                                                          ],
+                                      "response":  {
+                                                       "dispatch_id":  "string",
+                                                       "status":  "accepted"
+                                                   }
+                                  },
+                        "status":  {
+                                       "method":  "GET",
+                                       "path":  "/v1/runs/{dispatch_id}",
+                                       "required":  [
+                                                        "dispatch_id",
+                                                        "status"
+                                                    ],
+                                       "running_progress":  {
+                                                                "done":  "integer",
+                                                                "total":  "integer|null"
+                                                            },
+                                       "optional":  [
+                                                        "stage",
+                                                        "progress",
+                                                        "current",
+                                                        "result",
+                                                        "error"
+                                                    ]
+                                   },
+                        "cancel":  {
+                                       "method":  "POST",
+                                       "path":  "/v1/runs/{dispatch_id}/cancel",
+                                       "request_body":  null,
+                                       "response":  {
+                                                        "dispatch_id":  "string",
+                                                        "status":  "string"
+                                                    }
+                                   },
+                        "artifact":  {
+                                         "required_only_when_declared":  true,
+                                         "method":  "GET",
+                                         "path":  "/v1/runs/{dispatch_id}/artifacts/{name}",
+                                         "response":  "declared bytes matching sha256"
+                                     }
+                    },
+    "platform_api":  {
+                         "create":  {
+                                        "method":  "POST",
+                                        "path":  "/api/v1/evaluations",
+                                        "required":  [
+                                                         "version_id",
+                                                         "benchmark_type",
+                                                         "phase"
+                                                     ],
+                                        "optional":  [
+                                                         "options"
+                                                     ],
+                                        "response":  {
+                                                         "evaluation_id":  "string",
+                                                         "status":  "queued"
+                                                     }
+                                    },
+                         "get":  {
+                                     "method":  "GET",
+                                     "path":  "/api/v1/evaluations/{evaluation_id}"
+                                 },
+                         "resume":  {
+                                        "method":  "POST",
+                                        "path":  "/api/v1/evaluations/{evaluation_id}/resume",
+                                        "request_body":  null,
+                                        "reuses_evaluation_id":  true,
+                                        "reuses_dispatch_id":  true,
+                                        "increments_attempt":  true
+                                    },
+                         "artifact_download":  {
+                                                   "method":  "GET",
+                                                   "path":  "/api/v1/evaluations/{evaluation_id}/artifacts/{name}",
+                                                   "authentication_required":  true
+                                               }
+                     },
+    "options":  {
+                    "max_add_concurrency":  {
+                                                "type":  "integer",
+                                                "minimum":  16,
+                                                "maximum":  64
+                                            },
+                    "search_concurrency":  {
+                                               "type":  "integer",
+                                               "minimum":  16,
+                                               "maximum":  256
+                                           },
+                    "top_k":  {
+                                  "type":  "integer",
+                                  "minimum":  1,
+                                  "maximum":  100
+                              }
+                },
+    "datasets":  [
+                     "scriptmem",
+                     "locomo",
+                     "longmemeval",
+                     "clbench",
+                     "beam",
+                     "personamem_v1",
+                     "personamem_v2"
+                 ],
+    "memory_api":  {
+                       "contract_version":  "memory-api-v1.1",
+                       "add_content":  "string_or_content_parts",
+                       "search_query":  "string_or_content_parts",
+                       "search_result_content":  "string_or_content_parts",
+                       "content_types":  [
+                                             "text"
+                                         ]
+                   },
+    "result":  {
+                   "required_common_fields":  [
+                                                  "score",
+                                                  "completed",
+                                                  "total"
+                                              ],
+                   "optional_common_fields":  [
+                                                  "artifacts"
+                                              ],
+                   "required_track_fields":  [
+                                                 "capabilities"
+                                             ],
+                   "optional_track_fields":  [
+                                                 "subcapabilities"
+                                             ],
+                   "artifact_fields":  [
+                                           "name",
+                                           "uri",
+                                           "sha256"
+                                       ]
+               }
+}

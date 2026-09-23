@@ -1,9 +1,23 @@
-.env
-.pytest_cache/
+# Local data and generated artifacts, including every archived phase.
+data/
+references/
 .venv/
+.pytest_cache/
 __pycache__/
 *.py[cod]
-data/
-dist/
 *.egg-info/
-references/
+dist/
+build/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+.env
+.env.*
+!.env.example
+
+# Authorized local credentials and deployment snapshots; never publish.
+/docs/private/
+*.local.md
+*.local.env
