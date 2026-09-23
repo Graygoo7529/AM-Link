@@ -1,17 +1,19 @@
 # 服务器接入经验
 
-2026-09-23 已停止一期 API、Nginx 和专属证书续期任务，并清理项目部署。以下是复用经验，不表示旧地址仍可调用。
+2026-09-23 已停止一期 API、删除一期数据/代码/专用证书，并将服务器改为与 AM-Link 无关的通用公网基础设施。当前长期示例为 `http://121.43.49.84/hello` 和 `http://121.43.49.84/health`；一期旧地址不再调用。
 
 ## 一期部署链路
 
 ```text
 本地源码 -> 构建 wheel -> SSH/SCP 上传 -> 服务器 venv 安装
-公网 HTTPS :443 -> Nginx -> 127.0.0.1:8080 Uvicorn -> SQLite + 外部模型
+公网 HTTP :80 -> Nginx -> 静态 hello 示例；未来域名 HTTPS :443 -> Nginx -> 独立 loopback 服务
 ```
 
-服务器是阿里云 ECS，IP `121.43.49.84`。通过系统 OpenSSH 的 `ssh` 和 `scp` 对接；登录资料在本地 `docs/private/server-access.md`。本地无交互会话曾用临时 SSH_ASKPASS 脚本提供已授权密码，操作后删除脚本；复杂远程命令先写成 LF 换行脚本再上传，避免 PowerShell 与 Bash 双重展开。
+服务器是阿里云 ECS，IP `121.43.49.84`。通过系统 OpenSSH 的 `ssh` 和 `scp` 对接；登录资料在本地 `docs/private/server-access.md`。本地无交互会话曾用临时 SSH_ASKPASS 脚本提供已授权密码，操作后删除脚本；复杂远程命令先写成 LF 换行脚本再上传，避免 PowerShell 与 Bash 双重展开。服务器账号不写入公开仓库，服务进程不使用 root。
 
-应用使用独立 `aml` 用户、单个 Uvicorn worker 和 systemd 托管；SSH 管理用户与应用运行用户不同。以前的路径为：
+### 一期历史部署
+
+应用使用独立 `aml` 用户、单个 Uvicorn worker 和 systemd 托管；SSH 管理用户与应用运行用户不同。以下路径只描述一期历史部署，当前服务器不再保留这些 AM-Link 资源：
 
 | 路径/服务 | 用途 |
 | --- | --- |
@@ -21,7 +23,9 @@
 | `aml-memory.service` | 启动、故障重启及应用权限约束 |
 | Nginx 80/443 | HTTP 跳转 HTTPS、TLS 终止、转发 loopback API |
 
-无需域名也曾成功部署 IP HTTPS。一期使用短期 IP 证书，靠 Certbot 每 6 小时检查续期来维持可用；**单张证书不覆盖 30 天，连续可用依赖续期链路**。二期重新部署时应重新核验当时的证书产品与规则，签发/更新证书，检查 SAN、到期时间、续期 dry-run 和重载钩子，不沿用“证书应该还有效”的假设。
+一期曾使用测试 IP 证书做链路验证，但 2026-09-23 重新申请生产证书时，Certbot 5.7.0 明确返回 Let's Encrypt 不为裸 IP 签发证书。因此当前通用示例只提供 HTTP；不要把裸 IP HTTP 地址提交给要求 HTTPS 的官方评测。需要正式 HTTPS 时，先准备域名，再使用同一个 ACME webroot 申请域名证书；不要把 staging/test certificate 当作生产证书。
+
+域名证书步骤是：Nginx 80 保留 `/.well-known/acme-challenge/`，Certbot 使用 `/opt/certbot/bin/certbot certonly --webroot -w /var/www/certbot -d <domain>`，Nginx 443 使用 `fullchain.pem` 和 `privkey.pem`；`public-certbot-renew.timer` 每 6 小时执行 `renew --quiet`，deploy hook 只 reload Nginx。签发后用 `openssl s_client` 或 `curl` 检查 SAN、有效期和实际链路。证书私钥只留在服务器 `/etc/letsencrypt`，不能交给官方或写入 Memory System Key 申请。
 
 Nginx 原配置为请求体 4 MiB、连接超时 10 秒、收发超时 180 秒。它们是一期部署取值，不是二期标准；尤其不能直接用来承接二期多模态请求。服务器安全组与本机监听都必须检查；应用 8080 保持 loopback 即可。
 
@@ -55,4 +59,8 @@ docker run --rm -p 127.0.0.1:8080:8080 -v aml-phase1-local:/data \
 
 固定代码 commit 和运行配置，构建同一份 wheel/镜像；上传后检查模块版本与安装位置，使用单实例可写数据目录。先验证健康、错误鉴权、Add 后 Search、同 ID 重放和用户隔离，再小规模验证真实 provider 的完成状态与费用。升级之前留回滚制品，但备份不能超出数据保留期限。
 
-停止评测后的收尾要涵盖 API、后台任务、自动重启、续期、数据库副本和部署密钥。服务器实例仍保留时，ECS 本身的费用不会因关闭 API 自动停止；本次没有释放实例或改变云账号资源。
+当前通用基础设施：`nginx.service` 已启用并监听 80；`public-certbot-renew.timer` 已启用，每 6 小时触发一次，当前无生产证书时命令正常退出。`/opt/public-web/README.md` 是服务器上的可读维护说明；`/var/www/public/hello.json` 是示例内容。新增应用必须使用独立用户、loopback 端口和独立 Nginx location/server。ECS 实例仍保留，云资源费用与 API 是否运行是两件事。
+
+## 官方接口凭据
+
+提交时只给官方：Add URL、Search URL、健康检查 URL、认证方案和 Memory System Key。Eval/Leaderboard Key 是官方签发的评测平台凭据，不放进服务器环境，也不用于 Add/Search。URL 不包含用户名、密码或 Key；公网地址应先通过健康、鉴权、Add 后 Search、重复 Add 和隔离检查。官方要求 HTTPS 生产接口，并拒绝解析到私网、回环或链路本地地址的 URL。

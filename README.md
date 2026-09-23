@@ -2,7 +2,7 @@
 
 面向 Agent Memory Leaderboard 的智能体记忆研究项目：实现 Add 写入和 Search 证据检索，由主办方统一回答与评分。
 
-**当前阶段：一期归档，二期调研。** 一期 `0.3.0` 已通过官方 Smoke 并完成 Full；用户反馈取得了不错的成绩，尚未在这里登记具体名次和官方分数。2026-09-23 已关闭一期公网 API 并清理服务器部署代码。
+**当前阶段：一期归档，二期调研。** 一期 `0.3.0` 已通过官方 Smoke 并完成 Full，在 [AM-Link 排行榜开源榜文本赛道](https://agentmemories.ai/leaderboard/academic/textual)排名第 21 名。2026-09-23 已关闭一期公网 API，并删除服务器上的一期程序、数据库数据和专用证书。
 
 AM-Link 和设计灵感来源 **TinySoul-Agent** 都是 Graygoo7529 的个人原创项目。一期借鉴自己的记忆设计思想，独立实现比赛接口，未直接移植 TinySoul-Agent 代码。
 

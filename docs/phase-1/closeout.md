@@ -1,6 +1,6 @@
 # 一期收尾记录
 
-日期：2026-09-23。用户确认一期比赛已完成且成绩不错；此前已确认官方 Smoke 通过、Full completed。此处不补写未经登记的官方分数或名次。
+日期：2026-09-23。用户确认一期比赛已完成；官方 Smoke 通过、Full completed。一期在 [AM-Link 排行榜开源榜文本赛道](https://agentmemories.ai/leaderboard/academic/textual)排名第 21 名。
 
 ## 冻结与归档
 
@@ -16,14 +16,16 @@
 | 状态 | 事项 | 结果 |
 | --- | --- | --- |
 | done | 关闭一期接口 | 80/443/8080 无监听；从外部访问旧 Health/Add/Search 均无法连接，SSH 保留 |
-| done | 停止后台及自动启动 | API 与 Nginx 禁用自启；一期证书续期 timer 停止并移除 |
+| done | 停止后台及自动启动 | 一期 API 与旧 Nginx 站点禁用自启；一期证书续期 timer 停止并移除（通用 Nginx 后续重新启用） |
 | done | 保存部署经验 | 环境及 systemd/Nginx 快照取回本地 `docs/private/`，已验证 Git 忽略 |
 | done | 删除部署代码与密钥环境文件 | 删除 `/opt/aml-memory`、`/etc/aml-memory.env` 和专属服务/站点配置；Nginx 配置检查通过 |
-| pending | 一期服务器数据及备份 | 原目录 `/var/lib/aml-memory` 约 3.3 GB；已请求用户确认删除，尚未执行 |
+| done | 一期服务器数据及备份 | 删除 `/var/lib/aml-memory` 及其中 SQLite、WAL、Markdown 和旧备份；服务器不再保留一期评测数据 |
+| deferred | 主机级访问日志 | `/var/log/nginx` 与 `/var/log/letsencrypt` 可能包含一期请求，但无法证明整份文件只属于 AM-Link；未删除，避免影响服务器其他服务 |
 | done | 本地归档及 ignore | 46/46 文件一致；data、数据库、references、私有资料均忽略 |
 | done | 修复本地运行路径 | 根 `.venv` 可正确导入归档中的 `aml_memory` 0.3.0 |
 | done | 验证归档 | 61 项测试通过、pip check 通过；一条 TestClient 依赖弃用警告 |
 | done | 经验沉淀与二期调研 | 文档入口、设计理念、实验/架构复盘、运维/模型经验及二期调研 |
+| done | 通用服务器基础 | Nginx 开机服务、HTTP hello/health 示例、通用 Certbot renewal timer 和 `/opt/public-web/README.md` 已建立；与一期 API 解耦 |
 
 首次 pytest 已完成用例，但清理旧系统临时目录时权限失败；改用独立 `B:\tmp` 临时目录后完整退出成功。没有为解决环境权限修改归档代码，也没有执行付费模型调用。
 
@@ -31,6 +33,6 @@
 
 本地 `archive/phase-1/data/` 保存一期原有数据目录，以及从本机临时目录找回的公开 LoCoMo 数据、回放 manifest 和实验报告；它们均不进入 Git。没有把服务器正式评测数据库下载为二期训练或调参数据。
 
-服务器保留操作系统、SSH、Nginx/Certbot 工具和证书账户等通用环境；证书续期已停止，未来重新部署必须重新检查证书。ECS 实例尚未释放，云资源费用与 API 是否运行是两件事。
+服务器保留并重新启用了与 AM-Link 无关的通用 Nginx 和 Certbot renewal 基础，提供 `http://121.43.49.84/hello` 与 `/health` 示例；一期专用证书 lineage、续期配置、数据库、Markdown 数据和旧备份均已删除。裸 IP 生产 HTTPS 申请被当前 Let's Encrypt 明确拒绝，未来应绑定域名后再启用 443。主机级 Nginx/Certbot 日志因可能由其他服务共享而保留，见上表。ECS 实例尚未释放，云资源费用与 API 是否运行是两件事。
 
-本轮更改留在本地工作树供审阅，没有提交或推送；提交时应一起包含旧路径删除和新归档路径新增，不能只提交根 README。下次会话以根 [AGENTS.md](../../AGENTS.md) 和 [docs 索引](../README.md) 恢复工作上下文。
+归档基础已记录在提交 `59e2cc7`（`Archive 1`）；本次排名、服务器删除和工程经验补充仍在本地工作树，尚未推送。下次会话以根 [AGENTS.md](../../AGENTS.md) 和 [docs 索引](../README.md) 恢复工作上下文。
