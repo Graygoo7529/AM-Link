@@ -33,6 +33,6 @@
 
 本地 `archive/phase-1/data/` 保存一期原有数据目录，以及从本机临时目录找回的公开 LoCoMo 数据、回放 manifest 和实验报告；它们均不进入 Git。没有把服务器正式评测数据库下载为二期训练或调参数据。
 
-服务器保留并重新启用了与 AM-Link 无关的通用 Nginx 和 Certbot renewal 基础，提供 `http://121.43.49.84/hello` 与 `/health` 示例；一期专用证书 lineage、续期配置、数据库、Markdown 数据和旧备份均已删除。裸 IP 生产 HTTPS 申请被当前 Let's Encrypt 明确拒绝，未来应绑定域名后再启用 443。主机级 Nginx/Certbot 日志因可能由其他服务共享而保留，见上表。ECS 实例尚未释放，云资源费用与 API 是否运行是两件事。
+服务器保留并重新启用了与 AM-Link 无关的通用 Nginx 和 Certbot renewal 基础，提供 `http://121.43.49.84/hello` 与 `/health` 示例；一期专用证书 lineage、续期配置、数据库、Markdown 数据和旧备份均已删除。Let’s Encrypt 目前支持公网 IP 的约 160 小时短证书，但需要 `shortlived` profile 和可靠自动续期；长期服务仍建议绑定域名，域名证书或商业 IP 证书再启用 443。主机级 Nginx/Certbot 日志因可能由其他服务共享而保留，见上表。ECS 实例尚未释放，云资源费用与 API 是否运行是两件事。
 
 归档基础已记录在提交 `59e2cc7`（`Archive 1`）；本次排名、服务器删除和工程经验补充仍在本地工作树，尚未推送。下次会话以根 [AGENTS.md](../../AGENTS.md) 和 [docs 索引](../README.md) 恢复工作上下文。
