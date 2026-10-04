@@ -10,6 +10,7 @@
 | 4 | [服务器接入经验](./operations/server.md) | 本地运行、部署和端口服务；2026-10-04 SSH/HTTPS/续期核验 |
 | 5 | [模型接入经验](./operations/models.md) | LLM、embedding、配置；2026-10-04 最小真实调用核验 |
 | 6 | [二期接入调研](./phase-2/integration-research.md) | 当前官方约定、变化与下一步 |
+| 7 | [数据集与 Add/Search 靶场实施](./doing/README.md) | 官方套件调研、公开数据集准备和可观测协议回放 |
 
 `private/` 仅本机存在：包含已授权保存的 SSH 账号、服务器环境快照和模型 Key。公开文档只记录接入方法。
 

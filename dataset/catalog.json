@@ -1,0 +1,49 @@
+{
+  "catalog_version": 1,
+  "verified_on": "2026-10-04",
+  "datasets": {
+    "locomo": {
+      "title": "LoCoMo (original public release)",
+      "official_suite_name": "LoCoMo-Refined",
+      "contract_ids": ["locomo"],
+      "status": "available",
+      "format": "json-array",
+      "upstream": "https://github.com/snap-research/locomo",
+      "download_url": "https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json",
+      "raw_relative_path": "locomo/locomo10.json",
+      "license": "CC BY-NC 4.0",
+      "attribution": "Maharana et al., SNAP Research; LoCoMo: Long-Context Conversation Understanding with Memory Operations",
+      "sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+      "size_bytes": 2805274,
+      "public_counts": {
+        "conversations": 10,
+        "sessions": 272,
+        "turns": 5882,
+        "questions": 1986
+      },
+      "notes": "Original upstream release, not the AML LoCoMo-Refined bundle."
+    },
+    "longmemeval-s": {
+      "title": "LongMemEval-S (cleaned public release)",
+      "official_suite_name": "LongMemEval-S",
+      "contract_ids": ["longmemeval"],
+      "status": "not_downloaded",
+      "format": "json-array",
+      "upstream": "https://github.com/xiaowu0162/LongMemEval",
+      "dataset_card": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned",
+      "download_url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416/longmemeval_s_cleaned.json",
+      "raw_relative_path": "longmemeval/longmemeval_s_cleaned.json",
+      "license": "MIT",
+      "attribution": "Di Wu, Hongwei Wang, Wenhao Yu, Yuwei Zhang, Kai-Wei Chang, and Dong Yu; LongMemEval (ICLR 2025)",
+      "revision": "98d7416",
+      "approx_size_mb": 277,
+      "sha256": null,
+      "public_counts": {
+        "questions": 500,
+        "approx_history_sessions_per_question": 48,
+        "approx_tokens_per_question": 115000
+      },
+      "notes": "The observed Hugging Face file is about 277 MiB (290455142 bytes). Record and verify the SHA-256 after downloading this immutable repository revision."
+    }
+  }
+}
