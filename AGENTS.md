@@ -4,6 +4,7 @@
 - 截至 2026-09-23：一期 Smoke 通过、Full completed，在 [AM-Link 排行榜开源榜文本赛道](https://agentmemories.ai/leaderboard/academic/textual)排名第 21 名；一期公网 API、部署代码、数据库数据和专用证书均已清理。服务器现保留与项目无关的通用 Nginx、Certbot renewal 基础和 `/hello` 示例。二期处于调研阶段，还没有新实现。具体收尾状态见 `docs/phase-1/closeout.md`。
 - 一期代码在 `archive/phase-1/`，版本 0.3.0；代码基线 `1881abe`，归档前 HEAD `447608a`。保持归档作为历史参考，二期代码应另建目录。
 - 每次开始先读根 README、`docs/README.md`、`docs/phase-2/integration-research.md`；只按任务需要读历史长文，不把旧文档的当前状态当成今天的事实。
+- reference\TinySoul-Agent 是我进行的另一个项目，可以探索和参考它使用的记忆设计理念和 Inspect、Search 原型方法
 
 ## 环境
 

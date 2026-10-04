@@ -21,3 +21,4 @@ build/
 /docs/private/
 *.local.md
 *.local.env
+reference/
