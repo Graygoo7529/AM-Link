@@ -1,11 +1,24 @@
 # 模型接入经验
 
-本次只归档配置，未重新发起付费模型调用。下面是一期最后使用的接口；Key 在本地被忽略的 `docs/private/phase1-server.env`，取回于 2026-09-23。历史调用成功不等于今日余额、授权或模型仍可用。
+2026-09-23 归档时只保存配置，未重新发起付费模型调用；2026-10-04 已完成下述最小真实请求核验。下面是一期最后使用的接口；Key 在本地被忽略的 `docs/private/phase1-server.env`，取回于 2026-09-23。一次调用成功不代表后续余额、配额或模型授权始终可用。
 
 | 用途 | 提供方与模型 | 地址 | 环境变量 |
 | --- | --- | --- | --- |
 | LLM | 智增增代理，`gpt-4o-mini` | `https://api.zhizengzeng.com/v1/chat/completions` | `OPENAI_BASE_URL=https://api.zhizengzeng.com/v1`，`OPENAI_API_KEY` |
 | 向量 | 智谱，`embedding-3` | `https://open.bigmodel.cn/api/paas/v4/embeddings` | `ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas/v4`，`ZHIPU_API_KEY` |
+
+## 2026-10-04 可用性核验（done）
+
+北京时间 09:41，从本地读取上述私有配置，分别发送一次合成文本请求；未重试、未使用评测数据。
+
+| 用途 | 实测结果 | 耗时 | 提供方返回用量 |
+| --- | --- | --- | --- |
+| LLM | HTTP 200；返回模型 `gpt-4o-mini`；输出为有效 JSON `{"ok":true}` | 1.366 秒 | 输入 18、输出 5，共 23 tokens |
+| Embedding | HTTP 200；返回模型 `embedding-3`；1 条 512 维向量，数值有限且非零 | 0.396 秒 | 输入 9、输出 0，共 9 tokens |
+
+本次确认本地到提供方的网络、现存 Key 和最小调用可用；未测试并发容量、记忆质量或服务器侧模型调用，未查询余额及实际账单。模型名称为提供方自报，二期合规边界仍以正式核验为准。
+
+## 一期调用方式
 
 一期使用 HTTPX 直接发送兼容请求，不使用 pi SDK，也不要求安装 OpenAI SDK。两种模型分别启用：`AML_LLM_ENABLED=true`、`AML_EMBEDDING_ENABLED=true`；`AML_ENRICHMENT_MODE=sync`。配置模板在 [归档 .env.example](../../archive/phase-1/.env.example)，模板和旧默认值不是二期推荐值。
 

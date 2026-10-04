@@ -2,6 +2,22 @@
 
 2026-09-23 已停止一期 API、删除一期数据/代码/专用证书，并将服务器改为与 AM-Link 无关的通用公网基础设施。当前示例为 `https://121.43.49.84/hello` 和 `https://121.43.49.84/health`，HTTP 也可访问；旧 Add/Search 返回 404。
 
+## 2026-10-04 可用性核验（done）
+
+北京时间 09:41，完成已知主机密钥校验后的 SSH 登录与只读检查；公网请求未跳过 TLS 验证。
+
+| 检查 | 结果 |
+| --- | --- |
+| 服务器 | SSH 正常；根分区剩余约 33 GiB，内存可用约 1169 MiB |
+| 服务和端口 | Nginx、SSH 均 active/enabled；公网地址监听 22/80/443，无 8080 监听；`nginx -t` 通过 |
+| 公开 endpoint | HTTP/HTTPS 的 `/hello`、`/health` 均 200；HTTPS POST `/v1/memory/add`、`/v1/memory/search` 均 404 |
+| 当前 HTTPS 证书 | `public-ip`，Let's Encrypt YE1；IP SAN 为 `121.43.49.84`；有效期北京时间 2026-10-04 05:23:14 至 **2026-10-10 21:23:13**，检查时剩余约 155.7 小时 |
+| 证书加载 | 公网 TLS 1.3 信任链及 IP 校验通过；公网证书与磁盘证书 SHA-256 指纹一致；至少剩余 48 小时检查通过 |
+| 自动续期 | `public-certbot-renew.timer` active/enabled，每 6 小时检查；最近一次服务执行 2026-10-04 06:21 成功，下一次计划 12:21；oneshot 服务完成后 inactive 为正常状态 |
+| 一期清理 | `aml-memory.service`、`aml-certbot-renew.timer` 未找到；`/opt/aml-memory`、`/var/lib/aml-memory`、`/etc/aml-memory.env` 及一期专属 systemd/Nginx 配置均不存在；证书 live/archive/renewal 仅有 `public-ip` lineage |
+
+本次未重新部署应用、修改远程配置或手动触发续期。远程检查通过内存脚本执行，未创建远程临时脚本、askpass 文件或测试数据。证书后续会自动轮换，以上日期只描述本次读取的证书。
+
 ## 一期部署链路
 
 ```text
@@ -55,6 +71,8 @@ curl --fail https://121.43.49.84/hello
 Nginx 配置在 `/etc/nginx/sites-available/public-web`；变更前配置备份在 `/opt/public-web/backups/pre-https/`。staging 测试目录已清理。私钥只留服务器，不能给官方或写入仓库。未来也可以申请域名证书或商业 IP 证书；自签名不能替代公开可信证书。参考：[Let’s Encrypt IP 证书](https://letsencrypt.org/2026/01/15/6day-and-ip-general-availability)、[Certbot 获取方法](https://letsencrypt.org/2026/03/11/shorter-certs-certbot)。
 
 ## 本地与 Docker 复核
+
+2026-10-04 发现工作区从 `AMLeaderboard` 改名为 `AM-Link` 后，`.venv` 的 editable 安装仍引用旧路径。已使用 `pip install --no-index --no-deps --no-build-isolation -e "./archive/phase-1[dev]"` 更新本地安装引用；未下载或升级依赖。
 
 根目录虚拟环境已指向归档。下列命令在 `archive/phase-1` 执行，只启动无外部模型的本机实例：
 

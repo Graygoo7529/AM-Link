@@ -8,12 +8,12 @@
 
 ## 环境
 
-- 工作区 `B:\WorkSpace\AMLeaderboard`，Windows PowerShell，时区 Asia/Shanghai。
+- 工作区 `B:\WorkSpace\AM-Link`，Windows PowerShell，时区 Asia/Shanghai。
 - 根 `.venv\Scripts\python.exe` 是 Python 3.13.14，源自 `C:\Anaconda3\envs\common`；一期要求 Python 3.10+。归档后 editable 安装已指向 `archive/phase-1/src`。
 - 安装：根目录执行 `.\.venv\Scripts\python.exe -m pip install -e "./archive/phase-1[dev]"`。
 - 测试：在 `archive/phase-1` 执行 `..\..\.venv\Scripts\python.exe -m pytest -q --basetemp B:\tmp\aml-phase1-pytest`。此临时目录专供 pytest，勿存放其他文件。
 - 本地禁止安装和使用 Docker；确需构建时使用 GitHub Actions 或服务器。旧 workflow 已随一期归档，根目录目前没有自动 CI。
-- 当前环境若 Git 提示 dubious ownership，使用单次参数 `git -c safe.directory=B:/WorkSpace/AMLeaderboard ...`；不要为此改全局信任设置。
+- 当前环境若 Git 提示 dubious ownership，使用单次参数 `git -c safe.directory=B:/WorkSpace/AM-Link ...`；不要为此改全局信任设置。
 
 ## 简要规约
 
@@ -28,7 +28,7 @@
 
 ## 每轮结束检查
 
-- 每轮完成工作后必须运行 `git -c safe.directory=B:/WorkSpace/AMLeaderboard status --short`、`git diff --check`，并检查是否有未预期的临时文件、凭据或数据库进入工作树。
+- 每轮完成工作后必须运行 `git -c safe.directory=B:/WorkSpace/AM-Link status --short`、`git diff --check`，并检查是否有未预期的临时文件、凭据或数据库进入工作树。
 - 最终回复必须说明未提交内容的范围，区分代码、文档、归档删除和配置变更；如果存在未提交内容，给出可直接使用的建议提交标题和简短提交说明。不要在用户未要求时自动提交或推送。
 - 若本轮包含服务器操作，最终回复同时核对服务状态、监听端口、公开 endpoint、systemd 自启动和是否仍有一期路径；远程临时脚本、askpass 文件和测试数据必须清理。
 
