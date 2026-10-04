@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from benchmark.core import load_manifest, run_replay, write_json
-from benchmark.targets import AmlApiTarget, Mem0OssTarget
+from benchmark.targets import AmlApiTarget, Mem0LibraryTarget, Mem0OssTarget
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,10 +21,17 @@ RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m benchmark")
     commands = parser.add_subparsers(dest="command", required=True)
+    inspect_parser = commands.add_parser("inspect", help="inspect one case or Search with its trace")
+    inspect_parser.add_argument("--report", type=Path, required=True)
+    inspect_parser.add_argument("--trace", type=Path, required=True)
+    selection = inspect_parser.add_mutually_exclusive_group(required=True)
+    selection.add_argument("--case-id")
+    selection.add_argument("--search-id")
+
     run_parser = commands.add_parser("run", help="replay one dataset manifest")
     run_parser.add_argument("--manifest", type=Path, required=True)
-    run_parser.add_argument("--target", choices=("aml-api", "mem0-oss"), required=True)
-    run_parser.add_argument("--base-url", required=True)
+    run_parser.add_argument("--target", choices=("aml-api", "mem0-oss", "mem0-library"), required=True)
+    run_parser.add_argument("--base-url", default=None)
     run_parser.add_argument("--system-name", default=None)
     run_parser.add_argument("--system-version", default="unspecified")
     run_parser.add_argument("--auth-scheme", choices=("none", "token", "bearer", "x-api-key"), default="none")
@@ -37,6 +44,57 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _inspect(arguments: argparse.Namespace) -> None:
+    report = json.loads(arguments.report.read_text(encoding="utf-8"))
+    query_filter = (
+        (lambda query: query.get("case_id") == arguments.case_id)
+        if arguments.case_id
+        else (lambda query: query.get("search_id") == arguments.search_id)
+    )
+    queries = [query for query in report.get("queries", []) if query_filter(query)]
+    if not queries:
+        selector = arguments.case_id or arguments.search_id
+        raise ValueError(f"no report query found for {selector}")
+    selected_ids = {(query["case_id"], query["search_id"]) for query in queries}
+    with arguments.trace.open("r", encoding="utf-8") as source:
+        events = [json.loads(line) for line in source if line.strip()]
+    search_events = [
+        event
+        for event in events
+        if event.get("event") == "search"
+        and (event.get("case_id"), event.get("search_id")) in selected_ids
+    ]
+    source_add_ids = {
+        diagnosis.get("source", {}).get("add_request_id")
+        for event in search_events
+        for diagnosis in event.get("evidence_diagnosis", [])
+        if isinstance(diagnosis.get("source"), dict)
+    }
+    add_events = [
+        event
+        for event in events
+        if event.get("event") == "add"
+        and event.get("case_id") in {case_id for case_id, _ in selected_ids}
+        and any(
+            isinstance(source_id, str)
+            and event.get("request_id", "").endswith(f":{source_id}")
+            for source_id in source_add_ids
+        )
+    ]
+    print(
+        json.dumps(
+            {
+                "queries": queries,
+                "source_add_events": add_events,
+                "search_events": search_events,
+                "diagnosis_scope": "API-boundary observations; no claim about inaccessible target internals",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
 def _base_url(value: str) -> str:
     parsed = urlsplit(value)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -47,6 +105,17 @@ def _base_url(value: str) -> str:
 
 
 def _build_target(arguments: argparse.Namespace):
+    if arguments.target == "mem0-library":
+        if arguments.base_url or arguments.auth_scheme != "none" or arguments.api_key_env:
+            raise ValueError("HTTP URL and authentication options do not apply to mem0-library")
+        try:
+            from mem0 import Memory
+        except ImportError as error:
+            raise ValueError("mem0-library requires the published 'mem0ai' package") from error
+        return Mem0LibraryTarget(Memory())
+
+    if not arguments.base_url:
+        raise ValueError("--base-url is required for HTTP targets")
     key = None
     if arguments.auth_scheme != "none":
         if not arguments.api_key_env:
@@ -69,6 +138,9 @@ def _build_target(arguments: argparse.Namespace):
 def main() -> None:
     arguments = _parser().parse_args()
     try:
+        if arguments.command == "inspect":
+            _inspect(arguments)
+            return
         manifest = load_manifest(arguments.manifest)
         run_id = arguments.run_id or uuid.uuid4().hex
         if not RUN_ID_PATTERN.fullmatch(run_id):
@@ -109,13 +181,17 @@ def main() -> None:
                 "name": arguments.system_name or arguments.target,
                 "version": arguments.system_version,
                 "target": arguments.target,
-                "base_url": _base_url(arguments.base_url),
-                "api_version": "memory-api-v1.1" if arguments.target == "aml-api" else "mem0-oss-rest",
-                "adapter_notes": (
-                    []
-                    if arguments.target == "aml-api"
-                    else ["message timestamp and request_id are not forwarded by the OSS REST adapter"]
-                ),
+                "base_url": _base_url(arguments.base_url) if arguments.base_url else None,
+                "api_version": {
+                    "aml-api": "memory-api-v1.1",
+                    "mem0-oss": "mem0-oss-rest",
+                    "mem0-library": "mem0ai-python",
+                }[arguments.target],
+                "adapter_notes": {
+                    "aml-api": [],
+                    "mem0-oss": ["message timestamp and request_id are not forwarded by the OSS REST adapter"],
+                    "mem0-library": ["per-message timestamp and request_id idempotency are not supported by the package adapter"],
+                }[arguments.target],
             },
             trace_path=trace_path,
         )

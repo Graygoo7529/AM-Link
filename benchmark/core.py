@@ -112,6 +112,12 @@ def _validate_search(search: Any) -> None:
             raise ValueError("evidence fragments must be a list of non-empty strings")
         if not ids and not fragments:
             raise ValueError("each evidence target requires ids or contains_any")
+        source = target.get("source")
+        if source is not None and (
+            not isinstance(source, dict)
+            or not _nonempty_string(source.get("add_request_id"))
+        ):
+            raise ValueError("evidence source requires add_request_id")
 
 
 def _nonempty_string(value: Any) -> bool:
@@ -141,6 +147,7 @@ def run_replay(
     with trace_path.open("w", encoding="utf-8", newline="\n") as trace:
         for case in cases:
             case_adds_succeeded = True
+            add_outcomes: dict[str, dict[str, Any]] = {}
             for original in case["adds"]:
                 request = _namespace_add(original, run_id)
                 started = time.perf_counter()
@@ -152,6 +159,11 @@ def run_replay(
                 succeeded = error is None
                 case_adds_succeeded = case_adds_succeeded and succeeded
                 add_successes += int(succeeded)
+                add_outcomes[original["request_id"]] = {
+                    "ok": succeeded,
+                    "error": error,
+                    "status_code": response.status_code,
+                }
                 if error:
                     errors[f"add:{error}"] += 1
                 _write_trace(
@@ -190,6 +202,8 @@ def run_replay(
                     latency_ms=latency_ms,
                     add_ok=case_adds_succeeded,
                     search_ok=succeeded,
+                    add_outcomes=add_outcomes,
+                    top_k=request["top_k"],
                 )
                 queries.append(observation)
                 _write_trace(
@@ -209,6 +223,7 @@ def run_replay(
                         "expected": search.get("expected", []),
                         "expect_empty": search.get("expect_empty", False),
                         "target_ranks": observation["target_ranks"],
+                        "evidence_diagnosis": observation["evidence_diagnosis"],
                         "matched_targets_by_result": observation["matched_targets_by_result"],
                         "results": results,
                         "target_response": response.raw_body,
@@ -345,9 +360,12 @@ def _observe_query(
     latency_ms: float,
     add_ok: bool,
     search_ok: bool,
+    add_outcomes: dict[str, dict[str, Any]],
+    top_k: int,
 ) -> dict[str, Any]:
     ranks: list[int | None] = []
     matched_by_result: list[list[int]] = [[] for _ in results]
+    evidence_diagnosis = []
     for target_index, evidence in enumerate(search.get("expected", [])):
         match_rank = None
         ids = evidence.get("ids", [])
@@ -361,6 +379,28 @@ def _observe_query(
                 if match_rank is None:
                     match_rank = result_index + 1
         ranks.append(match_rank)
+        source = evidence.get("source")
+        add_status = add_outcomes.get(source.get("add_request_id")) if isinstance(source, dict) else None
+        if not search_ok:
+            status = "search_failed"
+        elif add_status is not None and not add_status["ok"]:
+            status = "source_add_failed"
+        elif match_rank is None:
+            status = "no_literal_evidence_match"
+        elif match_rank > min(5, top_k):
+            status = "retrieved_below_top5"
+        else:
+            status = "retrieved"
+        evidence_diagnosis.append(
+            {
+                "target_index": target_index,
+                "source": source,
+                "source_add": add_status,
+                "rank": match_rank,
+                "status": status,
+                "interpretation": _diagnosis_interpretation(status),
+            }
+        )
     expect_empty = search.get("expect_empty", False)
     return {
         "case_id": case_id,
@@ -370,6 +410,7 @@ def _observe_query(
         "result_count": len(results),
         "target_count": len(ranks),
         "target_ranks": ranks,
+        "evidence_diagnosis": evidence_diagnosis,
         "first_relevant_rank": min((rank for rank in ranks if rank is not None), default=None),
         "add_setup_ok": add_ok,
         "search_ok": search_ok,
@@ -380,11 +421,26 @@ def _observe_query(
     }
 
 
+def _diagnosis_interpretation(status: str) -> str:
+    return {
+        "search_failed": "Search failed at the adapter/API boundary; inspect its error and response.",
+        "source_add_failed": "The Add request containing this source evidence failed validation or returned an error.",
+        "no_literal_evidence_match": "No literal source fragment or expected result ID matched; the target may omit, transform, or summarize it.",
+        "retrieved_below_top5": "A literal source match was returned below rank 5.",
+        "retrieved": "A literal source match was returned within rank 5.",
+    }[status]
+
+
 def _metrics(queries: list[dict[str, Any]]) -> dict[str, Any]:
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for query in queries:
         grouped[str(query["category"])].append(query)
     empty = [query for query in queries if query["expect_empty"]]
+    diagnosis_counts = Counter(
+        evidence["status"]
+        for query in queries
+        for evidence in query["evidence_diagnosis"]
+    )
     return {
         "overall": _group_metrics(queries),
         "by_category": {
@@ -398,6 +454,7 @@ def _metrics(queries: list[dict[str, Any]]) -> dict[str, Any]:
             sum(query["duplicate_count"] for query in queries),
             sum(query["result_count"] for query in queries),
         ),
+        "evidence_diagnosis_counts": dict(sorted(diagnosis_counts.items())),
     }
 
 

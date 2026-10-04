@@ -12,7 +12,7 @@ AM-Link 和设计灵感来源 **TinySoul-Agent** 都是 Graygoo7529 的个人原
 | [docs/README.md](./docs/README.md) | 精简经验、收尾记录和二期接入调研 |
 | [docs/doing](./docs/doing/README.md) | 数据集调研、目录建设和 Add/Search 靶场的执行记录 |
 | [dataset](./dataset/README.md) | 公开数据集来源、许可、获取和切片 |
-| [benchmark](./benchmark/README.md) | 官方 Add/Search API 回放、Mem0 OSS 适配与可观测报告 |
+| [benchmark](./benchmark/README.md) | 官方 Add/Search API 回放、Mem0 Python/REST 适配与可观测报告 |
 | [archive/phase-1](./archive/phase-1/) | 一期代码、原始设计、历史文档及测试，作为冻结参考 |
 
 一期运行代码基线为 `1881abe`，归档前仓库 HEAD 为 `447608a`。旧文档中的“当前部署”“待 Smoke”等描述是当时记录；当前状态以根目录文档为准。二期记忆服务实现尚未开始；`dataset/` 和 `benchmark/` 是公开数据研究与本地诊断工具。

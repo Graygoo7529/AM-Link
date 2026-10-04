@@ -1,10 +1,10 @@
 {
-  "catalog_version": 1,
+  "catalog_version": 2,
   "verified_on": "2026-10-04",
   "datasets": {
     "locomo": {
       "title": "LoCoMo (original public release)",
-      "official_suite_name": "LoCoMo-Refined",
+      "official_suite_name": "LoCoMo original; related to but not the AML LoCoMo-Refined bundle",
       "contract_ids": ["locomo"],
       "status": "available",
       "format": "json-array",
@@ -21,10 +21,12 @@
         "turns": 5882,
         "questions": 1986
       },
-      "notes": "Original upstream release, not the AML LoCoMo-Refined bundle."
+      "reader": "dataset.prepare:inspect_locomo/build_locomo",
+      "evaluation": "source-turn evidence recall, hit rate, and multi-evidence chain coverage",
+      "notes": "Original SNAP release, not the AML LoCoMo-Refined frozen bundle."
     },
     "longmemeval-s": {
-      "title": "LongMemEval-S (cleaned public release)",
+      "title": "LongMemEval-S (author cleaned public release)",
       "official_suite_name": "LongMemEval-S",
       "contract_ids": ["longmemeval"],
       "status": "not_downloaded",
@@ -33,17 +35,141 @@
       "dataset_card": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned",
       "download_url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416/longmemeval_s_cleaned.json",
       "raw_relative_path": "longmemeval/longmemeval_s_cleaned.json",
-      "license": "MIT",
+      "license": "MIT (author Hugging Face dataset card)",
       "attribution": "Di Wu, Hongwei Wang, Wenhao Yu, Yuwei Zhang, Kai-Wei Chang, and Dong Yu; LongMemEval (ICLR 2025)",
       "revision": "98d7416",
       "approx_size_mb": 277,
       "sha256": null,
       "public_counts": {
         "questions": 500,
-        "approx_history_sessions_per_question": 48,
+        "approx_history_sessions_per_question": 40,
         "approx_tokens_per_question": 115000
       },
-      "notes": "The observed Hugging Face file is about 277 MiB (290455142 bytes). Record and verify the SHA-256 after downloading this immutable repository revision."
+      "reader": "dataset.prepare:inspect_longmemeval/build_longmemeval",
+      "evaluation": "has_answer turn/session evidence recall; upstream answer QA judge is a separate optional stage",
+      "notes": "Pinned author dataset revision. Record and verify the local SHA-256 after download."
+    }
+  },
+  "public_sources": {
+    "locomo-refined-community": {
+      "title": "LoCoMo-Refined (public community release candidate)",
+      "status": "public_source_not_downloaded",
+      "source_class": "third-party benchmark release based on SNAP LoCoMo",
+      "upstream": "https://github.com/mem-eval-suite/LoCoMo_refined",
+      "revision": "887091190789e8d6760e70b9edd696539923dc4f",
+      "download_url": "https://raw.githubusercontent.com/mem-eval-suite/LoCoMo_refined/887091190789e8d6760e70b9edd696539923dc4f/data/raw/locomo_refined.json",
+      "resources": [
+        "https://github.com/mem-eval-suite/LoCoMo_refined/tree/887091190789e8d6760e70b9edd696539923dc4f/data/raw",
+        "https://github.com/mem-eval-suite/LoCoMo_refined/tree/887091190789e8d6760e70b9edd696539923dc4f/data/public",
+        "https://github.com/mem-eval-suite/LoCoMo_refined/blob/887091190789e8d6760e70b9edd696539923dc4f/NOTICE"
+      ],
+      "format": "json plus jsonl",
+      "license": "CC BY-NC 4.0 (community release; review NOTICE and upstream rights)",
+      "sha256": null,
+      "raw_relative_path": "locomo-refined-community/locomo_refined.json",
+      "public_counts": {"questions": 1382, "conversations": 10},
+      "available_materials": ["annotated raw JSON", "public questions JSONL", "conversation JSONL", "manifest"],
+      "processing": "Pair public questions with the corresponding conversation/session history; preserve the community release revision and evidence annotation. No adapter in this workspace yet.",
+      "evaluation": "Community README describes answer evaluation/judging. Inspect labels and rubric before mapping evidence to Add/Search; not verified as AML's exact frozen bundle.",
+      "identity_warning": "This is a community repository using the LoCoMo-Refined name. Its relationship to the AML evaluation bundle is unverified; do not report it as the official AML release."
+    },
+    "longmemeval-m": {
+      "title": "LongMemEval-M (author release)",
+      "status": "public_source_not_downloaded",
+      "source_class": "benchmark author release",
+      "upstream": "https://github.com/xiaowu0162/LongMemEval",
+      "download_url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416/longmemeval_m_cleaned.json",
+      "format": "json-array",
+      "license": "MIT (author Hugging Face dataset card)",
+      "revision": "98d7416",
+      "public_counts": {"questions": 500, "approx_history_sessions_per_question": 500},
+      "processing": "Same record family as S; keep full session history for a faithful run. Avoid loading the entire file into memory; current converter streams rows but a single selected question can still be very large.",
+      "evaluation": "Turn evidence recall is possible from has_answer; full QA requires the author's separate evaluator."
+    },
+    "longmemeval-oracle": {
+      "title": "LongMemEval Oracle (author release)",
+      "status": "public_source_not_downloaded",
+      "source_class": "benchmark author release with gold evidence sessions only",
+      "upstream": "https://github.com/xiaowu0162/LongMemEval",
+      "download_url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416/longmemeval_oracle.json",
+      "format": "json-array",
+      "license": "MIT (author Hugging Face dataset card)",
+      "revision": "98d7416",
+      "public_counts": {"questions": 500},
+      "processing": "Use only as an evidence-pipeline sanity check. Its histories contain only gold evidence sessions, so retrieval difficulty is lower than S/M.",
+      "evaluation": "Author QA evaluator accepts the Oracle file; do not compare its score directly with S/M."
+    },
+    "scriptmem": {
+      "title": "ScriptMem v1.0",
+      "status": "public_questions_only",
+      "source_class": "benchmark author release; source scripts omitted",
+      "upstream": "https://github.com/memorax-ai/ScriptMem",
+      "resources": ["https://github.com/memorax-ai/ScriptMem/tree/main/data"],
+      "format": "json/jsonl task metadata",
+      "license": "CC BY-NC 4.0 for ScriptMem-created benchmark materials only",
+      "public_counts": {"questions": 457, "source_works": 4, "question_types": 6},
+      "processing": "Can inspect question types/options/metadata. Original scripts and source dialogues are not released; never synthesize Add history from gold questions or answers.",
+      "evaluation": "Author benchmark uses unified answer generation and accuracy. Not currently suitable for full local Add/Search replay without licensed source conversations."
+    },
+    "clbench": {
+      "title": "CL-bench",
+      "status": "public_source_not_downloaded",
+      "source_class": "Tencent Hunyuan and Fudan NLP benchmark release",
+      "upstream": "https://github.com/Tencent-Hunyuan/CL-bench",
+      "dataset_card": "https://huggingface.co/datasets/tencent/CL-bench",
+      "format": "messages/rubrics/metadata dataset rows",
+      "license": "Custom evaluation-only license; prohibits training, fine-tuning, calibration, distillation, adaptation, and parameter updates",
+      "public_counts": {"tasks": 1899, "size_mb": 90.1},
+      "processing": "Separate context/history from the task in messages. Keep rubrics out of Add/Search and use only in an explicitly enabled evaluator. Map evidence only where source spans are available.",
+      "evaluation": "Rubric-based task evaluation, not retrieval recall alone."
+    },
+    "clbench-life": {
+      "title": "CL-bench Life",
+      "status": "public_source_not_downloaded",
+      "source_class": "Tencent Hunyuan and Fudan NLP benchmark release",
+      "upstream": "https://github.com/Tencent-Hunyuan/CL-bench",
+      "dataset_card": "https://huggingface.co/datasets/tencent/CL-bench-Life",
+      "format": "OpenAI-style messages/rubrics/metadata dataset rows",
+      "license": "Custom evaluation-only license; benchmark use only, no parameter updates",
+      "public_counts": {"tasks": 405, "size_mb": 29.3},
+      "processing": "Separate context/history and final task; keep rubric labels out of memory writes. Build a task adapter and evaluator before using for scores.",
+      "evaluation": "Rubric-based task evaluation over everyday-context cases; no source-span retrieval metric is supplied by the card."
+    },
+    "personamem-v2": {
+      "title": "PersonaMem-v2",
+      "status": "public_source_not_downloaded",
+      "source_class": "Penn author repository and Hugging Face dataset",
+      "upstream": "https://github.com/bowen-upenn/PersonaMem-v2",
+      "dataset_card": "https://huggingface.co/datasets/bowen-upenn/PersonaMem-v2",
+      "format": "CSV splits plus referenced conversation-history files",
+      "license": "CC BY 4.0 (author Hugging Face dataset card; verify linked history files individually)",
+      "public_counts": {"personas": 1000, "preferences": "20000+", "benchmark_multimodal_queries": 5000},
+      "processing": "Pin split and persona IDs, retrieve the referenced 32K or 128K history, and Add only the history. Search user_query. Preference labels, correct/incorrect answers, and related snippets remain evaluator-side.",
+      "evaluation": "Personalization answer accuracy / preference update tasks; evidence retrieval diagnostics need source alignment."
+    },
+    "beam": {
+      "title": "BEAM (128K/500K/1M)",
+      "status": "public_source_not_downloaded",
+      "source_class": "benchmark author release",
+      "upstream": "https://github.com/mohammadtavakoli78/BEAM",
+      "dataset_card": "https://huggingface.co/datasets/Mohammadta/BEAM",
+      "format": "conversation rows with chat, user_questions, probing_questions and metadata",
+      "license": "CC BY-SA 4.0 for benchmark data; code is MIT and has a separate license",
+      "public_counts": {"conversations": 90, "scale_tokens": [128000, 500000, 1000000]},
+      "processing": "Start with one 128K conversation; stream the row, convert chat turns into bounded Add calls, and keep probing questions/answers outside Add. Use author's evaluator for answer scoring.",
+      "evaluation": "Ten memory abilities and generated probes; evidence-only retrieval is a diagnostic proxy, not the full score."
+    },
+    "beam-10m": {
+      "title": "BEAM-10M",
+      "status": "public_source_not_downloaded",
+      "source_class": "benchmark author release",
+      "upstream": "https://github.com/mohammadtavakoli78/BEAM",
+      "dataset_card": "https://huggingface.co/datasets/Mohammadta/BEAM-10M",
+      "format": "large multi-turn conversation rows",
+      "license": "CC BY-SA 4.0 for benchmark data; verify the dataset card at the pinned revision",
+      "public_counts": {"conversations": 10, "scale_tokens": [10000000]},
+      "processing": "Separate opt-in stress tier. Do not fetch by default. Requires streaming import, storage and request-budget estimates before a run.",
+      "evaluation": "Use the author evaluator for question/answer scoring; report latency/cost separately."
     }
   }
 }

@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent
 RAW_DIR = ROOT / "data" / "raw"
 DERIVED_DIR = ROOT / "data" / "derived"
 CATALOG_PATH = ROOT / "catalog.json"
-BUILDER_VERSION = 1
+BUILDER_VERSION = 2
 CHUNK_READ_SIZE = 1024 * 1024
 SESSION_PATTERN = re.compile(r"^session_(\d+)$")
 DIALOG_ID_PATTERN = re.compile(r"D:?(\d+):(\d+)", re.IGNORECASE)
@@ -209,6 +209,7 @@ def _locomo_case(
 
     user_id = f"locomo:{sample_id}"
     evidence_text: dict[str, str] = {}
+    evidence_source: dict[str, dict[str, Any]] = {}
     adds: list[dict[str, Any]] = []
     for session_number, session_key in sessions:
         raw_turns = conversation.get(session_key)
@@ -216,7 +217,7 @@ def _locomo_case(
             raise ValueError(f"session {session_key} must be an array")
         timestamp = _parse_locomo_date(conversation.get(f"{session_key}_date_time"))
         messages = []
-        for turn in raw_turns:
+        for turn_index, turn in enumerate(raw_turns):
             if not isinstance(turn, dict):
                 raise ValueError(f"conversation {sample_id} contains an invalid turn")
             dialog_id = _normal_dialog_id(turn.get("dia_id"))
@@ -224,6 +225,14 @@ def _locomo_case(
                 raise ValueError(f"conversation {sample_id} contains an invalid dialog id")
             content = _turn_content(turn)
             evidence_text[dialog_id] = content
+            evidence_source[dialog_id] = {
+                "dataset_record_id": sample_id,
+                "turn_id": dialog_id,
+                "session_id": str(session_number),
+                "add_request_id": (
+                    f"locomo:{sample_id}:session:{session_number}:chunk:{turn_index // chunk_size}"
+                ),
+            }
             messages.append(
                 {
                     "role": "user" if turn.get("speaker") == speaker_a else "assistant",
@@ -268,7 +277,10 @@ def _locomo_case(
                 "id": f"locomo:{sample_id}:qa:{qa_index}",
                 "request": {"query": question, "user_id": user_id, "top_k": top_k},
                 "expected": [
-                    {"contains_any": [evidence_text[identifier]]}
+                    {
+                        "contains_any": [evidence_text[identifier]],
+                        "source": evidence_source[identifier],
+                    }
                     for identifier in dict.fromkeys(valid_ids)
                 ],
                 "category": CATEGORY_MAP[category],
@@ -378,7 +390,7 @@ def _longmemeval_case(
             raise ValueError(f"question {question_id} contains an invalid session")
         session_timestamp = _parse_timestamp(dates[session_index] if session_index < len(dates) else None)
         messages = []
-        for turn in turns:
+        for turn_index, turn in enumerate(turns):
             if not isinstance(turn, dict):
                 raise ValueError(f"question {question_id} contains an invalid turn")
             role = turn.get("role")
@@ -391,7 +403,20 @@ def _longmemeval_case(
                 signature = " ".join(content.casefold().split())
                 if signature and signature not in seen_targets:
                     seen_targets.add(signature)
-                    targets.append({"contains_any": [content]})
+                    targets.append(
+                        {
+                            "contains_any": [content],
+                            "source": {
+                                "dataset_record_id": question_id,
+                                "session_id": str(session_id),
+                                "turn_index": turn_index,
+                                "add_request_id": (
+                                    f"longmemeval:{question_id}:session:{session_id}:"
+                                    f"chunk:{turn_index // chunk_size}"
+                                ),
+                            },
+                        }
+                    )
         session_id_text = str(session_id)
         for chunk_index, offset in enumerate(range(0, len(messages), chunk_size)):
             adds.append(

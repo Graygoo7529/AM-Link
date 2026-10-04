@@ -2,6 +2,6 @@
 
 | 日期 | 计划 | 当前状态 |
 | --- | --- | --- |
-| 2026-10-04 | [官方数据集、数据目录与 Add/Search 靶场](./2026-10-04-dataset-benchmark-plan.md) | 本地实现与离线验证已完成；LongMemEval 下载和真实服务对照待外部条件 |
+| 2026-10-04 | [数据源调研、数据目录与 Add/Search 靶场](./2026-10-04-dataset-benchmark-plan.md) | 作者数据源清单、LoCoMo smoke、逐样本 Add/Search 追溯已实现；LongMemEval 获取和服务端端到端对照待外部条件 |
 
 各计划只使用允许获取的公开来源。实施产物、数据许可与限制以各计划和数据目录说明为准。

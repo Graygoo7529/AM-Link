@@ -1,28 +1,30 @@
-# Add/Search 靶场
+# Add/Search 本地靶场
 
-`benchmark/` 是本地诊断回放器。它读取 `dataset/` 生成的 manifest，按照官方 Textual Add/Search 语义写入每个样本、再逐题检索，输出可复算的证据召回摘要和 JSONL 操作追踪。
+比赛平台通常只给正式系统一次评测机会。`benchmark/` 的目标是在本地用固定公开数据、官方参赛 Add/Search contract 和本地 trace 反复检查候选实现，再决定是否提交正式评测。它会模拟官方给参赛者发 Add/Search 的边界和调用顺序；公开数据和本地 evidence 规则是可复核的替代评估集，不能声称是官方冻结题集、Answer/Eval 或官方成绩。
 
-它不实现官方 Answer/Eval，不生成答案，也不计算 AML 分数。每次 run 的 manifest SHA、数据集来源、系统名/版本、实际 HTTP 调用数、延迟、错误、每个 query 的证据 rank、候选内容和逐条 Add/Search 请求/响应均在本机 `dataset/data/runs/<run-id>/`。trace 含原文与检索结果，可能还原数据集片段；不要上传、提交或公开该目录。
+靶场按 manifest 顺序把一个样本的历史送入 Add，再发送其 Search 问题。`aml-api` 原样调用 `POST /v1/memory/add`、`POST /v1/memory/search` 并严格核对协议响应。Mem0 有两个适配入口：`mem0-library` 直接调用已发布的 Python package `mem0ai`；`mem0-oss` 调用已运行的 Mem0 OSS self-hosted REST API (`POST /memories`、`POST /search`)。不把 Mem0 源码复制进仓库或自行构建；当前环境禁用 Docker，因此示例优先使用 Python package adapter。每个 target 获得新的 run/user namespace，不能共享样本状态。
 
-## 参与对象
+## 选数据和控制规模
 
-| Target | 入口 | 协议 |
-| --- | --- | --- |
-| 参赛实现/旧接口/其他服务 | `aml-api` | 原样使用官方 `POST /v1/memory/add`、`POST /v1/memory/search` 及严格响应校验 |
-| Mem0 OSS self-hosted | `mem0-oss` | 调用 Mem0 REST `POST /memories` 和 `POST /search`；薄适配器将返回候选映射为靶场统一记录 |
+每个 manifest 固定数据源、SHA、切分条件和 builder version；可以为不同数据集生成独立 manifest，也可按 conversation/question/category/session 切分。运行时还可用 `--case-limit`、`--query-limit` 限量。正式对比时要让两个 target 使用同一 manifest 与同一切片；新 run 会生成新 namespace。
 
-AML API 目标的 `base-url` 不含用户名密码、查询或 fragment。鉴权 secret 只通过环境变量读取，不进入 trace/config 文件。Mem0 目标指向已经运行且完成 provider 配置的 Mem0 OSS REST API，不是 Mem0 Platform 云服务。Mem0 OSS API 不带 `/v1/` 前缀；它必须由操作者提供且启用鉴权的 server。本机不安装 Mem0、不获取其源代码、不运行 Docker。Mem0 的运行通常需要外部模型和向量库；连接前应先评估费用与原始数据的去向。
-
-`mem0-oss` 只传它 API 文档明确支持的 `role/content`、`user_id`、`run_id` 和 `top_k`，所以当前 adapter 不保留消息 timestamp，也不携带 AML `request_id` 幂等语义。它和完整 AML 合规接口不是同等输入能力；报告会标出该差异。
-
-## 生成一个公开小切片
+当前可生成 LoCoMo 和 LongMemEval-S manifest：
 
 ```powershell
-.\.venv\Scripts\python.exe dataset\prepare.py inspect --dataset locomo
 .\.venv\Scripts\python.exe dataset\prepare.py build --dataset locomo --conversation-ids conv-26 --session-limit 4 --category 1 --category 2 --category 3 --questions-per-category 2 --output dataset\data\derived\locomo-smoke.json
 ```
 
-manifest 建立后，启动一个被测服务，然后将其 URL 填入命令。官方格式参数：
+LongMemEval-S 的历史和逐题文件约 277 MB；如果本地已取得，可以只选一个问题和 8 个 session 做低成本检索检查：
+
+```powershell
+.\.venv\Scripts\python.exe dataset\prepare.py build --dataset longmemeval-s --question-limit 1 --session-limit 8 --output dataset\data\derived\longmemeval-smoke.json
+```
+
+其他已找到的数据源及许可/读取方式见 [`dataset/`](../dataset/README.md)。它们接入前不会误选为支持的 converter。限制后的切片不是该数据集全量成绩。
+
+## 运行对照
+
+准备 AM-Link/候选 Add/Search 服务后，直接指定 `aml-api`：
 
 ```powershell
 .\.venv\Scripts\python.exe -m benchmark run `
@@ -30,11 +32,23 @@ manifest 建立后，启动一个被测服务，然后将其 URL 填入命令。
   --target aml-api `
   --base-url http://127.0.0.1:8080 `
   --system-name AM-Link `
-  --system-version local-dev `
-  --auth-scheme none
+  --system-version local-dev
 ```
 
-从环境读取鉴权 Key 的示例：
+Mem0 package adapter 是可选项，不会由靶场自动安装。官方默认配置使用外部 OpenAI 模型和 embedding 服务，因此会把公开 history 发送给所配置的 provider 并可能计费；只有确认数据去向与预算后才运行。也可以配置 Mem0 支持的本地 provider：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install mem0ai
+.\.venv\Scripts\python.exe -m benchmark run `
+  --manifest dataset\data\derived\locomo-smoke.json `
+  --target mem0-library `
+  --system-name Mem0 `
+  --system-version "<installed mem0ai version>"
+```
+
+这个 adapter 调用 Python `Memory.add` / `Memory.search`，不会访问官方 API server，也不带 AML `request_id` 幂等语义，当前不传逐消息 timestamp；报告会记录这些能力差异。它使用当前 Python 环境中已安装的官方发布包，不下载或构建 Mem0 源码。
+
+如果 HTTP target 要求 key，从环境变量读取，绝不写入 report 或 trace：
 
 ```powershell
 $env:AM_LINK_MEMORY_KEY = "<local secret>"
@@ -43,10 +57,11 @@ $env:AM_LINK_MEMORY_KEY = "<local secret>"
   --target aml-api `
   --base-url https://memory.example.com `
   --auth-scheme bearer `
-  --api-key-env AM_LINK_MEMORY_KEY
+  --api-key-env AM_LINK_MEMORY_KEY `
+  --system-version local-dev
 ```
 
-Mem0 OSS 例子：
+如果已运行并配置好 Mem0 OSS REST server，也可以使用 REST target：
 
 ```powershell
 $env:MEM0_API_KEY = "<mem0 local API key>"
@@ -56,23 +71,38 @@ $env:MEM0_API_KEY = "<mem0 local API key>"
   --base-url http://127.0.0.1:8000 `
   --auth-scheme x-api-key `
   --api-key-env MEM0_API_KEY `
-  --system-version "mem0-oss-local"
+  --system-version mem0-oss-local
 ```
 
-`--case-limit` 和 `--query-limit` 可在运行时对 manifest 再限量；正常情况下从 builder 固定并记录切片条件。不同 target 使用不同 run_id/user_id namespace，不会共享单个样本的存储空间。失败调用不在靶场内重试；修复后换 run_id 得到独立新 run。
+Mem0 Python 与 REST contract 都不包含 AML 的 `request_id` 幂等字段；当前 adapters 也不传消息 timestamp，报告会标明这些差异。未运行的目标不会自动启动，也不会自动配置外部模型。Mem0 官方 quickstart 和 REST API 文档见 [Python SDK Quickstart](https://github.com/mem0ai/mem0/blob/main/docs/open-source/python-quickstart.mdx) 与 [REST API Server](https://github.com/mem0ai/mem0/blob/main/docs/open-source/features/rest-api.mdx)。
 
-## 输出与解读
+## 查看单个失败
 
-默认文件在 `dataset/data/runs/<run-id>/report.json` 和 `trace.jsonl`。报告包含 Add/Search 成功率与 p50/p95/max、按 category 分组的 hit@k/evidence recall@k/MRR/multi-evidence chain coverage、空检索结果准确率、重复候选率、错误类型以及每个查询的 target ranks。JSONL 记录保留实际请求 ID、样本、问题、目标 source evidence、返回候选正文、匹配位置和接口状态。
+默认 run 文件在被忽略的 `dataset/data/runs/<run-id>/report.json` 和 `trace.jsonl`。报告含 Add/Search 成功率、延迟、每题 rank、evidence recall/hit/chain coverage、错误计数及 diagnosis 计数。trace 保留原始请求/响应、证据正文、dataset source id、result rank、HTTP 状态和耗时；可能复原原始样本，仅保存在本地。
 
-这些指标衡量公开样本的字面/来源证据召回，不是 answer correctness。String target 对语义改写可能漏判，不能独立用于优劣排名；读逐题证据和 query trace，再将同切片结果与上游 benchmark 的任务判据对照。准确性无标注时不计算 precision。官方 Add/Search API 不暴露真实 provider usage/费用，因此相应 report 字段为 `null`，而非 `0`。
+按样本 case ID 或具体 Search ID 展开报告和关联 trace：
+
+```powershell
+.\.venv\Scripts\python.exe -m benchmark inspect `
+  --report dataset\data\runs\<run-id>\report.json `
+  --trace dataset\data\runs\<run-id>\trace.jsonl `
+  --case-id conv-26
+```
+
+LoCoMo/LongMemEval 的每个 evidence target 都关联原始 turn/session 和对应 Add request。诊断优先检查 Search 是否成功、该证据所属 Add 是否成功、目标原文是否在 Search 返回项中按字面匹配、匹配 rank 是否在前五；报告也提供 query、top_k、错误响应和候选内容，方便定位。
+
+诊断是可观察接口边界上的证据，不是对 target 私有内部状态的断言。`no_literal_evidence_match` 表示原始证据字串/ID 未出现在返回结果，可能是丢失，也可能是被摘要/改写，需人工对照返回内容。仅凭 Add 200 或 Search 200 不推断 memory 完整、准确、模型调用成功或费用为零。API 不公开的 usage/费用记录为 `null`。
+
+当前靶场严格按顺序回放，不在内部自动重试；一个公开样本的 evidence recall 不是端到端问答准确率。LoCoMo、LongMemEval 原文与其 evidence 标注、公开的上游 Answer judge，以及 AML 私有 bundle 都是不同对象。后续如要跑答案级评估，应新增明确的 evaluator adapter，把 rubric/答案留在写入路径外，且独立记录 judge/model 与真实费用。
 
 ## 离线验证
 
-协议校验和指标实现测试无需启动 API 或使用模型：
+无需启动服务或模型：
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s benchmark\tests -v
+.\.venv\Scripts\python.exe -m benchmark --help
+.\.venv\Scripts\python.exe -m benchmark inspect --help
 ```
 
-靶场当前是顺序本地评估器，不宣称官方并发/容量压测；未来需要按固定 concurrency 与明确预算另行扩展。完整 scope/实施记录见 [主计划](../docs/doing/2026-10-04-dataset-benchmark-plan.md) 和[靶场设计子计划](../docs/doing/2026-10-04-benchmark-arena.md)。
+设计和实施状态见[靶场子计划](../docs/doing/2026-10-04-benchmark-arena.md)与[总计划](../docs/doing/2026-10-04-dataset-benchmark-plan.md)。

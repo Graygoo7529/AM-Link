@@ -1,38 +1,52 @@
-# 公开数据集目录与转换计划
+# 数据集目录与转换计划
 
-日期：2026-10-04；状态：`in_progress`
+日期：2026-10-04；状态：`in_progress`。
 
-## 范围与设计
+## 范围和目录设计
 
-- 只整理公开上游语料，登记来源、版本、许可、原始格式、体量和 AML 公开套件的对应关系。
-- `dataset/data/raw/` 保存原始文件，`dataset/data/derived/` 保存固定规则生成的 manifest；两处均被 Git 忽略。只按需获取单个数据集。
-- manifest 使用比赛 Textual Add/Search 输入形状，并增加 evidence target、类别及完整来源/hash/slice 元数据。答案不写入 Add；证据未包含在所选 history 的题目不参与该切片。
-- 原始公开上游和 AML `Refined`/冻结 bundle 分开标注。数据整理器只做切片和字段映射，不做 Answer、模型推理或官方评分。
+- `dataset/catalog.json` 分成 `datasets`（已有支持读取器，可由当前 fetch/prepare 命令处理）与 `public_sources`（上游公开来源、许可和处理方案已核实，但尚未下载或接入）。避免把 metadata-only 数据错误地当成可运行样本。
+- `dataset/data/raw/` 保存明确选择获取的源文件；`derived/` 保存带来源 hash 和切片条件的 manifest；`runs/` 保存含实际请求/响应的 report 和 trace。上述均为 Git 忽略路径。
+- Add manifest 只包含历史输入。问题、答案、preference、rubric 和 source evidence 标注仅用于 Search/evaluator/诊断，不得泄漏到 Add。
+- `dataset/prepare.py` 只做结构化读取、切片、source evidence 映射和官方 Add/Search 字段映射，不做 Answer、模型推理或官方评分。
 
 ## 已实施
 
-- `dataset/catalog.json` 当前登记 LoCoMo 原始版和 LongMemEval-S 清理版，包括源 URI、LoCoMo SHA、LongMemEval-S 固定 HF revision 和本地状态。
-- `dataset/fetch.py` 按清单单个下载、校验 SHA（清单有值时）、先写 `.partial` 再替换目标文件；没有配置批量下载。
-- `dataset/prepare.py` 支持 LoCoMo/LongMemEval-S 检查和 manifest 转换；JSON 数组使用标准库增量读取，支持 question/category/conversation/session/chunk/top-k 限制。
-- LoCoMo 已从一期被忽略的本地公开副本复制到 `dataset/data/raw/locomo/locomo10.json`，逐字节相同；不触碰归档文件。
-- LongMemEval-S 暂不下载：上游 HTTPS 在当前环境握手失败。其大文件无预先核实的 SHA，成功获取后必须记录本地摘要；session 截片仅保留 gold evidence session 完整包含的题目。
+- 清单详列 LoCoMo 原始版、LongMemEval-S 作者清理版；调研 catalog 登记 LoCoMo-Refined community candidate（固定 commit `887091190789e8d6760e70b9edd696539923dc4f`）、LongMemEval-M/Oracle、ScriptMem、CL-bench/Life、PersonaMem-v2、BEAM/10M。
+- LoCoMo 原始公开文件已存在于 `dataset/data/raw/locomo/locomo10.json`：2,805,274 bytes，SHA-256 `79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4`，10 conversations、272 sessions、5,882 turns、1,986 QA。许可 CC BY-NC 4.0。
+- `dataset/fetch.py` 只从可运行 `datasets` 选择单一数据源，按 pinned URL 下载、核 SHA（有已知值时），先写 `.partial` 后原子替换。不会批量抓取 metadata-only public_sources。
+- `dataset/prepare.py` 支持 LoCoMo 和 LongMemEval-S。可按 conversation/question ID、类别/题型、session、question 数、Add 消息 chunk 数、Search `top_k` 控制。
+- 新 manifest 中每条 LoCoMo evidence target 带 dataset record、`dia_id`、session 和源 Add request ID；LongMemEval 带 question record、session、turn index、Add request ID，便于靶场逐样本追溯。
+- LongMemEval-S author cleaned 文件约 277 MiB，revision `98d7416`。本轮下载返回 HTTP 502；fetcher 已清理 `.partial`，状态仍为 `not_downloaded`，成功取得后应算本地 SHA 并核 schema。
+- LoCoMo-Refined community raw JSON 已固定完整 Git commit 并登记 pinned URL；本轮 GitHub raw 请求也返回 HTTP 502，没有生成文件，SHA/schema 保持待核验。
 
-## 验证
+## 转换和评分方式
 
-- LoCoMo 输入 SHA-256：`79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4`。
-- 固定 smoke manifest SHA-256：`ce621c6f65063ecc7f32cd6ee14752f29d29e55a3862d61bfd22cb9d4d07ce4a`；重复构建值相同。
-- `inspect --dataset locomo`：10 conversations、272 sessions、5,882 turns、1,986 QA；category 1–5 计数分别为 282、321、96、841、446。
-- 固定 `conv-26`、前 4 个 session、category 1/2/3 各最多 2 个问题，可生成 5 Add/6 Search。两次独立生成得到相同输入和摘要；生成物留在 ignored `dataset/data/derived/`。
-- `python -m unittest discover -s dataset\\tests -v`：4 项通过，覆盖分块 JSON 读取、LoCoMo 证据/答案边界、LongMemEval `has_answer` 和截片后有效题目限量。
+- LoCoMo：每个 conversation 是独立 user；原始 session/turn 顺序入 Add；`evidence` 中 turn id 必须能映射至所选 history 才保留题目。按 source turn 原文计算 literal evidence recall/rank/chain coverage。
+- LongMemEval-S/M/Oracle：每题是独立 user，S/M session 以原时间戳顺序入 Add，`has_answer` turn 映射检索 target；Oracle 只有 gold evidence sessions，单独作为容易数据流检查。author `evaluate_qa.py` 使用 Answer hypothesis + judge 的 QA 分，属于靶场外的可选 Answer/Eval 阶段。
+- CLBench/Life：OpenAI `messages` 中分 context 与 task，history 才进入 Add；`rubrics` 留 evaluator。没有源 span 时不能报告 evidence retrieval recall。
+- PersonaMem-v2：冻结 HF split/persona，取得并许可检查引用 history；history 入 Add、`user_query` 用于 Search，preference/正确答案只供 evaluator。
+- BEAM：先单行、单个 128K 对话，流式读取 chat 并按消息上限分 Add；probing questions 与答案留给 evaluator。10M 单列压力计划。
+- ScriptMem：只用公开题型/answer evaluator 做 QA 材料研究；不将缺失的原始影视剧本或 synthetic example 当成历史输入。
 
-## 待办与判据
+## 已运行核对
 
-- [x] 许可与公开数据边界有可读清单和机器可读 catalog。
-- [x] LoCoMo 原始数据、检查器与固定 smoke manifest 可复现。
-- [x] LongMemEval-S converter 使用 answer-session/turn 标记，且 Add 不含 gold answer。
-- [ ] HTTPS 可用时获取 LongMemEval-S pinned file，计算摘要并对上游实际 schema 进行小样本适配核验。
-- [ ] 下载/使用其他数据前逐一确认数据许可和 reader；当前不下载 CLBench、PersonaMem、BEAM、ScriptMem 或多模态素材。
+- 固定 LoCoMo `conv-26`、前 4 session、category 1/2/3 每类最多 2 题：5 Add / 6 Search，8/8 source evidence 的 Add request 映射均可解析。当前 builder v2 manifest SHA-256 `efabcb565df8ac7de46482d9306cd158eed063bc49c8ea5f24977e76fce2389c`。
+- LoCoMo 检查：10 conversations、272 sessions、5,882 turns、1,986 QA；category 1–5 题数分别为 282、321、96、841、446。
+- source reference 更新后的 4 项 `dataset/tests` 通过。
+- 上游非 LoCoMo 文件尚未写入工作区；不把网页可见的行数当本机取得状态。
 
-## 可比性限制
+## 待办
 
-LoCoMo 公共原版不能代表 AML LoCoMo-Refined。LongMemEval 检索 evidence recall 不能代替 answer/judge accuracy；按 session 截短后的子集也不能与上游全量成绩比较。完整数据集比较范围和官方隐藏数据边界见[总调研](./2026-10-04-dataset-research.md)。
+- [x] 登记相关作者/维护方数据源、许可、格式、split/use/evaluator 及未下载状态。
+- [x] 现有 converter 追踪 evidence source 到 Add request，保持 gold 不入 Add。
+- [x] 留存可复现的 LoCoMo 本地 smoke 文件与摘要。
+- [ ] 网络可用时下载 pinned LongMemEval-S；对一个小切片检查实际字段和来源映射。
+- [ ] 视近期验证与许可确认，将 community LoCoMo-Refined 作为独立 dataset source 接入，不与 AML bundle 混名。
+- [ ] 每接入一个新数据源，先补 schema/label leakage 测试和手工抽样，再启用打分。
+
+## 文件索引
+
+- [`README.md`](../../dataset/README.md)：获取、使用和评分边界。
+- [`catalog.json`](../../dataset/catalog.json)：机器可读源 catalog。
+- [`prepare.py`](../../dataset/prepare.py)：读取、切片和 manifest builder。
+- [总调研](./2026-10-04-dataset-research.md)：公开源详细交叉核验。

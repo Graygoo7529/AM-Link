@@ -68,7 +68,20 @@ class PrepareTests(unittest.TestCase):
 
         case = manifest["cases"][0]
         self.assertEqual([search["request"]["query"] for search in case["searches"]], ["What happened first?"])
-        self.assertEqual(case["searches"][0]["expected"], [{"contains_any": ["Evidence from first session."]}])
+        self.assertEqual(
+            case["searches"][0]["expected"],
+            [
+                {
+                    "contains_any": ["Evidence from first session."],
+                    "source": {
+                        "dataset_record_id": "conv-test",
+                        "turn_id": "D1:1",
+                        "session_id": "1",
+                        "add_request_id": "locomo:conv-test:session:1:chunk:0",
+                    },
+                }
+            ],
+        )
         serialized = json.dumps(manifest)
         self.assertNotIn("SECRET-GOLD-ANSWER", serialized)
         self.assertTrue(all("second session" not in message["content"] for add in case["adds"] for message in add["messages"]))
@@ -106,7 +119,20 @@ class PrepareTests(unittest.TestCase):
             )
 
         case = manifest["cases"][0]
-        self.assertEqual(case["searches"][0]["expected"], [{"contains_any": ["I prefer tea."]}])
+        self.assertEqual(
+            case["searches"][0]["expected"],
+            [
+                {
+                    "contains_any": ["I prefer tea."],
+                    "source": {
+                        "dataset_record_id": "q1",
+                        "session_id": "s1",
+                        "turn_index": 0,
+                        "add_request_id": "longmemeval:q1:session:s1:chunk:0",
+                    },
+                }
+            ],
+        )
         self.assertNotIn("SECRET-GOLD-ANSWER", json.dumps(manifest))
 
     def test_longmemeval_question_limit_counts_cases_with_included_gold_evidence(self) -> None:

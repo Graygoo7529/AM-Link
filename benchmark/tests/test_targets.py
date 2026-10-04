@@ -6,7 +6,7 @@ import urllib.error
 import unittest
 from unittest.mock import patch
 
-from benchmark.targets import AmlApiTarget, Mem0OssTarget
+from benchmark.targets import AmlApiTarget, Mem0LibraryTarget, Mem0OssTarget
 
 
 class FakeResponse:
@@ -132,6 +132,56 @@ class TargetTests(unittest.TestCase):
         with patch("urllib.request.urlopen", return_value=response):
             result = target.add(request)
         self.assertEqual(result.error_type, "invalid_mem0_add_response")
+
+    def test_mem0_library_maps_official_add_search_and_scopes(self) -> None:
+        class FakeMemory:
+            def __init__(self):
+                self.add_call = None
+                self.search_call = None
+
+            def add(self, messages, **kwargs):
+                self.add_call = (messages, kwargs)
+                return {"results": [{"id": "mem-1", "event": "ADD"}]}
+
+            def search(self, query, **kwargs):
+                self.search_call = (query, kwargs)
+                return {
+                    "results": [
+                        {
+                            "id": "mem-1",
+                            "memory": "Alice prefers tea.",
+                            "score": 0.91,
+                            "score_details": {"semantic": 0.91},
+                        }
+                    ]
+                }
+
+        memory = FakeMemory()
+        target = Mem0LibraryTarget(memory)
+        request = {
+            "request_id": "req-1",
+            "user_id": "user-1",
+            "session_id": "session-1",
+            "messages": [
+                {"role": "user", "content": "I prefer tea.", "timestamp": 1000}
+            ],
+        }
+
+        add_response = target.add(request)
+        search_response = target.search(
+            {"query": "What does Alice prefer?", "user_id": "user-1", "top_k": 5}
+        )
+
+        messages, add_options = memory.add_call
+        self.assertEqual(messages, [{"role": "user", "content": "I prefer tea."}])
+        self.assertEqual(add_options, {"user_id": "user-1", "run_id": "session-1"})
+        query, search_options = memory.search_call
+        self.assertEqual(query, "What does Alice prefer?")
+        self.assertEqual(search_options["top_k"], 5)
+        self.assertEqual(search_options["filters"], {"user_id": "user-1"})
+        self.assertTrue(search_options["explain"])
+        self.assertEqual(add_response.body["request_id"], "req-1")
+        self.assertEqual(search_response.body["data"][0]["target_metadata"]["score_details"], {"semantic": 0.91})
 
 
 if __name__ == "__main__":

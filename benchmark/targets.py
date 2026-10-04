@@ -188,3 +188,80 @@ class Mem0OssTarget(HttpTarget):
             body={"data": normalized_results},
             raw_body=raw,
         )
+
+
+class Mem0LibraryTarget:
+    """Adapts the published Mem0 Python package to the arena Add/Search contract."""
+
+    def __init__(self, memory: Any) -> None:
+        self.memory = memory
+
+    def add(self, request: dict[str, Any]) -> TargetResponse:
+        messages = [
+            {"role": message["role"], "content": message["content"]}
+            for message in request["messages"]
+        ]
+        try:
+            raw = self.memory.add(
+                messages,
+                user_id=request["user_id"],
+                run_id=request["session_id"],
+            )
+        except Exception as error:
+            return TargetResponse(None, error_type=f"mem0_library_error:{type(error).__name__}")
+        results = raw.get("results") if isinstance(raw, dict) else None
+        if not isinstance(results, list) or not results or any(
+            not isinstance(result, dict)
+            or not isinstance(result.get("id"), str)
+            or not result["id"]
+            or not isinstance(result.get("event"), str)
+            or not result["event"]
+            for result in results
+        ):
+            return TargetResponse(None, error_type="invalid_mem0_add_response", raw_body=raw)
+        return TargetResponse(
+            200,
+            body={
+                "success": True,
+                "request_id": request["request_id"],
+                "user_id": request["user_id"],
+                "session_id": request["session_id"],
+            },
+            raw_body=raw,
+        )
+
+    def search(self, request: dict[str, Any]) -> TargetResponse:
+        try:
+            raw = self.memory.search(
+                request["query"],
+                top_k=request["top_k"],
+                filters={"user_id": request["user_id"]},
+                explain=True,
+            )
+        except Exception as error:
+            return TargetResponse(None, error_type=f"mem0_library_error:{type(error).__name__}")
+        results = raw.get("results") if isinstance(raw, dict) else None
+        if not isinstance(results, list):
+            return TargetResponse(None, error_type="invalid_mem0_search_response", raw_body=raw)
+        normalized = []
+        for result in results:
+            if not isinstance(result, dict):
+                return TargetResponse(None, error_type="invalid_mem0_search_response", raw_body=raw)
+            memory_id = result.get("id")
+            content = result.get("memory", result.get("content"))
+            if not isinstance(memory_id, str) or not memory_id or not isinstance(content, str) or not content:
+                return TargetResponse(None, error_type="invalid_mem0_search_response", raw_body=raw)
+            candidate = {"id": memory_id, "content": content}
+            score = result.get("score")
+            if isinstance(score, (int, float)) and not isinstance(score, bool):
+                candidate["score"] = float(score)
+            created_at = result.get("created_at")
+            if isinstance(created_at, str):
+                candidate["created_at"] = created_at
+            candidate["target_metadata"] = {
+                field: result[field]
+                for field in ("score_details", "categories", "metadata", "run_id")
+                if field in result
+            }
+            normalized.append(candidate)
+        return TargetResponse(200, body={"data": normalized}, raw_body=raw)
