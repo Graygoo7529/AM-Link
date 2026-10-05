@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import ast
+import csv
 import hashlib
+import itertools
 import json
 import re
 import sys
@@ -10,20 +13,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
+from dataset.pack import PACK_SCHEMA_VERSION, write_pack
+
 
 ROOT = Path(__file__).resolve().parent
 RAW_DIR = ROOT / "data" / "raw"
-DERIVED_DIR = ROOT / "data" / "derived"
 CATALOG_PATH = ROOT / "catalog.json"
-BUILDER_VERSION = 2
+BUILDER_VERSION = 3
 CHUNK_READ_SIZE = 1024 * 1024
 SESSION_PATTERN = re.compile(r"^session_(\d+)$")
 DIALOG_ID_PATTERN = re.compile(r"D:?(\d+):(\d+)", re.IGNORECASE)
 CATEGORY_MAP = {
-    1: "single_hop",
+    1: "multi_hop",
     2: "temporal",
-    3: "multi_hop",
-    4: "open_domain",
+    3: "open_domain",
+    4: "single_hop",
     5: "adversarial",
 }
 
@@ -33,10 +37,22 @@ def load_catalog() -> dict[str, Any]:
 
 
 def source_path(dataset_id: str) -> Path:
-    datasets = load_catalog()["datasets"]
-    if dataset_id not in datasets:
-        raise ValueError(f"unknown dataset: {dataset_id}")
-    return RAW_DIR / datasets[dataset_id]["raw_relative_path"]
+    entry = source_entry(dataset_id)
+    if entry.get("raw_relative_path"):
+        return RAW_DIR / entry["raw_relative_path"]
+    assets = entry.get("assets", [])
+    if not assets:
+        raise ValueError(f"dataset {dataset_id} has no local source asset")
+    return RAW_DIR / assets[0]["path"]
+
+
+def source_entry(dataset_id: str) -> dict[str, Any]:
+    catalog = load_catalog()
+    for section in ("datasets", "sources"):
+        entry = catalog.get(section, {}).get(dataset_id)
+        if entry is not None:
+            return entry
+    raise ValueError(f"unknown dataset: {dataset_id}")
 
 
 def iter_json_array(path: Path) -> Iterator[Any]:
@@ -115,8 +131,7 @@ def build_locomo(
     session_limit: int | None,
     questions_per_category: int | None,
     categories: set[int] | None,
-    chunk_size: int,
-    top_k: int,
+    dataset_id: str = "locomo",
 ) -> dict[str, Any]:
     if conversation_limit is not None and conversation_limit < 1:
         raise ValueError("conversation-limit must be positive")
@@ -124,7 +139,6 @@ def build_locomo(
         raise ValueError("session-limit must be positive")
     if questions_per_category is not None and questions_per_category < 1:
         raise ValueError("questions-per-category must be positive")
-    _validate_build_limits(chunk_size, top_k)
     selected_categories = categories or set(CATEGORY_MAP)
     if not selected_categories or not selected_categories <= CATEGORY_MAP.keys():
         raise ValueError("category must be one of 1, 2, 3, 4, 5")
@@ -148,46 +162,40 @@ def build_locomo(
     if not raw_conversations:
         raise ValueError("no LoCoMo conversations selected")
 
-    cases = []
+    records = []
     for sample in raw_conversations:
-        case = _locomo_case(
+        record = _locomo_record(
             sample,
             session_limit=session_limit,
             questions_per_category=questions_per_category,
             categories=selected_categories,
-            chunk_size=chunk_size,
-            top_k=top_k,
         )
-        if case:
-            cases.append(case)
-    if not cases:
-        raise ValueError("selected conversations produced no questions with included evidence")
-    dataset = load_catalog()["datasets"]["locomo"]
-    return _manifest(
-        dataset_id="locomo-original-public",
+        if record:
+            records.append(record)
+    if not records:
+        raise ValueError("selected conversations produced no usable records")
+    dataset = source_entry(dataset_id)
+    return _dataset_pack(
+        dataset_id=dataset_id,
         dataset=dataset,
         path=path,
         selection={
-            "conversation_ids": [case["id"] for case in cases],
+            "record_ids": [record["id"] for record in records],
             "conversation_limit": conversation_limit,
             "session_limit": session_limit,
             "questions_per_category": questions_per_category,
             "categories": sorted(selected_categories),
-            "chunk_size": chunk_size,
-            "top_k": top_k,
         },
-        cases=cases,
+        records=records,
     )
 
 
-def _locomo_case(
+def _locomo_record(
     sample: dict[str, Any],
     *,
     session_limit: int | None,
     questions_per_category: int | None,
     categories: set[int],
-    chunk_size: int,
-    top_k: int,
 ) -> dict[str, Any] | None:
     sample_id = sample.get("sample_id")
     conversation = sample.get("conversation")
@@ -207,16 +215,14 @@ def _locomo_case(
     if not sessions:
         return None
 
-    user_id = f"locomo:{sample_id}"
-    evidence_text: dict[str, str] = {}
-    evidence_source: dict[str, dict[str, Any]] = {}
-    adds: list[dict[str, Any]] = []
+    included_turn_ids: set[str] = set()
+    history = []
     for session_number, session_key in sessions:
         raw_turns = conversation.get(session_key)
         if not isinstance(raw_turns, list):
             raise ValueError(f"session {session_key} must be an array")
         timestamp = _parse_locomo_date(conversation.get(f"{session_key}_date_time"))
-        messages = []
+        turns = []
         for turn_index, turn in enumerate(raw_turns):
             if not isinstance(turn, dict):
                 raise ValueError(f"conversation {sample_id} contains an invalid turn")
@@ -224,34 +230,26 @@ def _locomo_case(
             if dialog_id is None:
                 raise ValueError(f"conversation {sample_id} contains an invalid dialog id")
             content = _turn_content(turn)
-            evidence_text[dialog_id] = content
-            evidence_source[dialog_id] = {
-                "dataset_record_id": sample_id,
-                "turn_id": dialog_id,
-                "session_id": str(session_number),
-                "add_request_id": (
-                    f"locomo:{sample_id}:session:{session_number}:chunk:{turn_index // chunk_size}"
-                ),
-            }
-            messages.append(
+            included_turn_ids.add(dialog_id)
+            turns.append(
                 {
-                    "role": "user" if turn.get("speaker") == speaker_a else "assistant",
+                    "id": dialog_id,
+                    "speaker": turn.get("speaker"),
                     "timestamp": timestamp,
                     "content": content,
                 }
             )
-        session_id = f"locomo:{sample_id}:session:{session_number}"
-        for chunk_index, offset in enumerate(range(0, len(messages), chunk_size)):
-            adds.append(
-                {
-                    "request_id": f"locomo:{sample_id}:session:{session_number}:chunk:{chunk_index}",
-                    "messages": messages[offset : offset + chunk_size],
-                    "user_id": user_id,
-                    "session_id": session_id,
-                }
-            )
+        history.append(
+            {
+                "id": str(session_number),
+                "source_id": session_key,
+                "timestamp": timestamp,
+                "turns": turns,
+            }
+        )
 
-    searches = []
+    tasks = []
+    excluded_tasks = []
     category_counts: Counter[int] = Counter()
     for qa_index, qa in enumerate(sample.get("qa", [])):
         if not isinstance(qa, dict):
@@ -261,10 +259,13 @@ def _locomo_case(
         except (TypeError, ValueError):
             continue
         evidence_ids = _evidence_ids(qa.get("evidence", []))
-        if category not in categories or not evidence_ids:
+        if category not in categories:
             continue
-        valid_ids = [identifier for identifier in evidence_ids if identifier in evidence_text]
-        if not valid_ids or len(set(valid_ids)) != len(set(evidence_ids)):
+        if evidence_ids and not set(evidence_ids) <= included_turn_ids:
+            excluded_tasks.append({
+                "task_id": f"qa-{qa_index}", "reason": "evidence_outside_selected_history",
+                "missing_turn_ids": sorted(set(evidence_ids) - included_turn_ids),
+            })
             continue
         if questions_per_category is not None and category_counts[category] >= questions_per_category:
             continue
@@ -272,23 +273,26 @@ def _locomo_case(
         if not isinstance(question, str) or not question.strip():
             continue
         category_counts[category] += 1
-        searches.append(
+        answer = qa.get("answer")
+        tasks.append(
             {
-                "id": f"locomo:{sample_id}:qa:{qa_index}",
-                "request": {"query": question, "user_id": user_id, "top_k": top_k},
-                "expected": [
-                    {
-                        "contains_any": [evidence_text[identifier]],
-                        "source": evidence_source[identifier],
-                    }
-                    for identifier in dict.fromkeys(valid_ids)
-                ],
-                "category": CATEGORY_MAP[category],
+                "id": f"qa-{qa_index}",
+                "kind": "question_answering",
+                "input": {"text": question},
+                "annotations": {
+                    "answer": answer,
+                    "evidence_turn_ids": list(dict.fromkeys(evidence_ids)),
+                },
+                "attributes": {
+                    "category_id": category,
+                    "category": CATEGORY_MAP[category],
+                },
             }
         )
-    if not searches:
+    if not tasks:
         return None
-    return {"id": sample_id, "adds": adds, "searches": searches}
+    return {"id": sample_id, "participants": [speaker_a, conversation.get("speaker_b")],
+        "sessions": history, "tasks": tasks, "excluded_tasks": excluded_tasks}
 
 
 def build_longmemeval(
@@ -298,20 +302,18 @@ def build_longmemeval(
     question_limit: int | None,
     session_limit: int | None,
     question_type: str | None,
-    chunk_size: int,
-    top_k: int,
+    dataset_id: str = "longmemeval-s",
 ) -> dict[str, Any]:
     if question_limit is not None and question_limit < 1:
         raise ValueError("question-limit must be positive")
     if session_limit is not None and session_limit < 1:
         raise ValueError("session-limit must be positive")
-    _validate_build_limits(chunk_size, top_k)
     requested = set(question_ids or [])
     if len(requested) != len(question_ids or []):
         raise ValueError("question-ids must be unique")
     if requested and question_limit is not None and len(requested) > question_limit:
         raise ValueError("question-limit cannot be smaller than the number of requested question IDs")
-    cases = []
+    records = []
     found_ids: set[str] = set()
     for record in iter_json_array(path):
         if not isinstance(record, dict):
@@ -324,47 +326,40 @@ def build_longmemeval(
         if question_type and record.get("question_type") != question_type:
             continue
         found_ids.add(question_id)
-        case = _longmemeval_case(
+        record_pack = _longmemeval_record(
             record,
             session_limit=session_limit,
-            chunk_size=chunk_size,
-            top_k=top_k,
         )
-        if case:
-            cases.append(case)
+        if record_pack:
+            records.append(record_pack)
         requested_found = requested and requested <= found_ids
-        if requested_found or (not requested and question_limit is not None and len(cases) >= question_limit):
+        if requested_found or (not requested and question_limit is not None and len(records) >= question_limit):
             break
     if requested:
         missing = requested - found_ids
         if missing:
             raise ValueError(f"question IDs not found in selected type/limit: {', '.join(sorted(missing))}")
-    if not cases:
-        raise ValueError("selected questions produced no complete included evidence")
-    dataset = load_catalog()["datasets"]["longmemeval-s"]
-    return _manifest(
-        dataset_id="longmemeval-s-original-public",
+    if not records:
+        raise ValueError("selected questions produced no usable records")
+    dataset = source_entry(dataset_id)
+    return _dataset_pack(
+        dataset_id=dataset_id,
         dataset=dataset,
         path=path,
         selection={
-            "question_ids": [case["id"] for case in cases],
+            "record_ids": [record["id"] for record in records],
             "question_limit": question_limit,
             "question_type": question_type,
             "session_limit": session_limit,
-            "chunk_size": chunk_size,
-            "top_k": top_k,
-            "abstention_policy": "excluded; retrieval-only harness cannot judge answer abstention",
         },
-        cases=cases,
+        records=records,
     )
 
 
-def _longmemeval_case(
+def _longmemeval_record(
     record: dict[str, Any],
     *,
     session_limit: int | None,
-    chunk_size: int,
-    top_k: int,
 ) -> dict[str, Any] | None:
     question_id = record["question_id"]
     session_ids = record.get("haystack_session_ids")
@@ -373,23 +368,22 @@ def _longmemeval_case(
     answer_session_ids = record.get("answer_session_ids", [])
     if not isinstance(session_ids, list) or not isinstance(sessions, list) or len(session_ids) != len(sessions):
         raise ValueError(f"question {question_id} has mismatched history sessions")
-    if not isinstance(answer_session_ids, list) or not answer_session_ids:
-        return None
+    if not isinstance(answer_session_ids, list):
+        raise ValueError(f"question {question_id} has invalid answer_session_ids")
     selected_sessions = list(zip(session_ids, sessions, strict=True))
     if session_limit is not None:
         selected_sessions = selected_sessions[:session_limit]
     included_ids = {identifier for identifier, _ in selected_sessions}
-    if not set(answer_session_ids) <= included_ids:
+    if answer_session_ids and not set(answer_session_ids) <= included_ids:
         return None
-    adds = []
-    targets = []
+    history = []
+    evidence_turn_ids = []
     seen_targets: set[str] = set()
-    user_id = f"longmemeval:{question_id}"
     for session_index, (session_id, turns) in enumerate(selected_sessions):
         if not isinstance(turns, list):
             raise ValueError(f"question {question_id} contains an invalid session")
         session_timestamp = _parse_timestamp(dates[session_index] if session_index < len(dates) else None)
-        messages = []
+        normalized_turns = []
         for turn_index, turn in enumerate(turns):
             if not isinstance(turn, dict):
                 raise ValueError(f"question {question_id} contains an invalid turn")
@@ -398,86 +392,308 @@ def _longmemeval_case(
             if role not in {"user", "assistant"} or not isinstance(content, str) or not content.strip():
                 raise ValueError(f"question {question_id} contains an invalid role/content")
             message_timestamp = _parse_timestamp(turn.get("timestamp")) or session_timestamp
-            messages.append({"role": role, "timestamp": message_timestamp, "content": content})
+            turn_id = f"{session_id}:{turn_index}"
+            normalized_turns.append(
+                {
+                    "id": turn_id,
+                    "speaker": role,
+                    "role": role,
+                    "timestamp": message_timestamp,
+                    "content": content,
+                }
+            )
             if session_id in answer_session_ids and turn.get("has_answer"):
                 signature = " ".join(content.casefold().split())
                 if signature and signature not in seen_targets:
                     seen_targets.add(signature)
-                    targets.append(
-                        {
-                            "contains_any": [content],
-                            "source": {
-                                "dataset_record_id": question_id,
-                                "session_id": str(session_id),
-                                "turn_index": turn_index,
-                                "add_request_id": (
-                                    f"longmemeval:{question_id}:session:{session_id}:"
-                                    f"chunk:{turn_index // chunk_size}"
-                                ),
-                            },
-                        }
-                    )
-        session_id_text = str(session_id)
-        for chunk_index, offset in enumerate(range(0, len(messages), chunk_size)):
-            adds.append(
-                {
-                    "request_id": f"longmemeval:{question_id}:session:{session_id_text}:chunk:{chunk_index}",
-                    "messages": messages[offset : offset + chunk_size],
-                    "user_id": user_id,
-                    "session_id": f"longmemeval:{question_id}:session:{session_id_text}",
-                }
-            )
-    if not targets:
-        return None
+                    evidence_turn_ids.append(turn_id)
+        history.append(
+            {
+                "id": str(session_id),
+                "source_id": str(session_id),
+                "timestamp": session_timestamp,
+                "turns": normalized_turns,
+            }
+        )
     question = record.get("question")
     if not isinstance(question, str) or not question.strip():
         raise ValueError(f"question {question_id} has no question text")
+    answer = record.get("answer")
     return {
         "id": question_id,
-        "adds": adds,
-        "searches": [
+        "sessions": history,
+        "tasks": [
             {
-                "id": question_id,
-                "request": {"query": question, "user_id": user_id, "top_k": top_k},
-                "expected": targets,
-                "category": record.get("question_type", "general"),
+                "id": "question",
+                "kind": "question_answering",
+                "input": {"text": question},
+                "annotations": {
+                    "answer": answer,
+                    "evidence_turn_ids": evidence_turn_ids,
+                    "answer_session_ids": [str(value) for value in answer_session_ids],
+                    "is_answerable": bool(answer_session_ids),
+                },
+                "attributes": {"question_type": record.get("question_type", "unknown")},
             }
         ],
     }
 
 
-def _manifest(
+def build_context_tasks(
+    *,
+    dataset_id: str,
+    path: Path,
+    task_ids: list[str] | None,
+    task_limit: int | None,
+) -> dict[str, Any]:
+    if task_limit is not None and task_limit < 1:
+        raise ValueError("task-limit must be positive")
+    requested = set(task_ids or [])
+    if len(requested) != len(task_ids or []):
+        raise ValueError("task-ids must be unique")
+    if requested and task_limit is not None and len(requested) > task_limit:
+        raise ValueError("task-limit cannot be smaller than the number of requested task IDs")
+    entry = source_entry(dataset_id)
+    if entry.get("pack_adapter") != "context-task-v1":
+        raise ValueError(f"dataset {dataset_id} has no context-task pack adapter")
+    records = []
+    found_ids: set[str] = set()
+    for index, row in enumerate(iter_json_array(path)):
+        if not isinstance(row, dict):
+            raise ValueError(f"{dataset_id} rows must be JSON objects")
+        metadata = row.get("metadata", {})
+        metadata = metadata if isinstance(metadata, dict) else {}
+        task_id = metadata.get("task_id", str(index))
+        if not isinstance(task_id, str) or not task_id:
+            task_id = str(index)
+        if requested and task_id not in requested:
+            continue
+        found_ids.add(task_id)
+        record = _context_task_record(row, task_id)
+        if record is not None:
+            records.append(record)
+        if requested and requested <= found_ids:
+            break
+        if not requested and task_limit is not None and len(records) >= task_limit:
+            break
+    if requested:
+        missing = requested - found_ids
+        if missing:
+            raise ValueError(f"task IDs not found: {', '.join(sorted(missing))}")
+    if not records:
+        raise ValueError("selected rows produced no usable task records")
+    return _dataset_pack(
+        dataset_id=dataset_id,
+        dataset=entry,
+        path=path,
+        selection={"record_ids": [record["id"] for record in records], "task_limit": task_limit},
+        records=records,
+    )
+
+
+def _context_task_record(row: dict[str, Any], task_id: str) -> dict[str, Any] | None:
+    messages = row.get("messages")
+    if not isinstance(messages, list) or not messages:
+        return None
+    instructions = [m for m in messages if isinstance(m, dict) and m.get("role") == "system"]
+    messages = [m for m in messages if not isinstance(m, dict) or m.get("role") != "system"]
+    if not messages:
+        raise ValueError(f"task {task_id} has no user messages")
+    history_messages: list[dict[str, str]]
+    question: str
+    if len(messages) == 1 and isinstance(messages[0], dict):
+        content = messages[0].get("content")
+        if not isinstance(content, str) or "<|TASK|>" not in content:
+            # Preserve the source structure when it does not declare the boundary.
+            return {
+                "id": task_id, "group_id": str(row.get("metadata", {}).get("context_id", task_id)), "sessions": [], "tasks": [{
+                    "id": "task", "kind": "context_task",
+                    "input": {"messages": row["messages"]},
+                    "annotations": {"rubrics": row.get("rubrics", [])},
+                    "attributes": {**row.get("metadata", {}), "context_task_boundary": "unseparated"},
+                }],
+            }
+        history_text, question = content.split("<|TASK|>", 1)
+        history_text = history_text.strip()
+        question = question.strip()
+        history_messages = [{"role": "user", "content": history_text}] if history_text else []
+    else:
+        normalized = []
+        for message in messages:
+            if not isinstance(message, dict) or message.get("role") not in {"user", "assistant"}:
+                return None
+            content = message.get("content")
+            if not isinstance(content, str) or not content.strip():
+                return None
+            normalized.append({"role": message["role"], "content": content})
+        if normalized[-1]["role"] != "user":
+            return None
+        question = normalized[-1]["content"].strip()
+        history_messages = normalized[:-1]
+    if not question:
+        return None
+
+    metadata = row.get("metadata", {})
+    metadata = metadata if isinstance(metadata, dict) else {}
+    rubrics = row.get("rubrics", [])
+    return {
+        "id": task_id,
+        "group_id": str(metadata.get("context_id", task_id)),
+        "sessions": [
+            {
+                "id": "context",
+                "source_id": "messages",
+                "turns": [
+                    {"id": f"{task_id}:turn:{index}", **message}
+                    for index, message in enumerate(history_messages)
+                ],
+            }
+        ] if history_messages else [],
+        "tasks": [
+            {
+                "id": str(metadata.get("task_id", "task")),
+                "kind": "context_task",
+                "input": {"text": question, "instructions": instructions},
+                "annotations": {"rubrics": rubrics if isinstance(rubrics, list) else []},
+                "attributes": metadata,
+            }
+        ],
+    }
+
+
+def build_tasks(*, dataset_id: str, path: Path, task_limit: int | None, task_ids: list[str] | None = None) -> dict[str, Any]:
+    """Read source-specific task data without inventing unavailable history."""
+    if task_limit is not None and task_limit < 1:
+        raise ValueError("task-limit must be positive")
+    requested = set(task_ids or [])
+    if len(requested) != len(task_ids or []):
+        raise ValueError("task-ids must be unique")
+    if requested and task_limit is not None and len(requested) > task_limit:
+        raise ValueError("task-limit cannot be smaller than requested task IDs")
+    found = set()
+    records = []
+    selected = 0
+    for index, row in enumerate(iter_rows(path)):
+        if dataset_id == "scriptmem":
+            record = {
+                "id": row["qa_id"], "group_id": row["conversation_id"],
+                "history_status": "unavailable_in_release", "sessions": [],
+                "tasks": [{
+                    "id": row["qa_id"], "kind": "multiple_choice",
+                    "input": {"text": row["question"], "options": row["option"]},
+                    "annotations": {"answer": row["answer"], "answer_letters": row["answer_letters"]},
+                    "attributes": {"category": row["qa_type"], "source": row["source"]},
+                }],
+            }
+        elif dataset_id == "personamem-v2":
+            record = {
+                "id": f"persona-{row['persona_id']}:row-{index}", "group_id": f"persona-{row['persona_id']}",
+                "history_status": "external_history_required", "sessions": [],
+                "history_references": {k: v for k, v in row.items() if k.endswith("_link")},
+                "tasks": [{
+                    "id": f"row-{index}", "kind": "personalization",
+                    "input": {"text": row["user_query"]},
+                    "annotations": {k: v for k, v in row.items() if k not in {"user_query", "persona_id"} and not k.endswith("_link")},
+                    "attributes": {"category": row.get("pref_type"), "persona_id": row["persona_id"]},
+                }],
+            }
+        elif dataset_id == "beam":
+            record = _beam_record(row, index)
+        else:
+            raise ValueError(f"no task adapter for {dataset_id}")
+        if requested:
+            record["tasks"] = [t for t in record["tasks"] if t["id"] in requested]
+            found.update(t["id"] for t in record["tasks"])
+        if task_limit is not None:
+            record["tasks"] = record["tasks"][: task_limit - selected]
+        if record["tasks"]:
+            records.append(record)
+        selected += len(record["tasks"])
+        if requested and requested <= found:
+            break
+        if task_limit is not None and selected >= task_limit:
+            break
+    if requested - found:
+        raise ValueError(f"task IDs not found: {', '.join(sorted(requested - found))}")
+    if not records:
+        raise ValueError("no tasks selected")
+    return _dataset_pack(
+        dataset_id=dataset_id, dataset=source_entry(dataset_id), path=path,
+        selection={"record_ids": [r["id"] for r in records], "task_limit": task_limit, "task_ids": sorted(requested)}, records=records,
+    )
+
+
+def _beam_record(row: dict[str, Any], index: int) -> dict[str, Any]:
+    sessions = []
+    for session_index, messages in enumerate(row["chat"]):
+        turns = []
+        for turn_index, message in enumerate(messages):
+            if message.get("role") not in {"user", "assistant"}:
+                raise ValueError("BEAM chat contains an unsupported role")
+            turns.append({
+                "id": f"{session_index}:{turn_index}", "role": message["role"],
+                "content": message["content"],
+                "attributes": {k: v for k, v in message.items() if k not in {"role", "content"}},
+            })
+        sessions.append({"id": str(session_index), "turns": turns})
+    probes = row["probing_questions"]
+    if isinstance(probes, str):
+        probes = ast.literal_eval(probes)
+    if not isinstance(probes, dict):
+        raise ValueError("BEAM probing_questions must be a category mapping")
+    tasks = []
+    for category, questions in probes.items():
+        for question_index, question in enumerate(questions):
+            tasks.append({
+                "id": f"{category}:{question_index}", "kind": "question_answering",
+                "input": {"text": question["question"]},
+                "annotations": {k: v for k, v in question.items() if k != "question"},
+                "attributes": {"category": category},
+            })
+    return {"id": str(row.get("conversation_id", index)), "sessions": sessions, "tasks": tasks}
+
+
+def iter_rows(path: Path) -> Iterator[dict[str, Any]]:
+    if path.suffix.lower() == ".csv":
+        with path.open("r", encoding="utf-8-sig", newline="") as source:
+            yield from csv.DictReader(source)
+    else:
+        yield from iter_json_array(path)
+
+
+def _dataset_pack(
     *,
     dataset_id: str,
     dataset: dict[str, Any],
     path: Path,
     selection: dict[str, Any],
-    cases: list[dict[str, Any]],
+    records: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    receipt_path = path.with_suffix(path.suffix + ".receipt.json")
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8")) if receipt_path.exists() else None
+    actual_hash = sha256_file(path)
+    if receipt and receipt.get("sha256") != actual_hash:
+        raise ValueError("source file no longer matches its acquisition receipt")
     return {
-        "schema_version": 1,
+        "schema_version": PACK_SCHEMA_VERSION,
         "dataset": {
             "id": dataset_id,
             "title": dataset["title"],
-            "official_suite_name": dataset["official_suite_name"],
             "upstream": dataset["upstream"],
             "license": dataset["license"],
             "attribution": dataset["attribution"],
-            "source_revision": dataset.get("revision"),
-            "source_sha256": sha256_file(path),
-            "source_file": path.name,
-            "selection": selection,
-            "builder_version": BUILDER_VERSION,
+            "source_revision": receipt.get("source_revision") if receipt else None,
+            "format": dataset.get("format"),
         },
-        "cases": cases,
+        "preparation": {
+            "tool": "dataset.prepare",
+            "version": BUILDER_VERSION,
+            "input": {"file": path.name, "sha256": actual_hash, "acquisition": receipt},
+            "selection": selection,
+            "excluded_tasks": [{"record_id": r["id"], **item} for r in records for item in r.get("excluded_tasks", [])],
+        },
+        "records": records,
     }
-
-
-def _validate_build_limits(chunk_size: int, top_k: int) -> None:
-    if not 1 <= chunk_size <= 20:
-        raise ValueError("chunk-size must be between 1 and 20")
-    if not 1 <= top_k <= 100:
-        raise ValueError("top-k must be between 1 and 100")
 
 
 def _turn_content(turn: dict[str, Any]) -> str:
@@ -542,11 +758,24 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def inspect_dataset(dataset_id: str) -> dict[str, Any]:
-    path = source_path(dataset_id)
+def inspect_dataset(dataset_id: str, path: Path | None = None) -> dict[str, Any]:
+    entry = source_entry(dataset_id)
+    paths = [path] if path else [
+        RAW_DIR / asset["path"] for asset in entry.get("assets", [])
+        if (RAW_DIR / asset["path"]).is_file()
+    ]
+    if not paths:
+        paths = [path or source_path(dataset_id)]
+    inspections = [_inspect_file(dataset_id, asset_path) for asset_path in paths]
+    if len(inspections) == 1:
+        return inspections[0]
+    return {"id": dataset_id, "assets": inspections}
+
+
+def _inspect_file(dataset_id: str, path: Path) -> dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(f"dataset is unavailable: {path}")
-    if dataset_id == "locomo":
+    if source_entry(dataset_id).get("pack_adapter") == "locomo-v1" and path.suffix.lower() != ".jsonl":
         samples = list(iter_json_array(path))
         sessions = 0
         turns = 0
@@ -570,13 +799,190 @@ def inspect_dataset(dataset_id: str) -> dict[str, Any]:
             "questions": questions,
             "questions_by_category": dict(sorted(categories.items())),
         }
-    record_count = sum(1 for _ in iter_json_array(path))
+    entry = source_entry(dataset_id)
+    if entry.get("pack_adapter") == "context-task-v1":
+        return _inspect_context_tasks(dataset_id, path)
+    if path.suffix.lower() == ".csv":
+        return _inspect_csv(dataset_id, path)
+    if dataset_id in {"scriptmem", "beam", "personamem-v2"} and path.suffix.lower() == ".jsonl":
+        return _inspect_task_rows(dataset_id, path)
+    if path.suffix.lower() == ".json":
+        with path.open("r", encoding="utf-8") as source:
+            first = next((char for block in iter(lambda: source.read(4096), "") for char in block if not char.isspace()), "")
+        if first != "[":
+            value = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(value, dict):
+                raise ValueError(f"{dataset_id} JSON source must contain an object or array")
+            return {
+                "id": dataset_id,
+                "path": str(path),
+                "sha256": sha256_file(path),
+                "format": "json-object",
+                "top_level_keys": sorted(value),
+                "top_level_types": {key: type(item).__name__ for key, item in value.items()},
+            }
+    record_count = 0
+    sessions = 0
+    turns = 0
+    answerable = 0
+    question_types: Counter[str] = Counter()
+    for record in iter_json_array(path):
+        if not isinstance(record, dict):
+            raise ValueError(f"{dataset_id} records must be JSON objects")
+        record_count += 1
+        question_types[str(record.get("question_type", "unknown"))] += 1
+        answer_session_ids = record.get("answer_session_ids")
+        if isinstance(answer_session_ids, list) and answer_session_ids:
+            answerable += 1
+        sessions_for_record = record.get("haystack_sessions", [])
+        if isinstance(sessions_for_record, list):
+            sessions += len(sessions_for_record)
+            turns += sum(len(session) for session in sessions_for_record if isinstance(session, list))
+    if source_entry(dataset_id).get("pack_adapter") == "longmemeval-v1":
+        return {
+            "id": dataset_id,
+            "path": str(path),
+            "sha256": sha256_file(path),
+            "questions": record_count,
+            "sessions": sessions,
+            "turns": turns,
+            "answerable_questions": answerable,
+            "questions_by_type": dict(sorted(question_types.items())),
+        }
+    keys: Counter[str] = Counter()
+    for row in iter_json_array(path):
+        if isinstance(row, dict):
+            keys.update(row.keys())
     return {
         "id": dataset_id,
         "path": str(path),
         "sha256": sha256_file(path),
-        "questions": record_count,
+        "rows": record_count,
+        "top_level_key_frequency": dict(sorted(keys.items())),
     }
+
+
+def _inspect_context_tasks(dataset_id: str, path: Path) -> dict[str, Any]:
+    row_count = 0
+    categories: Counter[str] = Counter()
+    subcategories: Counter[str] = Counter()
+    message_shapes: Counter[str] = Counter()
+    delimiter_rows = 0
+    rubric_counts: Counter[int] = Counter()
+    for row in iter_json_array(path):
+        if not isinstance(row, dict):
+            raise ValueError(f"{dataset_id} rows must be JSON objects")
+        row_count += 1
+        metadata = row.get("metadata", {})
+        metadata = metadata if isinstance(metadata, dict) else {}
+        categories[str(metadata.get("context_category", "unknown"))] += 1
+        subcategories[str(metadata.get("context_subcategory", metadata.get("sub_category", "unknown")))] += 1
+        messages = row.get("messages", [])
+        if isinstance(messages, list):
+            message_shapes[str(len(messages))] += 1
+            if len(messages) == 1 and isinstance(messages[0], dict):
+                delimiter_rows += int("<|TASK|>" in str(messages[0].get("content", "")))
+        rubrics = row.get("rubrics", [])
+        rubric_counts[len(rubrics) if isinstance(rubrics, list) else 0] += 1
+    return {
+        "id": dataset_id,
+        "path": str(path),
+        "sha256": sha256_file(path),
+        "tasks": row_count,
+        "tasks_by_category": dict(sorted(categories.items())),
+        "tasks_by_subcategory": dict(sorted(subcategories.items())),
+        "message_count_distribution": dict(sorted(message_shapes.items())),
+        "single_message_delimiter_tasks": delimiter_rows,
+        "rubric_count_distribution": dict(sorted(rubric_counts.items())),
+    }
+
+
+def _inspect_task_rows(dataset_id: str, path: Path) -> dict[str, Any]:
+    count = 0
+    keys: Counter[str] = Counter()
+    groups: Counter[str] = Counter()
+    types: Counter[str] = Counter()
+    history_turns = 0
+    for row in iter_rows(path):
+        count += 1
+        keys.update(row.keys())
+        if dataset_id == "scriptmem":
+            groups[str(row["source"])] += 1
+            types[str(row["qa_type"])] += 1
+        elif dataset_id == "personamem-v2":
+            groups[str(row["persona_id"])] += 1
+            types[str(row["pref_type"])] += 1
+        elif dataset_id == "beam":
+            record = _beam_record(row, count - 1)
+            history_turns += sum(len(s["turns"]) for s in record["sessions"])
+            types.update(t["attributes"]["category"] for t in record["tasks"])
+    return {"id": dataset_id, "path": str(path), "sha256": sha256_file(path), "rows": count,
+        "top_level_key_frequency": dict(sorted(keys.items())), "groups": dict(sorted(groups.items())),
+        "task_types": dict(sorted(types.items())), "history_turns": history_turns}
+
+
+def _inspect_csv(dataset_id: str, path: Path) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8-sig", newline="") as source:
+        reader = csv.DictReader(source)
+        if reader.fieldnames is None:
+            raise ValueError(f"CSV is missing a header row: {path}")
+        rows = sum(1 for _ in reader)
+    return {
+        "id": dataset_id,
+        "path": str(path),
+        "sha256": sha256_file(path),
+        "rows": rows,
+        "columns": reader.fieldnames,
+    }
+
+
+def slice_rows(path: Path, output: Path, *, offset: int, limit: int) -> dict[str, Any]:
+    if offset < 0 or limit < 1:
+        raise ValueError("offset must be non-negative and limit must be positive")
+    if path.resolve() == output.resolve() or output.exists():
+        raise ValueError("slice output must be a new path distinct from its source")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    suffix = path.suffix.lower()
+    selected = 0
+    if suffix == ".jsonl":
+        with path.open("r", encoding="utf-8") as source, output.open("w", encoding="utf-8", newline="\n") as target:
+            for index, line in enumerate(line for line in source if line.strip()):
+                if index < offset:
+                    continue
+                if selected >= limit:
+                    break
+                if line.strip():
+                    json.loads(line)
+                    target.write(line.rstrip("\r\n") + "\n")
+                    selected += 1
+    elif suffix == ".csv":
+        with path.open("r", encoding="utf-8-sig", newline="") as source:
+            reader = csv.DictReader(source)
+            if reader.fieldnames is None:
+                raise ValueError("CSV is missing a header row")
+            with output.open("w", encoding="utf-8", newline="") as target:
+                writer = csv.DictWriter(target, fieldnames=reader.fieldnames)
+                writer.writeheader()
+                for index, row in enumerate(reader):
+                    if index < offset:
+                        continue
+                    if selected >= limit:
+                        break
+                    writer.writerow(row)
+                    selected += 1
+    elif suffix == ".json":
+        selected_rows = list(itertools.islice(iter_json_array(path), offset, offset + limit))
+        output.write_text(json.dumps(selected_rows, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        selected = len(selected_rows)
+    else:
+        raise ValueError("slice supports JSON arrays, JSONL, and CSV")
+    if selected == 0:
+        output.unlink(missing_ok=True)
+        raise ValueError("slice selection contains no rows")
+    receipt = {"input": str(path), "input_sha256": sha256_file(path), "output": str(output),
+        "offset": offset, "rows": selected, "sha256": sha256_file(output), "source_kind": "local-row-slice"}
+    output.with_suffix(output.suffix + ".receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+    return receipt
 
 
 def _comma_list(value: str | None) -> list[str] | None:
@@ -589,12 +995,22 @@ def _comma_list(value: str | None) -> list[str] | None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Inspect public datasets and build Add/Search manifests")
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    parser = argparse.ArgumentParser(description="Inspect, slice, and prepare public dataset sources")
     commands = parser.add_subparsers(dest="command", required=True)
+    catalog = load_catalog()
+    dataset_ids = tuple(catalog.get("datasets", {})) + tuple(catalog.get("sources", {}))
+    build_ids = tuple(
+        dataset_id
+        for dataset_id, entry in catalog["datasets"].items()
+        if entry.get("pack_adapter")
+    )
     inspect_parser = commands.add_parser("inspect")
-    inspect_parser.add_argument("--dataset", choices=("locomo", "longmemeval-s"), required=True)
+    inspect_parser.add_argument("--dataset", choices=dataset_ids, required=True)
+    inspect_parser.add_argument("--input", type=Path, default=None)
     build_parser = commands.add_parser("build")
-    build_parser.add_argument("--dataset", choices=("locomo", "longmemeval-s"), required=True)
+    build_parser.add_argument("--dataset", choices=build_ids, required=True)
     build_parser.add_argument("--input", type=Path, default=None)
     build_parser.add_argument("--output", type=Path, required=True)
     build_parser.add_argument("--conversation-ids", default=None)
@@ -605,49 +1021,76 @@ def main() -> None:
     build_parser.add_argument("--session-limit", type=int, default=None)
     build_parser.add_argument("--questions-per-category", type=int, default=None)
     build_parser.add_argument("--category", type=int, action="append", default=None)
-    build_parser.add_argument("--chunk-size", type=int, default=20)
-    build_parser.add_argument("--top-k", type=int, default=10)
+    build_parser.add_argument("--task-ids", default=None)
+    build_parser.add_argument("--task-limit", type=int, default=None)
+    slice_parser = commands.add_parser("slice", help="write a deterministic row-range slice")
+    slice_parser.add_argument("--dataset", choices=dataset_ids, required=True)
+    slice_parser.add_argument("--input", type=Path, default=None)
+    slice_parser.add_argument("--output", type=Path, required=True)
+    slice_parser.add_argument("--offset", type=int, default=0)
+    slice_parser.add_argument("--limit", type=int, required=True)
     arguments = parser.parse_args()
     try:
         if arguments.command == "inspect":
-            result = inspect_dataset(arguments.dataset)
+            result = inspect_dataset(arguments.dataset, arguments.input)
+        elif arguments.command == "slice":
+            result = slice_rows(
+                arguments.input or source_path(arguments.dataset),
+                arguments.output,
+                offset=arguments.offset,
+                limit=arguments.limit,
+            )
         else:
             input_path = arguments.input or source_path(arguments.dataset)
-            if arguments.dataset == "locomo":
+            if input_path.resolve() == arguments.output.resolve():
+                raise ValueError("pack output must differ from the source path")
+            adapter = source_entry(arguments.dataset).get("pack_adapter")
+            if adapter == "locomo-v1":
                 result = build_locomo(
+                    dataset_id=arguments.dataset,
                     path=input_path,
                     conversation_ids=_comma_list(arguments.conversation_ids),
                     conversation_limit=arguments.conversation_limit,
                     session_limit=arguments.session_limit,
                     questions_per_category=arguments.questions_per_category,
                     categories=set(arguments.category) if arguments.category else None,
-                    chunk_size=arguments.chunk_size,
-                    top_k=arguments.top_k,
                 )
-            else:
+            elif adapter == "longmemeval-v1":
                 result = build_longmemeval(
+                    dataset_id=arguments.dataset,
                     path=input_path,
                     question_ids=_comma_list(arguments.question_ids),
                     question_limit=arguments.question_limit,
                     session_limit=arguments.session_limit,
                     question_type=arguments.question_type,
-                    chunk_size=arguments.chunk_size,
-                    top_k=arguments.top_k,
                 )
-            arguments.output.parent.mkdir(parents=True, exist_ok=True)
-            arguments.output.write_text(
-                json.dumps(result, ensure_ascii=False, indent=2) + "\n",
-                encoding="utf-8",
-            )
+            elif adapter == "context-task-v1":
+                result = build_context_tasks(
+                    dataset_id=arguments.dataset,
+                    path=input_path,
+                    task_ids=_comma_list(arguments.task_ids),
+                    task_limit=arguments.task_limit,
+                )
+            else:
+                result = build_tasks(
+                    dataset_id=arguments.dataset, path=input_path, task_limit=arguments.task_limit,
+                    task_ids=_comma_list(arguments.task_ids),
+                )
+            write_pack(arguments.output, result)
             result = {
                 "output": str(arguments.output),
                 "dataset": result["dataset"],
-                "cases": len(result["cases"]),
-                "adds": sum(len(case["adds"]) for case in result["cases"]),
-                "searches": sum(len(case["searches"]) for case in result["cases"]),
+                "records": len(result["records"]),
+                "sessions": sum(len(record["sessions"]) for record in result["records"]),
+                "turns": sum(
+                    len(session["turns"])
+                    for record in result["records"]
+                    for session in record["sessions"]
+                ),
+                "tasks": sum(len(record["tasks"]) for record in result["records"]),
             }
         print(json.dumps(result, ensure_ascii=False))
-    except (OSError, ValueError, KeyError, json.JSONDecodeError) as error:
+    except (OSError, ValueError, KeyError, json.JSONDecodeError, csv.Error) as error:
         print(f"dataset operation failed: {type(error).__name__}: {error}", file=sys.stderr)
         raise SystemExit(1) from error
 

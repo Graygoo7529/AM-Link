@@ -1,18 +1,16 @@
 {
-  "catalog_version": 2,
-  "verified_on": "2026-10-04",
+  "catalog_version": 4,
+  "verified_on": "2026-10-05",
   "datasets": {
     "locomo": {
+      "id": "locomo",
       "title": "LoCoMo (original public release)",
-      "official_suite_name": "LoCoMo original; related to but not the AML LoCoMo-Refined bundle",
-      "contract_ids": ["locomo"],
-      "status": "available",
       "format": "json-array",
       "upstream": "https://github.com/snap-research/locomo",
       "download_url": "https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json",
       "raw_relative_path": "locomo/locomo10.json",
       "license": "CC BY-NC 4.0",
-      "attribution": "Maharana et al., SNAP Research; LoCoMo: Long-Context Conversation Understanding with Memory Operations",
+      "attribution": "Maharana et al., Evaluating Very Long-Term Conversational Memory of LLM Agents (ACL 2024), SNAP Research",
       "sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
       "size_bytes": 2805274,
       "public_counts": {
@@ -21,15 +19,21 @@
         "turns": 5882,
         "questions": 1986
       },
-      "reader": "dataset.prepare:inspect_locomo/build_locomo",
-      "evaluation": "source-turn evidence recall, hit rate, and multi-evidence chain coverage",
-      "notes": "Original SNAP release, not the AML LoCoMo-Refined frozen bundle."
+      "capabilities": [
+        "multi-session dialogue",
+        "speaker labels",
+        "turn evidence annotations",
+        "image captions"
+      ],
+      "pack_adapter": "locomo-v1",
+      "preprocessing": "Preserve speakers, source turn IDs, times and image captions. Select conversations/sessions/categories; exclude tasks with evidence outside selected history.",
+      "reader": "dataset.prepare:inspect_dataset/iter_rows",
+      "local_verification": "downloaded_data_verified",
+      "availability": "public_source"
     },
     "longmemeval-s": {
+      "id": "longmemeval-s",
       "title": "LongMemEval-S (author cleaned public release)",
-      "official_suite_name": "LongMemEval-S",
-      "contract_ids": ["longmemeval"],
-      "status": "not_downloaded",
       "format": "json-array",
       "upstream": "https://github.com/xiaowu0162/LongMemEval",
       "dataset_card": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned",
@@ -45,19 +49,44 @@
         "approx_history_sessions_per_question": 40,
         "approx_tokens_per_question": 115000
       },
-      "reader": "dataset.prepare:inspect_longmemeval/build_longmemeval",
-      "evaluation": "has_answer turn/session evidence recall; upstream answer QA judge is a separate optional stage",
-      "notes": "Pinned author dataset revision. Record and verify the local SHA-256 after download."
-    }
-  },
-  "public_sources": {
+      "capabilities": [
+        "long history",
+        "session timestamps",
+        "turn-level evidence annotations",
+        "answerability labels"
+      ],
+      "pack_adapter": "longmemeval-v1",
+      "hf_repository": "xiaowu0162/longmemeval-cleaned",
+      "hf_config": "default",
+      "hf_split": "longmemeval_s_cleaned",
+      "preprocessing": "Stream question records, preserve session timestamps, has_answer and answer_session_ids. Select question ID/type; exclude tasks when a session limit removes annotated evidence.",
+      "reader": "dataset.prepare:inspect_dataset/iter_rows",
+      "local_verification": "reader_fixture_only",
+      "availability": "public_source"
+    },
     "locomo-refined-community": {
-      "title": "LoCoMo-Refined (public community release candidate)",
-      "status": "public_source_not_downloaded",
+      "id": "locomo-refined-community",
+      "title": "LoCoMo-Refined community release",
       "source_class": "third-party benchmark release based on SNAP LoCoMo",
       "upstream": "https://github.com/mem-eval-suite/LoCoMo_refined",
       "revision": "887091190789e8d6760e70b9edd696539923dc4f",
       "download_url": "https://raw.githubusercontent.com/mem-eval-suite/LoCoMo_refined/887091190789e8d6760e70b9edd696539923dc4f/data/raw/locomo_refined.json",
+      "assets": [
+        {
+          "path": "locomo-refined-community/locomo_refined.json",
+          "url": "https://raw.githubusercontent.com/mem-eval-suite/LoCoMo_refined/887091190789e8d6760e70b9edd696539923dc4f/data/raw/locomo_refined.json",
+          "format": "json",
+          "sha256": "1aef6da702087d72515d1b9224f0956a2fbab415c11936253bf7d967d3cf8c17",
+          "size_bytes": 2745985
+        },
+        {
+          "path": "locomo-refined-community/questions.jsonl",
+          "url": "https://raw.githubusercontent.com/mem-eval-suite/LoCoMo_refined/887091190789e8d6760e70b9edd696539923dc4f/data/public/questions.jsonl",
+          "format": "jsonl",
+          "sha256": "4dd84cf65a28ece0ed6b2a1b7b2700ea639f4e7b2c5e1afcc511e47e81732790",
+          "size_bytes": 1302480
+        }
+      ],
       "resources": [
         "https://github.com/mem-eval-suite/LoCoMo_refined/tree/887091190789e8d6760e70b9edd696539923dc4f/data/raw",
         "https://github.com/mem-eval-suite/LoCoMo_refined/tree/887091190789e8d6760e70b9edd696539923dc4f/data/public",
@@ -67,109 +96,291 @@
       "license": "CC BY-NC 4.0 (community release; review NOTICE and upstream rights)",
       "sha256": null,
       "raw_relative_path": "locomo-refined-community/locomo_refined.json",
-      "public_counts": {"questions": 1382, "conversations": 10},
-      "available_materials": ["annotated raw JSON", "public questions JSONL", "conversation JSONL", "manifest"],
-      "processing": "Pair public questions with the corresponding conversation/session history; preserve the community release revision and evidence annotation. No adapter in this workspace yet.",
-      "evaluation": "Community README describes answer evaluation/judging. Inspect labels and rubric before mapping evidence to Add/Search; not verified as AML's exact frozen bundle.",
-      "identity_warning": "This is a community repository using the LoCoMo-Refined name. Its relationship to the AML evaluation bundle is unverified; do not report it as the official AML release."
+      "public_counts": {
+        "questions": 1382,
+        "conversations": 10
+      },
+      "available_materials": [
+        "annotated raw JSON",
+        "public questions JSONL",
+        "conversation JSONL",
+        "manifest"
+      ],
+      "attribution": "third-party benchmark release based on SNAP LoCoMo",
+      "pack_adapter": "locomo-v1",
+      "preprocessing": "Keep this revised release independent from original LoCoMo. Preserve raw conversation IDs and QA evidence; do not replace history with provided generated summaries.",
+      "reader": "dataset.prepare:inspect_dataset/iter_rows",
+      "local_verification": "downloaded_data_verified",
+      "availability": "public_source"
     },
     "longmemeval-m": {
+      "id": "longmemeval-m",
       "title": "LongMemEval-M (author release)",
-      "status": "public_source_not_downloaded",
       "source_class": "benchmark author release",
       "upstream": "https://github.com/xiaowu0162/LongMemEval",
       "download_url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416/longmemeval_m_cleaned.json",
+      "assets": [
+        {
+          "path": "longmemeval/longmemeval_m_cleaned.json",
+          "url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416/longmemeval_m_cleaned.json",
+          "format": "json-array"
+        }
+      ],
       "format": "json-array",
       "license": "MIT (author Hugging Face dataset card)",
       "revision": "98d7416",
-      "public_counts": {"questions": 500, "approx_history_sessions_per_question": 500},
-      "processing": "Same record family as S; keep full session history for a faithful run. Avoid loading the entire file into memory; current converter streams rows but a single selected question can still be very large.",
-      "evaluation": "Turn evidence recall is possible from has_answer; full QA requires the author's separate evaluator."
+      "public_counts": {
+        "questions": 500,
+        "approx_history_sessions_per_question": 500
+      },
+      "capabilities": [
+        "long history",
+        "answer-session annotations",
+        "turn-level evidence flags"
+      ],
+      "attribution": "benchmark author release",
+      "pack_adapter": "longmemeval-v1",
+      "hf_repository": "xiaowu0162/longmemeval-cleaned",
+      "hf_config": "default",
+      "hf_split": "longmemeval_m_cleaned",
+      "preprocessing": "Same record schema as S, with larger histories. A single selected record can still require substantial memory.",
+      "reader": "dataset.prepare:inspect_dataset/iter_rows",
+      "local_verification": "reader_fixture_only",
+      "availability": "public_source"
     },
     "longmemeval-oracle": {
+      "id": "longmemeval-oracle",
       "title": "LongMemEval Oracle (author release)",
-      "status": "public_source_not_downloaded",
       "source_class": "benchmark author release with gold evidence sessions only",
       "upstream": "https://github.com/xiaowu0162/LongMemEval",
       "download_url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416/longmemeval_oracle.json",
+      "assets": [
+        {
+          "path": "longmemeval/longmemeval_oracle.json",
+          "url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416/longmemeval_oracle.json",
+          "format": "json-array"
+        }
+      ],
       "format": "json-array",
       "license": "MIT (author Hugging Face dataset card)",
       "revision": "98d7416",
-      "public_counts": {"questions": 500},
-      "processing": "Use only as an evidence-pipeline sanity check. Its histories contain only gold evidence sessions, so retrieval difficulty is lower than S/M.",
-      "evaluation": "Author QA evaluator accepts the Oracle file; do not compare its score directly with S/M."
+      "public_counts": {
+        "questions": 500
+      },
+      "attribution": "benchmark author release with gold evidence sessions only",
+      "pack_adapter": "longmemeval-v1",
+      "hf_repository": "xiaowu0162/longmemeval-cleaned",
+      "hf_config": "default",
+      "hf_split": "longmemeval_oracle",
+      "preprocessing": "Only annotated answer sessions are retained upstream. Preserve the independent Oracle source identity; this is not full S/M history.",
+      "reader": "dataset.prepare:inspect_dataset/iter_rows",
+      "local_verification": "reader_fixture_only",
+      "availability": "public_source"
     },
     "scriptmem": {
+      "id": "scriptmem",
       "title": "ScriptMem v1.0",
-      "status": "public_questions_only",
       "source_class": "benchmark author release; source scripts omitted",
       "upstream": "https://github.com/memorax-ai/ScriptMem",
-      "resources": ["https://github.com/memorax-ai/ScriptMem/tree/main/data"],
+      "resources": [
+        "https://github.com/memorax-ai/ScriptMem/tree/main/data"
+      ],
+      "assets": [
+        {
+          "path": "scriptmem/raw/angry.json",
+          "url": "https://raw.githubusercontent.com/memorax-ai/ScriptMem/main/data/raw/angry.json",
+          "format": "json",
+          "sha256": "f9234a9d4bbd48e5d74fa94f22031ad4867a90756d285afeb1cf3bd039a11b88",
+          "size_bytes": 155325
+        },
+        {
+          "path": "scriptmem/raw/enemy.json",
+          "url": "https://raw.githubusercontent.com/memorax-ai/ScriptMem/main/data/raw/enemy.json",
+          "format": "json",
+          "sha256": "459f7d91a2af8f23cf01954f4bdd8afc2f5a9ab32c596571249f85e5b918294c",
+          "size_bytes": 165611
+        },
+        {
+          "path": "scriptmem/raw/friends.json",
+          "url": "https://raw.githubusercontent.com/memorax-ai/ScriptMem/main/data/raw/friends.json",
+          "format": "json",
+          "sha256": "58da6f3dc20644aa35ee17b427e9cab3b6596b97171c6bf28ffc5889c1d0cf04",
+          "size_bytes": 238557
+        },
+        {
+          "path": "scriptmem/raw/man_earth.json",
+          "url": "https://raw.githubusercontent.com/memorax-ai/ScriptMem/main/data/raw/man_earth.json",
+          "format": "json",
+          "sha256": "4d2f51bcc5a817ab38d2195845458fdb379b593928efa844032911580b2b070b",
+          "size_bytes": 137209
+        },
+        {
+          "path": "scriptmem/public/questions.jsonl",
+          "url": "https://raw.githubusercontent.com/memorax-ai/ScriptMem/main/data/public/questions.jsonl",
+          "format": "jsonl",
+          "sha256": "5d9625c59f60473f5a70183a83531bc90a9273ad869fea794cdde79924b3d0f3",
+          "size_bytes": 712122
+        },
+        {
+          "path": "scriptmem/public/manifest.json",
+          "url": "https://raw.githubusercontent.com/memorax-ai/ScriptMem/main/data/public/manifest.json",
+          "format": "json",
+          "sha256": "aafe50e7b003c08e03d951f824929564e4ecd12c997c23fd576a1e03096f1fce",
+          "size_bytes": 1605
+        }
+      ],
       "format": "json/jsonl task metadata",
       "license": "CC BY-NC 4.0 for ScriptMem-created benchmark materials only",
-      "public_counts": {"questions": 457, "source_works": 4, "question_types": 6},
-      "processing": "Can inspect question types/options/metadata. Original scripts and source dialogues are not released; never synthesize Add history from gold questions or answers.",
-      "evaluation": "Author benchmark uses unified answer generation and accuracy. Not currently suitable for full local Add/Search replay without licensed source conversations."
+      "public_counts": {
+        "questions": 457,
+        "source_works": 4,
+        "question_types": 6
+      },
+      "attribution": "benchmark author release; source scripts omitted",
+      "pack_adapter": "scriptmem-v1",
+      "raw_relative_path": "scriptmem/public/questions.jsonl",
+      "preprocessing": "Read public/questions.jsonl. Question/options are input; answers are annotations. Record unavailable source history explicitly.",
+      "reader": "dataset.prepare:inspect_dataset/iter_rows",
+      "local_verification": "downloaded_data_verified",
+      "availability": "public_source"
     },
     "clbench": {
+      "id": "clbench",
       "title": "CL-bench",
-      "status": "public_source_not_downloaded",
       "source_class": "Tencent Hunyuan and Fudan NLP benchmark release",
       "upstream": "https://github.com/Tencent-Hunyuan/CL-bench",
       "dataset_card": "https://huggingface.co/datasets/tencent/CL-bench",
       "format": "messages/rubrics/metadata dataset rows",
+      "pack_adapter": "context-task-v1",
+      "assets": [
+        {
+          "path": "clbench/CL-bench.jsonl",
+          "url": "https://huggingface.co/datasets/tencent/CL-bench/resolve/66122c88771ac4f09f163415902828b933e78899/CL-bench.jsonl",
+          "format": "jsonl",
+          "sha256": "d5fc88d4b2eea75c61dd40862021b6ae2fba26bd21b58e8c5e18377a763943be"
+        }
+      ],
       "license": "Custom evaluation-only license; prohibits training, fine-tuning, calibration, distillation, adaptation, and parameter updates",
-      "public_counts": {"tasks": 1899, "size_mb": 90.1},
-      "processing": "Separate context/history from the task in messages. Keep rubrics out of Add/Search and use only in an explicitly enabled evaluator. Map evidence only where source spans are available.",
-      "evaluation": "Rubric-based task evaluation, not retrieval recall alone."
+      "public_counts": {
+        "tasks": 1899,
+        "size_mb": 90.1
+      },
+      "attribution": "Tencent Hunyuan and Fudan NLP benchmark release",
+      "hf_repository": "tencent/CL-bench",
+      "hf_config": "default",
+      "hf_split": "train",
+      "preprocessing": "Preserve system instructions. Use final user message for multi-turn tasks. Preserve unsplit input.messages when single-turn context/task has no declared boundary. Keep rubrics separate.",
+      "reader": "dataset.prepare:inspect_dataset/iter_rows",
+      "local_verification": "downloaded_data_verified",
+      "availability": "public_source",
+      "revision": "66122c88771ac4f09f163415902828b933e78899"
     },
     "clbench-life": {
+      "id": "clbench-life",
       "title": "CL-bench Life",
-      "status": "public_source_not_downloaded",
       "source_class": "Tencent Hunyuan and Fudan NLP benchmark release",
       "upstream": "https://github.com/Tencent-Hunyuan/CL-bench",
       "dataset_card": "https://huggingface.co/datasets/tencent/CL-bench-Life",
       "format": "OpenAI-style messages/rubrics/metadata dataset rows",
+      "pack_adapter": "context-task-v1",
+      "assets": [
+        {
+          "path": "clbench-life/CL-bench Life.jsonl",
+          "url": "https://huggingface.co/datasets/tencent/CL-bench-Life/resolve/cd2589f/CL-bench%20Life.jsonl",
+          "format": "jsonl"
+        }
+      ],
       "license": "Custom evaluation-only license; benchmark use only, no parameter updates",
-      "public_counts": {"tasks": 405, "size_mb": 29.3},
-      "processing": "Separate context/history and final task; keep rubric labels out of memory writes. Build a task adapter and evaluator before using for scores.",
-      "evaluation": "Rubric-based task evaluation over everyday-context cases; no source-span retrieval metric is supplied by the card."
+      "public_counts": {
+        "tasks": 405,
+        "size_mb": 29.3
+      },
+      "attribution": "Tencent Hunyuan and Fudan NLP benchmark release",
+      "hf_repository": "tencent/CL-bench-Life",
+      "hf_config": "default",
+      "hf_split": "train",
+      "preprocessing": "Use explicit TASK delimiter for single-turn context/task separation; retain preceding dialogue for multi-turn tasks. Keep rubrics separate.",
+      "reader": "dataset.prepare:inspect_dataset/iter_rows",
+      "local_verification": "downloaded_data_verified",
+      "availability": "public_source",
+      "revision": "cd2589f"
     },
     "personamem-v2": {
+      "id": "personamem-v2",
       "title": "PersonaMem-v2",
-      "status": "public_source_not_downloaded",
       "source_class": "Penn author repository and Hugging Face dataset",
       "upstream": "https://github.com/bowen-upenn/PersonaMem-v2",
       "dataset_card": "https://huggingface.co/datasets/bowen-upenn/PersonaMem-v2",
       "format": "CSV splits plus referenced conversation-history files",
+      "assets": [
+        {
+          "path": "personamem-v2/benchmark.csv",
+          "url": "https://huggingface.co/datasets/bowen-upenn/PersonaMem-v2/resolve/e3a5916/benchmark/text/benchmark.csv",
+          "format": "csv"
+        }
+      ],
       "license": "CC BY 4.0 (author Hugging Face dataset card; verify linked history files individually)",
-      "public_counts": {"personas": 1000, "preferences": "20000+", "benchmark_multimodal_queries": 5000},
-      "processing": "Pin split and persona IDs, retrieve the referenced 32K or 128K history, and Add only the history. Search user_query. Preference labels, correct/incorrect answers, and related snippets remain evaluator-side.",
-      "evaluation": "Personalization answer accuracy / preference update tasks; evidence retrieval diagnostics need source alignment."
+      "public_counts": {
+        "personas": 1000,
+        "preferences": "20000+",
+        "benchmark_multimodal_queries": 5000
+      },
+      "attribution": "Penn author repository and Hugging Face dataset",
+      "hf_repository": "bowen-upenn/PersonaMem-v2",
+      "hf_config": "benchmark",
+      "hf_split": "benchmark_text",
+      "pack_adapter": "personamem-v2-v1",
+      "preprocessing": "Read CSV or JSONL, retain persona_id and source history references. user_query is input; preferences, answers and related snippets are annotations. Mark missing history.",
+      "reader": "dataset.prepare:inspect_dataset/iter_rows",
+      "local_verification": "downloaded_data_verified",
+      "availability": "public_source",
+      "revision": "e3a5916"
     },
     "beam": {
+      "id": "beam",
       "title": "BEAM (128K/500K/1M)",
-      "status": "public_source_not_downloaded",
       "source_class": "benchmark author release",
       "upstream": "https://github.com/mohammadtavakoli78/BEAM",
       "dataset_card": "https://huggingface.co/datasets/Mohammadta/BEAM",
       "format": "conversation rows with chat, user_questions, probing_questions and metadata",
       "license": "CC BY-SA 4.0 for benchmark data; code is MIT and has a separate license",
-      "public_counts": {"conversations": 90, "scale_tokens": [128000, 500000, 1000000]},
-      "processing": "Start with one 128K conversation; stream the row, convert chat turns into bounded Add calls, and keep probing questions/answers outside Add. Use author's evaluator for answer scoring.",
-      "evaluation": "Ten memory abilities and generated probes; evidence-only retrieval is a diagnostic proxy, not the full score."
+      "public_counts": {
+        "conversations": 90,
+        "scale_tokens": [
+          128000,
+          500000,
+          1000000
+        ]
+      },
+      "attribution": "benchmark author release",
+      "hf_repository": "Mohammadta/BEAM",
+      "hf_config": "default",
+      "hf_split": "100K",
+      "pack_adapter": "beam-v1",
+      "preprocessing": "Only chat is history. Preserve session/turn positions; parse probing_questions using literal_eval. Separate questions from ideal answers and rubrics.",
+      "reader": "dataset.prepare:inspect_dataset/iter_rows",
+      "local_verification": "downloaded_data_verified",
+      "availability": "public_source"
     },
     "beam-10m": {
+      "id": "beam-10m",
       "title": "BEAM-10M",
-      "status": "public_source_not_downloaded",
       "source_class": "benchmark author release",
       "upstream": "https://github.com/mohammadtavakoli78/BEAM",
       "dataset_card": "https://huggingface.co/datasets/Mohammadta/BEAM-10M",
       "format": "large multi-turn conversation rows",
       "license": "CC BY-SA 4.0 for benchmark data; verify the dataset card at the pinned revision",
-      "public_counts": {"conversations": 10, "scale_tokens": [10000000]},
-      "processing": "Separate opt-in stress tier. Do not fetch by default. Requires streaming import, storage and request-budget estimates before a run.",
-      "evaluation": "Use the author evaluator for question/answer scoring; report latency/cost separately."
+      "public_counts": {
+        "conversations": 10,
+        "scale_tokens": [
+          10000000
+        ]
+      },
+      "attribution": "benchmark author release",
+      "preprocessing": "Optional large-scale source; no local download or reader verification yet. Inspect storage schema and per-record memory before preparing.",
+      "reader": "dataset.prepare:inspect_dataset/iter_rows",
+      "local_verification": "source_registered_only",
+      "availability": "public_source"
     }
   }
 }

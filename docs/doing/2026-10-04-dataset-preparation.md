@@ -1,5 +1,7 @@
 # 数据集目录与转换计划
 
+> `superseded`：本文为初版历史设计，其中 dataset 生成 Add/Search manifest、runs 放 dataset 下的方案已被 [2026-10-05 解耦方案](./2026-10-05-dataset-decoupling.md)取代。当前命令见 [dataset](../../dataset/README.md)。
+
 日期：2026-10-04；状态：`in_progress`。
 
 ## 范围和目录设计

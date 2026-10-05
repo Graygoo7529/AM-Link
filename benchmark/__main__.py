@@ -9,18 +9,25 @@ import uuid
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from benchmark.core import load_manifest, run_replay, write_json
+from benchmark.core import run_replay, write_json
+from benchmark.datasets import build_retrieval_manifest
 from benchmark.targets import AmlApiTarget, Mem0LibraryTarget, Mem0OssTarget
+from dataset.pack import load_pack
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT_ROOT = ROOT / "dataset" / "data" / "runs"
+DEFAULT_OUTPUT_ROOT = ROOT / "benchmark" / "data" / "runs"
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m benchmark")
     commands = parser.add_subparsers(dest="command", required=True)
+    plan_parser = commands.add_parser("plan", help="build and inspect a replay plan without calling a target")
+    plan_parser.add_argument("--dataset-pack", type=Path, required=True)
+    plan_parser.add_argument("--chunk-size", type=int, default=20)
+    plan_parser.add_argument("--top-k", type=int, default=10)
+    plan_parser.add_argument("--output", type=Path, required=True)
     inspect_parser = commands.add_parser("inspect", help="inspect one case or Search with its trace")
     inspect_parser.add_argument("--report", type=Path, required=True)
     inspect_parser.add_argument("--trace", type=Path, required=True)
@@ -28,8 +35,11 @@ def _parser() -> argparse.ArgumentParser:
     selection.add_argument("--case-id")
     selection.add_argument("--search-id")
 
-    run_parser = commands.add_parser("run", help="replay one dataset manifest")
-    run_parser.add_argument("--manifest", type=Path, required=True)
+    run_parser = commands.add_parser("run", help="adapt a dataset pack and replay Add/Search")
+    run_parser.add_argument("--dataset-pack", type=Path, required=True)
+    run_parser.add_argument("--profile", choices=("evidence-retrieval",), default="evidence-retrieval")
+    run_parser.add_argument("--chunk-size", type=int, default=20)
+    run_parser.add_argument("--top-k", type=int, default=10)
     run_parser.add_argument("--target", choices=("aml-api", "mem0-oss", "mem0-library"), required=True)
     run_parser.add_argument("--base-url", default=None)
     run_parser.add_argument("--system-name", default=None)
@@ -75,11 +85,11 @@ def _inspect(arguments: argparse.Namespace) -> None:
         for event in events
         if event.get("event") == "add"
         and event.get("case_id") in {case_id for case_id, _ in selected_ids}
-        and any(
+        and (not source_add_ids or any(
             isinstance(source_id, str)
             and event.get("request_id", "").endswith(f":{source_id}")
             for source_id in source_add_ids
-        )
+        ))
     ]
     print(
         json.dumps(
@@ -136,12 +146,26 @@ def _build_target(arguments: argparse.Namespace):
 
 
 def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     arguments = _parser().parse_args()
     try:
         if arguments.command == "inspect":
             _inspect(arguments)
             return
-        manifest = load_manifest(arguments.manifest)
+        pack = load_pack(arguments.dataset_pack)
+        manifest = build_retrieval_manifest(
+            pack,
+            chunk_size=arguments.chunk_size,
+            top_k=arguments.top_k,
+        )
+        if arguments.command == "plan":
+            write_json(arguments.output, manifest)
+            print(json.dumps({"output": str(arguments.output), "cases": len(manifest["cases"]),
+                "adds": sum(len(c["adds"]) for c in manifest["cases"]),
+                "queries": sum(len(c["searches"]) for c in manifest["cases"]),
+                "excluded": manifest.get("excluded", [])}, ensure_ascii=False))
+            return
         run_id = arguments.run_id or uuid.uuid4().hex
         if not RUN_ID_PATTERN.fullmatch(run_id):
             raise ValueError("run-id must be 1-64 ASCII letters, digits, dots, underscores, or hyphens")
@@ -172,6 +196,9 @@ def main() -> None:
         output_dir.mkdir(parents=True, exist_ok=False)
         report_path = output_dir / "report.json"
         trace_path = output_dir / "trace.jsonl"
+        pack_path = output_dir / "dataset-pack.json"
+        write_json(pack_path, pack)
+        write_json(output_dir / "plan.json", {**manifest, "cases": cases})
         report = run_replay(
             manifest=manifest,
             cases=cases,
@@ -198,6 +225,8 @@ def main() -> None:
         report["artifact_paths"] = {
             "report": str(report_path),
             "trace": str(trace_path),
+            "dataset_pack": str(pack_path.resolve()),
+            "dataset_pack_input": str(arguments.dataset_pack.resolve()),
         }
         write_json(report_path, report)
         print(json.dumps({"run_id": run_id, "report": str(report_path), "trace": str(trace_path), "summary": report["summary"]}, ensure_ascii=False))

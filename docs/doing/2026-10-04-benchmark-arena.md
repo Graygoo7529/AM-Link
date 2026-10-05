@@ -1,5 +1,7 @@
 # Add/Search 靶场设计与实施
 
+> 本文为 2026-10-04 初版记录。当前靶场通过中立 dataset pack 构建环境，使用 `--dataset-pack`，产物位于 `benchmark/data/`；详见 [2026-10-05 更新](./2026-10-05-dataset-decoupling.md)与 [benchmark](../../benchmark/README.md)。
+
 日期：2026-10-04；状态：`done`（本地靶场实现和离线验收完成；真实目标端到端比较待服务/模型配置）。
 
 ## 为什么建靶场

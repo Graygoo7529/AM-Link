@@ -48,8 +48,8 @@ def validate_manifest(payload: Any) -> None:
         case_ids.add(case["id"])
         adds = case.get("adds")
         searches = case.get("searches")
-        if not isinstance(adds, list) or not adds:
-            raise ValueError(f"case {case['id']} requires at least one Add")
+        if not isinstance(adds, list):
+            raise ValueError(f"case {case['id']} requires an Add list")
         if not isinstance(searches, list) or not searches:
             raise ValueError(f"case {case['id']} requires at least one Search")
         request_ids: set[str] = set()
@@ -97,10 +97,17 @@ def _validate_search(search: Any) -> None:
         raise ValueError("Search top_k must be between 1 and 100")
     expected = search.get("expected", [])
     empty = search.get("expect_empty", False)
+    grading = search.get("grading")
     if not isinstance(expected, list) or not isinstance(empty, bool):
         raise ValueError("Search expected and expect_empty have invalid types")
-    if empty == bool(expected):
-        raise ValueError("set evidence targets or expect_empty=true")
+    if grading is None:
+        grading = "empty" if empty else "evidence" if expected else None
+    if grading not in {"evidence", "empty", "ungraded"}:
+        raise ValueError("Search grading must be evidence, empty, or ungraded")
+    if (grading == "evidence" and (not expected or empty)) or (
+        grading in {"empty", "ungraded"} and expected
+    ) or (grading == "empty" and not empty) or (grading != "empty" and empty):
+        raise ValueError("Search grading conflicts with expected evidence")
     for target in expected:
         if not isinstance(target, dict):
             raise ValueError("each expected evidence target must be an object")
@@ -148,6 +155,13 @@ def run_replay(
         for case in cases:
             case_adds_succeeded = True
             add_outcomes: dict[str, dict[str, Any]] = {}
+            source_by_add: dict[str, list[dict[str, Any]]] = defaultdict(list)
+            for turn_id, fragments in manifest.get("source_map", {}).get(case["id"], {}).items():
+                for fragment in fragments:
+                    source_by_add[fragment["add_request_id"]].append({
+                        "turn_id": turn_id, "session_id": fragment["session_id"],
+                        "char_start": fragment["char_start"], "char_end": fragment["char_end"],
+                    })
             for original in case["adds"]:
                 request = _namespace_add(original, run_id)
                 started = time.perf_counter()
@@ -179,6 +193,7 @@ def run_replay(
                         "error": error,
                         "status_code": response.status_code,
                         "request": request,
+                        "dataset_sources": source_by_add.get(original["request_id"], []),
                         "response": response.body,
                         "target_response": response.raw_body,
                     },
@@ -214,6 +229,7 @@ def run_replay(
                         "run_id": run_id,
                         "case_id": case["id"],
                         "search_id": search["id"],
+                        "dataset_task": search.get("dataset_task"),
                         "latency_ms": round(latency_ms, 3),
                         "add_setup_ok": case_adds_succeeded,
                         "ok": succeeded,
@@ -222,6 +238,7 @@ def run_replay(
                         "request": request,
                         "expected": search.get("expected", []),
                         "expect_empty": search.get("expect_empty", False),
+                        "grading": observation["grading"],
                         "target_ranks": observation["target_ranks"],
                         "evidence_diagnosis": observation["evidence_diagnosis"],
                         "matched_targets_by_result": observation["matched_targets_by_result"],
@@ -239,9 +256,13 @@ def run_replay(
             "completed_at": _now(),
             "quality_role": "public-data-retrieval-diagnostic; not AML official score",
             "dataset": manifest["dataset"],
+            "adapter": manifest.get("adapter"),
+            "dataset_selection": manifest.get("selection"),
+            "dataset_pack_sha256": manifest.get("dataset_pack_sha256"),
+            "excluded": manifest.get("excluded", []),
             "manifest_sha256": _json_digest(manifest),
             "system": system,
-            "selection": {"cases": len(cases), "queries": len(queries)},
+            "run_selection": {"cases": len(cases), "queries": len(queries)},
         },
         "summary": {
             "add": {
@@ -415,6 +436,10 @@ def _observe_query(
         "add_setup_ok": add_ok,
         "search_ok": search_ok,
         "expect_empty": expect_empty,
+        "grading": search.get(
+            "grading",
+            "empty" if expect_empty else "evidence" if search.get("expected") else "ungraded",
+        ),
         "empty_correct": bool(expect_empty and search_ok and add_ok and not results),
         "duplicate_count": _duplicate_count(results),
         "matched_targets_by_result": matched_by_result,
@@ -455,6 +480,7 @@ def _metrics(queries: list[dict[str, Any]]) -> dict[str, Any]:
             sum(query["result_count"] for query in queries),
         ),
         "evidence_diagnosis_counts": dict(sorted(diagnosis_counts.items())),
+        "ungraded_queries": sum(query["grading"] == "ungraded" for query in queries),
     }
 
 
@@ -480,9 +506,8 @@ def _group_metrics(queries: list[dict[str, Any]]) -> dict[str, Any]:
         result[f"hit_rate@{cutoff}"] = _ratio(query_hits, len(graded))
         result[f"chain_coverage@{cutoff}"] = _ratio(complete_chains, len(graded))
     first_ranks = [
-        1.0 / query["first_relevant_rank"]
+        1.0 / query["first_relevant_rank"] if query["first_relevant_rank"] is not None else 0.0
         for query in graded
-        if query["first_relevant_rank"] is not None
     ]
     result["mrr"] = round(statistics.fmean(first_ranks), 6) if first_ranks else None
     result["evidence_targets"] = target_total
@@ -541,6 +566,7 @@ def _write_trace(file, event: dict[str, Any]) -> None:
 
 
 def write_json(path: Path, value: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
