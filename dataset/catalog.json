@@ -323,7 +323,8 @@
       "public_counts": {
         "personas": 1000,
         "preferences": "20000+",
-        "benchmark_multimodal_queries": 5000
+        "benchmark_multimodal_queries": 5000,
+        "benchmark_text_queries": 5000
       },
       "attribution": "Penn author repository and Hugging Face dataset",
       "hf_repository": "bowen-upenn/PersonaMem-v2",
@@ -381,6 +382,87 @@
       "reader": "dataset.prepare:inspect_dataset/iter_rows",
       "local_verification": "source_registered_only",
       "availability": "public_source"
+    },
+    "perltqa-zh": {
+      "id": "perltqa-zh",
+      "title": "PerLTQA (Chinese author release)",
+      "upstream": "https://github.com/Elvin-Yiming-Du/PerLTQA",
+      "revision": "8d9e19868e239740ef701e603ec205cd581f221b",
+      "format": "paired JSON arrays: memory subjects and grouped QA",
+      "license": "CC BY-NC 4.0",
+      "attribution": "Du et al., PerLTQA, SIGHAN 2024",
+      "assets": [
+        {
+          "path": "perltqa-zh/perltmem.json",
+          "url": "https://raw.githubusercontent.com/Elvin-Yiming-Du/PerLTQA/8d9e19868e239740ef701e603ec205cd581f221b/Dataset/zh/perltmem.json",
+          "format": "json",
+          "sha256": "5869ee39e944cf835af5c163c5213723bd2d30c44eb6705271031a644ee0ab7b",
+          "size_bytes": 8989686
+        },
+        {
+          "path": "perltqa-zh/perltqa.json",
+          "url": "https://raw.githubusercontent.com/Elvin-Yiming-Du/PerLTQA/8d9e19868e239740ef701e603ec205cd581f221b/Dataset/zh/perltqa.json",
+          "format": "json",
+          "sha256": "aa19a0623312b5ffe1153ee5d04e20e0d054ba27eccc4f35baa9710a6e8ca9bd",
+          "size_bytes": 8634508
+        },
+        {
+          "path": "perltqa-zh/LICENSE.txt",
+          "url": "https://raw.githubusercontent.com/Elvin-Yiming-Du/PerLTQA/8d9e19868e239740ef701e603ec205cd581f221b/LICENSE.txt",
+          "format": "text",
+          "sha256": "d89ba8c03b098e4545aa2b3b7a6cd3b2be0adad5ac37b31cc483af1a4fad6f95",
+          "size_bytes": 1306
+        },
+        {
+          "path": "perltqa-zh/README.md",
+          "url": "https://raw.githubusercontent.com/Elvin-Yiming-Du/PerLTQA/8d9e19868e239740ef701e603ec205cd581f221b/Dataset/README.md",
+          "format": "text",
+          "sha256": "9d222693919c8e876a976ded5be52834849ed48c02892b02a3b3c69f95625b4d",
+          "size_bytes": 6486
+        }
+      ],
+      "raw_relative_path": "perltqa-zh/perltmem.json",
+      "pack_adapter": "perltqa-v1",
+      "local_verification": "downloaded_data_verified",
+      "availability": "public_source",
+      "preprocessing": "Preserve full source memory documents for selected subjects; resolve QA reference IDs within category, keep answer/anchors separate, record invalid references; source order is not chronological replay.",
+      "public_counts": {
+        "memory_characters_in_pinned_file": 141,
+        "qa_characters_in_pinned_file": 32,
+        "questions_in_pinned_file": 8593
+      }
+    },
+    "memoryagentbench-cr": {
+      "id": "memoryagentbench-cr",
+      "title": "MemoryAgentBench / Conflict_Resolution",
+      "upstream": "https://github.com/HUST-AI-HYZ/MemoryAgentBench",
+      "dataset_card": "https://huggingface.co/datasets/ai-hyz/MemoryAgentBench",
+      "format": "context/questions/answers/metadata rows",
+      "license": "MIT (author Hugging Face dataset card); source-specific rights also apply to adapted sub-datasets",
+      "attribution": "Hu, Wang and McAuley, MemoryAgentBench, ICLR 2026",
+      "hf_repository": "ai-hyz/MemoryAgentBench",
+      "hf_config": "default",
+      "hf_split": "Conflict_Resolution",
+      "pack_adapter": null,
+      "local_verification": "source_registered_only_row_download_timed_out",
+      "availability": "public_source",
+      "preprocessing": "Context is memory input; questions are tasks; answers and evaluation metadata remain annotations. Keep split and upstream sub-dataset identity."
+    },
+    "memoryagentbench-ttl": {
+      "id": "memoryagentbench-ttl",
+      "title": "MemoryAgentBench / Test_Time_Learning",
+      "upstream": "https://github.com/HUST-AI-HYZ/MemoryAgentBench",
+      "dataset_card": "https://huggingface.co/datasets/ai-hyz/MemoryAgentBench",
+      "format": "context/questions/answers/metadata rows",
+      "license": "MIT (author Hugging Face dataset card); source-specific rights also apply to adapted sub-datasets",
+      "attribution": "Hu, Wang and McAuley, MemoryAgentBench, ICLR 2026",
+      "hf_repository": "ai-hyz/MemoryAgentBench",
+      "hf_config": "default",
+      "hf_split": "Test_Time_Learning",
+      "pack_adapter": null,
+      "local_verification": "source_registered_only_row_download_timed_out",
+      "availability": "public_source",
+      "preprocessing": "Context is memory input; questions are tasks; answers and evaluation metadata remain annotations. Keep split and upstream sub-dataset identity."
     }
   }
 }

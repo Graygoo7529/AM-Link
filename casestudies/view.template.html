@@ -1,0 +1,84 @@
+<div id="aml-dataset-cases">
+  <div class="viz-controls">
+    <label class="form-label">数据集<select class="form-select" id="aml-dataset"></select></label>
+    <label class="form-label" id="aml-case-label">典型案例<select class="form-select" id="aml-case"></select></label>
+  </div>
+  <div id="aml-status" class="text-small text-muted" aria-live="polite"></div>
+  <div class="aml-projection" aria-label="原始与处理后数据对照">
+    <section><h3>原始材料</h3><div id="aml-raw"></div></section>
+    <div class="aml-arrow" aria-hidden="true">→</div>
+    <section><h3>本地处理后</h3><div id="aml-prepared"></div></section>
+  </div>
+  <div class="viz-row aml-downloads" id="aml-downloads" aria-label="数据来源与下载入口"></div>
+  <div class="text-small text-muted" id="aml-download-note"></div>
+  <hr>
+  <div id="aml-example" aria-live="polite">
+    <h3 id="aml-question"></h3>
+    <div class="text-small text-muted" id="aml-source-label"></div>
+    <figure class="aml-evidence" aria-label="来源证据之间的关系">
+      <div class="aml-source"><div class="text-small text-muted" id="aml-left-id"></div><div id="aml-left"></div></div>
+      <div class="aml-link"><div id="aml-link-label" class="text-small"></div><div id="aml-link-mark" aria-hidden="true">→</div></div>
+      <div class="aml-source"><div class="text-small text-muted" id="aml-right-id"></div><div id="aml-right"></div></div>
+    </figure>
+    <table class="table table-sm" aria-label="参考记忆处理方法"><tbody>
+      <tr><th scope="row">Add<br><span class="text-small text-muted">保存与组织</span></th><td id="aml-add"></td></tr>
+      <tr><th scope="row">Search<br><span class="text-small text-muted">返回证据</span></th><td id="aml-search"></td></tr>
+      <tr><th scope="row">Answer<br><span class="text-small text-muted">下游作答</span></th><td id="aml-answer"></td></tr>
+    </tbody></table>
+    <div id="aml-trap" class="text-small"></div>
+  </div>
+  <div id="aml-no-example" hidden></div>
+  <div class="aml-footer text-small text-muted" id="aml-footer"></div>
+</div>
+<style>
+  #aml-dataset-cases { color: var(--foreground); }
+  #aml-dataset-cases [hidden] { display:none; }
+  #aml-dataset-cases .aml-projection { display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:16px;align-items:center;margin:16px 0; }
+  #aml-dataset-cases h3 { margin:0 0 8px; }
+  #aml-dataset-cases .aml-arrow { color:var(--muted-foreground); }
+  #aml-dataset-cases .aml-evidence { display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:16px;margin:20px 0; }
+  #aml-dataset-cases .aml-source { border-left:3px solid var(--viz-series-1);padding-left:12px;min-width:0;overflow-wrap:anywhere; }
+  #aml-dataset-cases .aml-link { text-align:center;color:var(--muted-foreground); }
+  #aml-dataset-cases th { width:112px; }
+  #aml-dataset-cases .aml-footer { margin-top:16px; }
+  @media(max-width:520px) {
+    #aml-dataset-cases .aml-projection,#aml-dataset-cases .aml-evidence { grid-template-columns:1fr;gap:10px; }
+    #aml-dataset-cases .aml-arrow { transform:rotate(90deg);justify-self:center; }
+    #aml-dataset-cases .aml-link { display:flex;gap:8px;align-items:center;justify-content:center; }
+    #aml-dataset-cases th { width:86px; }
+  }
+</style>
+<script>
+(() => {
+  const root=document.getElementById('aml-dataset-cases');
+  const el=id=>root.querySelector('#aml-'+id);
+  const catalog=__AML_CATALOG_JSON__;
+  const {datasets,cases}=catalog;
+  const ds=el('dataset'), cs=el('case');
+  el('footer').textContent=catalog.updated+' 本机核对 · 方法为人工分析示意 · 尚无目标记忆系统实测结果';
+  Object.entries(datasets).forEach(([key,d])=>ds.add(new Option(d.name,key)));
+  function draw(datasetKey,caseKey) {
+    const key=Object.hasOwn(datasets,datasetKey)?datasetKey:catalog.defaultState.dataset;
+    const d=datasets[key]; ds.value=key; cs.replaceChildren();
+    d.cases.forEach(k=>cs.add(new Option(cases[k].name,k)));
+    const chosen=d.cases.includes(caseKey)?caseKey:d.cases[0];
+    if(chosen) cs.value=chosen;
+    el('status').textContent=d.status; el('raw').textContent=d.raw; el('prepared').textContent=d.prepared;
+    el('downloads').replaceChildren();
+    for(const link of d.links||[]){const a=document.createElement('a');a.textContent=link.label;a.href=link.url;a.target='_blank';a.rel='noopener noreferrer';el('downloads').append(a);}
+    el('download-note').textContent=d.downloadNote||'';
+    el('case-label').hidden=d.cases.length<2; el('example').hidden=!chosen;el('no-example').hidden=!!chosen;
+    if(!chosen){el('no-example').textContent=d.empty;return;}
+    const c=cases[chosen];
+    el('link-mark').textContent=c.mark;
+    const fields={'question':'q','source-label':'source','left-id':'leftId','left':'left','link-label':'link','right-id':'rightId','right':'right','add':'add','search':'search','answer':'answer','trap':'trap'};
+    Object.entries(fields).forEach(([id,field])=>el(id).textContent=c[field]);
+  }
+  function persist(){if(window.openai&&window.openai.setWidgetState)window.openai.setWidgetState({modelContent:{dataset:ds.value,case:cs.value||null},privateContent:null}).catch(()=>{});}
+  function restore(state){const s=state&&state.modelContent||catalog.defaultState;draw(s.dataset,s.case);}
+  ds.addEventListener('change',()=>{draw(ds.value);persist();});
+  cs.addEventListener('change',()=>{draw(ds.value,cs.value);persist();});
+  window.addEventListener('openai:set_globals',event=>{const g=event.detail&&event.detail.globals;if(g&&Object.prototype.hasOwnProperty.call(g,'widgetState'))restore(g.widgetState);});
+  restore(window.openai&&window.openai.widgetState);
+})();
+</script>

@@ -1023,6 +1023,9 @@ def main() -> None:
     build_parser.add_argument("--category", type=int, action="append", default=None)
     build_parser.add_argument("--task-ids", default=None)
     build_parser.add_argument("--task-limit", type=int, default=None)
+    build_parser.add_argument("--qa-input", type=Path, default=None, help="paired PerLTQA questions file")
+    build_parser.add_argument("--character-names", default=None, help="comma-separated PerLTQA subjects")
+    build_parser.add_argument("--character-limit", type=int, default=None)
     slice_parser = commands.add_parser("slice", help="write a deterministic row-range slice")
     slice_parser.add_argument("--dataset", choices=dataset_ids, required=True)
     slice_parser.add_argument("--input", type=Path, default=None)
@@ -1042,7 +1045,9 @@ def main() -> None:
             )
         else:
             input_path = arguments.input or source_path(arguments.dataset)
-            if input_path.resolve() == arguments.output.resolve():
+            if input_path.resolve() == arguments.output.resolve() or (
+                arguments.qa_input and arguments.qa_input.resolve() == arguments.output.resolve()
+            ):
                 raise ValueError("pack output must differ from the source path")
             adapter = source_entry(arguments.dataset).get("pack_adapter")
             if adapter == "locomo-v1":
@@ -1063,6 +1068,17 @@ def main() -> None:
                     question_limit=arguments.question_limit,
                     session_limit=arguments.session_limit,
                     question_type=arguments.question_type,
+                )
+            elif adapter == "perltqa-v1":
+                from dataset.perltqa import build_perltqa
+
+                qa_path = arguments.qa_input or input_path.with_name("perltqa.json")
+                if qa_path.resolve() == arguments.output.resolve():
+                    raise ValueError("pack output must differ from the QA source path")
+                result = build_perltqa(
+                    path=input_path, qa_path=qa_path,
+                    character_names=_comma_list(arguments.character_names),
+                    character_limit=arguments.character_limit, task_limit=arguments.task_limit,
                 )
             elif adapter == "context-task-v1":
                 result = build_context_tasks(

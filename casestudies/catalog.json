@@ -1,0 +1,334 @@
+{
+  "datasets": {
+    "perltqa": {
+      "name": "PerLTQA 中文 · 新增完整数据",
+      "status": "已取得：141 人物档案；其中 32 人物有 8,593 题",
+      "raw": "人物资料＋关系＋事件＋对话；作者生成的结构化记忆",
+      "prepared": "32 人物 → 2,211 来源文档＋8,593 任务；答案与 anchors 分离",
+      "cases": [
+        "p1",
+        "p2"
+      ],
+      "links": [
+        {
+          "label": "作者中文发布",
+          "url": "https://github.com/Elvin-Yiming-Du/PerLTQA/tree/8d9e19868e239740ef701e603ec205cd581f221b/Dataset/zh"
+        }
+      ],
+      "downloadNote": "中文双文件已齐；英文版尚未下载。"
+    },
+    "beam": {
+      "name": "BEAM · 长历史更新与冲突",
+      "status": "已取得：100K 档 2 / 20 条历史，388 发言、40 probes",
+      "raw": "长 chat＋代码＋生成背景＋十类能力探针",
+      "prepared": "只 chat 进入历史；新增案例：200 发言＋20 任务；来源评分尚未适配",
+      "cases": [
+        "b1",
+        "b2"
+      ],
+      "links": [
+        {
+          "label": "全部三档文件",
+          "url": "https://huggingface.co/datasets/Mohammadta/BEAM/tree/main/data"
+        },
+        {
+          "label": "10M 分片",
+          "url": "https://huggingface.co/datasets/Mohammadta/BEAM-10M/tree/main/data"
+        }
+      ],
+      "downloadNote": "Parquet 文件；下载后需解码并核验。10M 尚未下载。"
+    },
+    "life": {
+      "name": "CL-bench Life · 带材料完成工作",
+      "status": "已取得：5 / 405 条；新增 offset 100、101 两条",
+      "raw": "比赛日志、社区讨论与信息碎片；附任务和评分要求",
+      "prepared": "历史 / 任务 / rubric 分离；新增两条 → 7 条历史消息＋2 任务",
+      "cases": [
+        "c1"
+      ],
+      "links": [
+        {
+          "label": "完整文件 · 29.3 MB",
+          "url": "https://huggingface.co/datasets/tencent/CL-bench-Life/resolve/cd2589f/CL-bench%20Life.jsonl?download=true"
+        }
+      ],
+      "downloadNote": "仅取得 5 条样本，尚缺完整文件。"
+    },
+    "locomo": {
+      "name": "LoCoMo · 跨会话记忆",
+      "status": "已取得：10 对话、272 会话、5,882 发言、1,986 题",
+      "raw": "双人多次聊天；说话者、会话日期、图像 caption、问题与证据 ID",
+      "prepared": "完整保留历史；1,984 任务可用；排除 2 个不存在的来源引用",
+      "cases": [
+        "l1",
+        "l2",
+        "l3"
+      ],
+      "links": [
+        {
+          "label": "作者发布",
+          "url": "https://github.com/snap-research/locomo"
+        }
+      ],
+      "downloadNote": "文本 JSON 已齐；本机没有图片本体。"
+    },
+    "refined": {
+      "name": "LoCoMo-Refined · 修改问答版",
+      "status": "已取得：10 对话、1,382 题；与原版历史相同",
+      "raw": "社区修改问题与答案；去掉类别 5 的对抗题",
+      "prepared": "已有 6 题 smoke 包；完整原始文件可用；不可与原版视为独立历史",
+      "cases": [],
+      "empty": "能力重点：答案精度与完整性。与原版共享历史，不能作为无泄漏的独立测试集。",
+      "links": [
+        {
+          "label": "社区发布",
+          "url": "https://github.com/mem-eval-suite/LoCoMo_refined"
+        }
+      ],
+      "downloadNote": "当前社区版本已齐；不是 AML 私有冻结包。"
+    },
+    "cl": {
+      "name": "CL-bench · 学习新规则与流程",
+      "status": "已取得：3 / 1,899 条",
+      "raw": "新知识、流程或规则＋messages＋rubrics",
+      "prepared": "1 条能构造多轮历史；2 条单轮缺可靠任务边界，保留原文",
+      "cases": [],
+      "empty": "能力重点：记住约束并应用规则。先确认材料 / 任务边界，再做 Add → Search → Answer；不能把 rubric 当作历史。",
+      "links": [
+        {
+          "label": "完整文件 · 90.1 MB",
+          "url": "https://huggingface.co/datasets/tencent/CL-bench/resolve/66122c88771ac4f09f163415902828b933e78899/CL-bench.jsonl?download=true"
+        }
+      ],
+      "downloadNote": "仅取得 3 条样本，尚缺完整文件。"
+    },
+    "script": {
+      "name": "ScriptMem · 当前缺少剧本",
+      "status": "已取得 457 题；对应真实剧本未取得",
+      "raw": "多人物关系与事件；单选、多选、排序问题",
+      "prepared": "可检查题型；任务包标记缺历史，不能实际回放",
+      "cases": [],
+      "empty": "缺口：原始剧本。题目、答案与合成格式示例均不能充当历史。",
+      "links": [
+        {
+          "label": "作者说明",
+          "url": "https://github.com/memorax-ai/ScriptMem"
+        }
+      ],
+      "downloadNote": "公开题目已齐；作者未发布原始剧本。"
+    },
+    "persona": {
+      "name": "PersonaMem-v2 · 当前缺少历史",
+      "status": "已取得 3 题，均为 persona 521；历史文件下载返回 502",
+      "raw": "当前问题、偏好标签、评估答案、长历史路径",
+      "prepared": "任务与标签分离；无历史时拒绝回放",
+      "cases": [],
+      "empty": "能力重点：隐式偏好。题目标签中的偏好不是从历史检索出的记忆；需先取得作者 HF 仓库中的对应 history。",
+      "links": [
+        {
+          "label": "文本题目 CSV",
+          "url": "https://huggingface.co/datasets/bowen-upenn/PersonaMem-v2/tree/main/benchmark/text"
+        },
+        {
+          "label": "32K 历史",
+          "url": "https://huggingface.co/datasets/bowen-upenn/PersonaMem-v2/tree/main/data/chat_history_32k"
+        },
+        {
+          "label": "128K 历史",
+          "url": "https://huggingface.co/datasets/bowen-upenn/PersonaMem-v2/tree/main/data/chat_history_128k"
+        }
+      ],
+      "downloadNote": "题目和历史须配套下载；文件在 Hugging Face 数据仓库。"
+    },
+    "longmem": {
+      "name": "LongMemEval · 尚未取得真实样本",
+      "status": "来源与读取器已登记；S 行接口 500，Oracle 文件 502",
+      "raw": "长会话＋日期＋问题＋可回答性标注；S / M / Oracle",
+      "prepared": "读取器仅通过合成结构测试；无本机真实 pack",
+      "cases": [],
+      "empty": "能力重点：时间、更新、拒答。Oracle 仅保留答案会话，不能代替完整 S / M 历史的检索难度。",
+      "links": [
+        {
+          "label": "S · 277 MB",
+          "url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416/longmemeval_s_cleaned.json?download=true"
+        },
+        {
+          "label": "Oracle · 15.4 MB",
+          "url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416/longmemeval_oracle.json?download=true"
+        },
+        {
+          "label": "M · 2.74 GB",
+          "url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416/longmemeval_m_cleaned.json?download=true"
+        }
+      ],
+      "downloadNote": "三个真实文件都未取得；优先 S。"
+    },
+    "mab": {
+      "name": "MemoryAgentBench · 新发现候选",
+      "status": "官方 splits 已确认；CR / TTL 单条样本下载均超时",
+      "raw": "共享 context → 多个 questions / answers；检索、学习、长程理解、冲突",
+      "prepared": "已登记来源；未取得样本，未实现读取器",
+      "cases": [],
+      "empty": "下一步能力补充：Test_Time_Learning 与 Conflict_Resolution。当前不能作为可运行数据集。",
+      "links": [
+        {
+          "label": "四类数据文件",
+          "url": "https://huggingface.co/datasets/ai-hyz/MemoryAgentBench/tree/main/data"
+        }
+      ],
+      "downloadNote": "先取 Conflict_Resolution / Test_Time_Learning；尚无本地读取器。"
+    },
+    "pv3": {
+      "name": "PersonaMem-v3 · 新发现候选",
+      "status": "已核对 context / profiles / queries 三类配置；尚未下载",
+      "raw": "跨平台活动、反馈、用户意图与遗忘请求",
+      "prepared": "仅调研；无本地原文或读取器",
+      "cases": [],
+      "empty": "下一步能力补充：跨平台个性化与遗忘。作者页面对人物总量的文案不同，暂不使用统一规模结论。",
+      "links": [
+        {
+          "label": "作者完整文件页",
+          "url": "https://huggingface.co/datasets/bowen-upenn/PersonaMem-v3/tree/main"
+        }
+      ],
+      "downloadNote": "仍是候选；保留人物目录以及资料、历史、问题的配套关系。"
+    }
+  },
+  "cases": {
+    "p1": {
+      "name": "P01 关系方向与主体",
+      "q": "张小红的兄弟是谁？",
+      "source": "来源：social_relationship:4_0 · 中文原文含义",
+      "leftId": "资料主体",
+      "left": "张小红",
+      "link": "弟弟",
+      "rightId": "关系对象",
+      "right": "张小明",
+      "add": "张小红 — 弟弟 → 张小明；保留关系方向、主体和来源 4_0。",
+      "search": "定位张小红的关系资料；返回“张小明是张小红的弟弟”的原文。",
+      "answer": "张小明，是她的弟弟。",
+      "trap": "容易错：跨档案合并同名“小明”，或把关系方向反转。",
+      "document": "perltqa-structured-memory.md",
+      "mark": "→"
+    },
+    "p2": {
+      "name": "P02 原文与答案冲突",
+      "q": "王小明和姐姐已经到达目的地了吗？",
+      "source": "来源：events:1_0_0 与 dialogues:1_0_0#0 · 原文信息摘要",
+      "leftId": "事件＋当天对话",
+      "left": "2022-05-12 出发／今天出发",
+      "link": "时间冲突",
+      "rightId": "同一段 05-12 08:00 对话",
+      "right": "昨天抵达；作者答案却写 05-12 抵达",
+      "add": "保留事件、对话时间和原句；保留相互关联；标注时间冲突。",
+      "search": "返回冲突两端与原始日期；不从 gold 答案补造历史。",
+      "answer": "对话称已抵达；出发与抵达时间前后矛盾，不能确定具体日期。",
+      "trap": "容易错：用标准答案“修复”记忆，或把合理质疑算成记忆失效。",
+      "document": "perltqa-structured-memory.md",
+      "mark": "≠"
+    },
+    "b1": {
+      "name": "B01 配额明确更新",
+      "q": "这个项目当前每日 API 调用配额是多少？",
+      "source": "来源：conversation_id=2 · 历史中文转述，不是现实产品规格",
+      "leftId": "0:32 · 先前要求",
+      "left": "1,000 次 / 天；另有 60 次 / 分钟",
+      "link": "明确更新",
+      "rightId": "0:66 · 后续要求",
+      "right": "新的每日配额：1,200 次",
+      "add": "同一项目、同一属性：1,000 → 1,200；保留旧值、顺序与来源。",
+      "search": "问“当前”返回 0:66；问“最初”返回 0:32；按需附更新链。",
+      "answer": "当前每天 1,200 次。",
+      "trap": "容易错：召回旧配额、混淆每天 / 每分钟、把重复代码当作多次独立确认。",
+      "document": "beam-update-and-conflict.md",
+      "mark": "→"
+    },
+    "b2": {
+      "name": "B02 互相矛盾的经历",
+      "q": "用户是否已经取得这个项目的 API Key？",
+      "source": "来源：conversation_id=2 · 历史中文转述",
+      "leftId": "0:32 · 先前陈述",
+      "left": "2024-03-10 已取得 Key",
+      "link": "经历矛盾 ≠ 更新",
+      "rightId": "0:70 · 后续陈述",
+      "right": "从未真正取得这个项目的 Key",
+      "add": "保留两条相反陈述及来源；标记待澄清，不自动覆盖。",
+      "search": "同时返回“已取得”与“从未取得”的证据。",
+      "answer": "前后说法不一致，需要澄清。",
+      "trap": "容易错：自行编造“Key 已失效”或“换了项目”来消除矛盾。",
+      "document": "beam-update-and-conflict.md",
+      "mark": "≠"
+    },
+    "c1": {
+      "name": "C01 多观点覆盖与引用",
+      "q": "仅根据评论比较 iPhone / Android，并满足所有引用要求",
+      "source": "来源：Life offset 100 · task a760132c… · 任务约束摘要",
+      "leftId": "三个主要观点",
+      "left": "3 个观点 × 3 句引文 = 9 处",
+      "link": "全部互不重复",
+      "rightId": "五类立场表格",
+      "right": "5 类立场 × 3 句引文 = 15 处",
+      "add": "保存评论作者、回复关系、原帖 / 评论边界、原文与立场上下文。",
+      "search": "覆盖子需求；排除原帖；为 24 处不同引文保留出处。",
+      "answer": "按评论证据总结倾向并组织表格；不把局部检索分布当全体比例。",
+      "trap": "容易错：最相似的几段挤满上下文，却缺立场、重复引用或混入原帖。",
+      "document": "clbench-life-evidence-diversity.md",
+      "mark": "＋"
+    },
+    "l1": {
+      "name": "L01 跨会话语义关联",
+      "q": "Caroline 四年前从哪里搬来？",
+      "source": "来源：conv-26 / qa[11] · 历史中文转述",
+      "leftId": "D3:13 · 2023-06-09",
+      "left": "四年前离开自己的祖国",
+      "link": "同一人的祖国",
+      "rightId": "D4:3 · 2023-06-27",
+      "right": "祖国瑞典的奶奶，在她小时候送了项链",
+      "add": "保留 Caroline 的迁居事件；将“祖国”关联到瑞典；两段原文仍可追溯。",
+      "search": "同时返回 D3:13 与 D4:3，形成完整两跳证据链。",
+      "answer": "瑞典。",
+      "trap": "容易错：只搜“搬家”漏掉项链片段；只搜到“瑞典”缺少迁居关系。",
+      "document": "locomo-cross-session.md",
+      "mark": "↔"
+    },
+    "l2": {
+      "name": "L02 相对时间定位",
+      "q": "Caroline 何时参加了 LGBTQ 支持小组？",
+      "source": "来源：conv-26 / qa[0] · 原文时间关系",
+      "leftId": "会话时间",
+      "left": "2023-05-08 13:56",
+      "link": "昨天 → 前一天",
+      "rightId": "D1:3 · 相对时间",
+      "right": "昨天参加了支持小组",
+      "add": "同时保留原句、会话日期和事件日期 2023-05-07；来源未声明时区。",
+      "search": "返回 D1:3＋日期锚点＋归一化的事件日期。",
+      "answer": "2023 年 5 月 7 日。",
+      "trap": "容易错：用 Add 的接收时间或今天的日期解释“昨天”。",
+      "document": "locomo-time-anchor.md",
+      "mark": "→"
+    },
+    "l3": {
+      "name": "L03 人物混淆与错误前提",
+      "q": "Melanie 今年夏天有哪些收养计划？",
+      "source": "来源：conv-26 / qa[153] · 对抗题；D2:8 为关键辨析片段",
+      "leftId": "问题中的人物",
+      "left": "Melanie 的收养计划？",
+      "link": "人物不一致",
+      "rightId": "D2:8 · 实际说话者",
+      "right": "Caroline 正在研究收养机构",
+      "add": "把计划归到 Caroline；保留说话者、会话和原句。",
+      "search": "返回可辨析归属的证据；不能把 Caroline 的计划改记给 Melanie。",
+      "answer": "现有证据不足以支持 Melanie 的收养计划。",
+      "trap": "容易错：将 adversarial_answer 诱导答案当正确答案；命中 evidence 不等于回答正确。",
+      "document": "locomo-speaker-confusion.md",
+      "mark": "≠"
+    }
+  },
+  "schemaVersion": 1,
+  "updated": "2026-10-05",
+  "defaultState": {
+    "schemaVersion": 1,
+    "dataset": "beam",
+    "case": "b1"
+  }
+}

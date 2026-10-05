@@ -10,15 +10,26 @@
 | [LoCoMo-Refined 社区版](https://github.com/mem-eval-suite/LoCoMo_refined) | 完整 raw JSON、questions JSONL；10 对话、1,382 QA；固定 commit `8870911…` | 同一读取结构，独立来源身份；不使用生成 summary 充当原文。CC BY-NC 4.0，参见 NOTICE。 |
 | [ScriptMem](https://github.com/memorax-ai/ScriptMem) | 4 个 raw QA 文件、questions JSONL、manifest；457 题 | 分析题型、选项和来源，生成任务 pack；作者未发布真实剧本/对话。CC BY-NC 4.0 仅覆盖作者的任务材料。 |
 | [CL-bench](https://huggingface.co/datasets/tencent/CL-bench) | 官方行 API 前 3 条完整记录；全量 1,899 题 | 已取得样本中 1 条可按多轮边界拆分，2 条上下文与任务混在单条消息中，原样保留待适配。 |
-| [CL-bench Life](https://huggingface.co/datasets/tencent/CL-bench-Life) | 官方行 API 前 3 条完整记录；全量 405 题 | 单轮用 TASK 分隔符；多轮用最后用户消息为任务，保留此前历史；rubrics 独立保存。 |
+| [CL-bench Life](https://huggingface.co/datasets/tencent/CL-bench-Life) | 官方行 API 5 条（offset 0–2、100–101）；全量 405 题 | 单轮用 TASK 分隔符；多轮用最后用户消息为任务，保留此前历史；rubrics 独立保存。 |
 | [PersonaMem-v2](https://huggingface.co/datasets/bowen-upenn/PersonaMem-v2) | `benchmark_text` 前 3 条，均属 persona 521；该 split 为 5,000 题 | 读取 CSV/JSONL，保留历史引用；对应 32K 历史下载仍为 502，pack 标记缺失。CC BY 4.0。 |
-| [BEAM](https://huggingface.co/datasets/Mohammadta/BEAM) | `100K` split 第 1 个完整对话：3 个批次、188 turns；该 split 为 20 对话 | 仅 chat 作为历史；提取 10 类 probes，ideal_response/rubric 独立保存。CC BY-SA 4.0。 |
+| [BEAM](https://huggingface.co/datasets/Mohammadta/BEAM) | `100K` split 前 2 个完整对话，共 388 turns、40 probes；该 split 为 20 对话 | 仅 chat 作为历史；提取 10 类 probes，答案/rubric/source_chat_ids 独立保存。CC BY-SA 4.0。 |
+| [PerLTQA 中文](https://github.com/Elvin-Yiming-Du/PerLTQA) | 完整中文 memory/QA：141 人物档案，32 人物有 8,593 题 | 新 reader 保存结构化来源文档、关系和原始时间；QA 引用可解析，字符 anchors 未认证。CC BY-NC 4.0。 |
 
 CL-bench 两版均为作者的 [evaluation-only 许可](https://huggingface.co/datasets/tencent/CL-bench/blob/main/LICENSE.txt)，仅用于评测/测试，禁止训练、微调、校准、蒸馏等参数更新。
 
 [LongMemEval S/M/Oracle](https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned) 已登记作者源（MIT）并实现共同读取器；S 完整文件此前下载失败，本轮 Oracle 完整文件返回 502，S/Oracle 行 API 返回 500，尚无本机真实数据。M、[BEAM-10M](https://huggingface.co/datasets/Mohammadta/BEAM-10M) 本轮未下载。没有找到可独立获取并核验来源的 LongMemEval-Refined 发布，故没有虚构文件或读取器。
 
-[`catalog.json`](./catalog.json) 统一登记来源；`pack_adapter` 表示代码能力，`local_verification` 表示真实数据验证状态。来源可用、读取器支持和本机取得范围是不同事实。[本轮记录](../docs/doing/2026-10-05-dataset-decoupling.md)列出下载情况与限制。
+[`catalog.json`](./catalog.json) 统一登记来源；`pack_adapter` 表示代码能力，`local_verification` 表示真实数据验证状态。来源可用、读取器支持和本机取得范围是不同事实。[基础记录](../docs/doing/2026-10-05-dataset-decoupling.md)、[最新扩充记录](../docs/doing/2026-10-05-case-study-expansion.md)和[样本案例库](../casestudies/README.md)列出材料、经验与限制。MemoryAgentBench CR/TTL 已登记来源但 row 下载超时；PersonaMem-v3 已调研，尚未取数。
+
+## 中文 PerLTQA
+
+```powershell
+.\.venv\Scripts\python.exe -m dataset.fetch perltqa-zh --github-api
+.\.venv\Scripts\python.exe -m dataset.prepare build --dataset perltqa-zh --output dataset/data/prepared/perltqa-zh-full.json
+.\.venv\Scripts\python.exe -m dataset.prepare build --dataset perltqa-zh --character-names 张小红,王小明 --output dataset/data/prepared/perltqa-zh-cases.json
+```
+
+memory/QA 双文件分别核对来源回执；可用 `--qa-input` 指定配对题目文件。默认覆盖全部有 QA 的 32 人：2,211 个来源文档单元、8,593 题。这里的 session 是资料分区，turn 是来源文档，不是按时间发生的真实交互。生成的结构化记忆和普通聊天输入应分别报告；原始材料存在矛盾，全部引用可解析不等于答案全部正确。不得将 gold 答案用于修复 Add 输入。
 
 ## 目录与获取
 
