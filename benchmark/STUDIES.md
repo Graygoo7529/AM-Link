@@ -38,6 +38,20 @@
 .\.venv\Scripts\python.exe -m visualization.build --local --workspace --workspace-run lm4-full-20261007 --workspace-run lm4-anchors-20261007 --web
 ```
 
+## Mem0 诊断切片
+
+需要先在被忽略的研究环境安装 `benchmark/requirements-research.txt`，再显式提供本机私有环境文件。`microstudy` 接受任意已准备的诊断 pack；它只把历史消息送给 Mem0，任务答案、rubric 和 evidence 不进入 Add/Search：
+
+```powershell
+.\benchmark\data\research-env\Scripts\python.exe -m benchmark.microstudy `
+  --run-id mem0-broad-slices-YYYYMMDD `
+  --env-file docs/private/phase1-server.env `
+  --dataset-pack dataset/data/prepared/memory-broad-slices.json `
+  --chunk-size 20 --top-k 5
+```
+
+实验脚本对 provider 请求和输入字符设置上限，关闭 SDK 内部重试，记录真实模型 span、Add 后记忆快照、Search 结果和本地诊断 Answer。连接失败、抽取失败和正常空结果分别保留；一次成功的 HTTP 调用不能推断记忆抽取成功。运行完成后可用 `workspace register --observations <run>/observations-reviewed.json` 接入可视化。
+
 每个运行页面最多展示 20 道查询，界面标出展示/实际数量。更大实验应按研究问题拆成独立运行；全部 trace 仍在运行目录。单次运行大到超出展示上限时构建会明确报错，运行结果已保存，可改用更小实验或检查原始轨迹。
 
 既有 Mem0 Answer/Eval 补充记录可以登记并在以后自动加载：

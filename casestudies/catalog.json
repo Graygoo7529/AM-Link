@@ -24,7 +24,8 @@
       "prepared": "只 chat 进入历史；已有 100K 案例 pack；全量 Parquet 已解码核对，尚未构建全量 pack",
       "cases": [
         "b1",
-        "b2"
+        "b2",
+        "b3"
       ],
       "links": [
         {
@@ -44,7 +45,8 @@
       "raw": "比赛日志、社区讨论与信息碎片；附任务和评分要求",
       "prepared": "历史 / 任务 / rubric 分离；已有 7 条历史消息＋2 任务小样本，完整文件尚未构建全量 pack",
       "cases": [
-        "c1"
+        "c1",
+        "c2"
       ],
       "links": [
         {
@@ -62,7 +64,8 @@
       "cases": [
         "l1",
         "l2",
-        "l3"
+        "l3",
+        "l4"
       ],
       "links": [
         {
@@ -124,7 +127,9 @@
       "prepared": "persona 521/737 完整 32K 历史研究包；他人信息、遗忘案例；gold 与生成画像分离",
       "cases": [
         "pv1",
-        "pv2"
+        "pv2",
+        "pv3",
+        "pv4"
       ],
       "links": [
         {
@@ -195,7 +200,8 @@
       "prepared": "persona 36/68 的两题时间切片：600 / 2,228 条可见事件；排除同刻/未来及嵌套生成标签",
       "cases": [
         "v31",
-        "v32"
+        "v32",
+        "v33"
       ],
       "links": [
         {
@@ -1295,10 +1301,305 @@
           ]
         }
       ]
+    },
+    "l4": {
+      "name": "L04 共享兴趣的多证据覆盖",
+      "q": "Joanna 和 Nate 共享哪些兴趣？",
+      "source": "来源：LoCoMo conv-42 / qa-1 · 多会话标注",
+      "leftId": "7 个作者证据段",
+      "left": "D1:10、D1:11、D1:12、D3:4、D4:9、D10:9、D20:2",
+      "link": "跨会话合并",
+      "rightId": "回答输出",
+      "right": "只合并两人的共同兴趣，不把单人的兴趣当共同项",
+      "add": "按人物、兴趣和来源保存多次提及；不要把作者证据列表写进记忆。",
+      "search": "先分别召回 Joanna 与 Nate 的兴趣，再求交集并保留每个结论的至少一条支持来源。",
+      "answer": "列出共同兴趣，并说明证据来自哪些会话；未出现的共同项不要补造。",
+      "trap": "只命中一个人的兴趣，或把同一人多次提及计成多个共同兴趣。",
+      "document": "locomo-shared-interest.md",
+      "mark": "∩",
+      "data": {
+        "dataset": "locomo",
+        "record": "conv-42",
+        "task": "qa-1",
+        "turns": [
+          "D1:10",
+          "D1:11",
+          "D1:12",
+          "D3:4",
+          "D4:9",
+          "D10:9",
+          "D20:2"
+        ],
+        "pack": "dataset/data/prepared/locomo-full.json"
+      },
+      "checks": {
+        "add": "保留人物、兴趣、会话日期与来源；合并是回答阶段的关系运算。",
+        "search": "检查两位人物的证据是否都返回，完整链路不能只看单条命中。",
+        "answer": "先按人物归属分组，再计算交集；引用不足时明确不确定。"
+      },
+      "watch": {
+        "add": "观察同一兴趣的多次写入和人物归属。",
+        "search": "观察候选覆盖、去重和交集输入；区分未命中与未采集。",
+        "answer": "记录实际采用的两人证据和交集结果。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "Joanna 的兴趣证据",
+          "use": "交集左侧",
+          "sources": [
+            "D1:10",
+            "D1:11",
+            "D1:12",
+            "D3:4",
+            "D4:9",
+            "D10:9",
+            "D20:2"
+          ]
+        },
+        {
+          "fact": "Nate 的兴趣证据",
+          "use": "交集右侧",
+          "sources": [
+            "D1:10",
+            "D1:11",
+            "D1:12",
+            "D3:4",
+            "D4:9",
+            "D10:9",
+            "D20:2"
+          ]
+        }
+      ]
+    },
+    "b3": {
+      "name": "B03 事件顺序与五项约束",
+      "q": "城市自动补全功能的五个实现关注点按什么顺序出现？",
+      "source": "来源：BEAM conversation_id=2 · event_ordering:0",
+      "leftId": "五个阶段",
+      "left": "防抖、慢响应、快速输入、下拉与错误、监听器清理",
+      "link": "出现顺序",
+      "rightId": "输出约束",
+      "right": "只能给五项且保持原顺序",
+      "add": "保留每次讨论的主题、发生顺序、会话来源；不要把参考答案或 rubric 写入历史。",
+      "search": "召回五个不同时间点的实现讨论，按 source/session 顺序重排。",
+      "answer": "严格输出五项；缺一项或改变顺序都算工作失败。",
+      "trap": "语义相似的错误处理段落会被合并，或返回超过五项。",
+      "document": "beam-ordering-and-constraints.md",
+      "mark": "⇢",
+      "data": {
+        "dataset": "beam",
+        "record": "2",
+        "task": "event_ordering:0",
+        "turns": [],
+        "pack": "dataset/data/prepared/beam-update-cases.json"
+      },
+      "checks": {
+        "add": "保存主题与来源顺序，不只保存最终摘要。",
+        "search": "验证五个阶段是否都覆盖并可排序；无证据映射时标记 ungraded。",
+        "answer": "遵守数量和顺序约束；不能用 rubric 补齐缺失内容。"
+      },
+      "watch": {
+        "add": "观察事件顺序字段是否保留。",
+        "search": "观察候选按时间/来源排序，记录未选阶段。",
+        "answer": "记录输出项数量、顺序和实际上下文。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "五个实现关注点及其出现顺序",
+          "use": "受约束顺序回答",
+          "sources": []
+        }
+      ]
+    },
+    "c2": {
+      "name": "C02 条件税务分解与未知信息",
+      "q": "第二笔和解金中哪些部分应纳税？",
+      "source": "来源：CL-bench Life · settlement 任务 · rubric 仅评估侧",
+      "leftId": "可计算部分",
+      "left": "每月 500 美元中损失扶养 65、一般损害 435；利息 2,000",
+      "link": "条件分支",
+      "rightId": "未知条件",
+      "right": "一般损害是否因身体伤害而来未提供",
+      "add": "保留文件规则、金额、适用条件和来源；不能把上一笔和解性质迁移到新一笔。",
+      "search": "同时召回计算规则和税务条件，避免只返回金额或上一案例标签。",
+      "answer": "明确 65 美元与 2,000 美元规则；435 美元必须条件化回答，先指出缺少索赔性质。",
+      "trap": "把新和解自动当成 wrongful-death，或对 435 美元给绝对结论。",
+      "document": "clbench-conditional-taxonomy.md",
+      "mark": "?",
+      "data": {
+        "dataset": "life",
+        "record": "75121251-319e-f2d7-985c-112d0f76579f",
+        "task": "75121251-319e-f2d7-985c-112d0f76579f",
+        "turns": [],
+        "pack": "dataset/data/prepared/clbench-life-extra.json"
+      },
+      "checks": {
+        "add": "将规则、数字和条件拆开保存并标出处。",
+        "search": "检查规则证据与当前实例证据是否都在，不能拿 rubric 当记忆。",
+        "answer": "展示计算并保留条件未知；这是条件推理，不是单值分类。"
+      },
+      "watch": {
+        "add": "观察结构化金额与条件是否共同进入记忆。",
+        "search": "观察候选是否覆盖规则、文档和当前实例。",
+        "answer": "记录采用的证据和条件分支，不以格式完整代替正确性。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "损失扶养 13% = 65 美元",
+          "use": "非应税规则",
+          "sources": []
+        },
+        {
+          "fact": "一般损害 435 美元",
+          "use": "条件分支",
+          "sources": []
+        },
+        {
+          "fact": "延期利息 2,000 美元",
+          "use": "应税规则",
+          "sources": []
+        }
+      ]
+    },
+    "pv3": {
+      "name": "PV03 敏感信息与最小化记忆",
+      "q": "保险理赔清单和传输敏感信息时应注意什么？",
+      "source": "来源：PersonaMem-v2 persona-737 / row-27 · sensitive_info 标注",
+      "leftId": "当前请求",
+      "left": "包含社会安全号码和保险材料准备",
+      "link": "任务可用 ≠ 长期画像",
+      "rightId": "保护边界",
+      "right": "提供安全建议，不把敏感号码作为长期偏好或回答上下文复述",
+      "add": "只保存必要的安全偏好或许可；原始号码属于当前任务敏感输入，不应沉淀为画像。",
+      "search": "若需要个性化，只召回安全相关的明确长期偏好；避免把原始敏感字段返回。",
+      "answer": "给出最小化、遮盖、官方渠道等建议；不重复泄露号码。",
+      "trap": "把输入中的号码写入记忆，或以人物画像字段解释当前请求。",
+      "document": "personamem-sensitive-minimization.md",
+      "mark": "⊙",
+      "data": {
+        "dataset": "persona",
+        "record": "persona-737",
+        "task": "row-27",
+        "turns": [],
+        "pack": "dataset/data/prepared/personamem-v2-research.json"
+      },
+      "checks": {
+        "add": "分离当前敏感任务和可长期保留的用户偏好，默认不保存原始标识。",
+        "search": "检查结果是否泄露敏感字段；需要时只返回脱敏规则。",
+        "answer": "回答不复述秘密；将安全建议和记忆使用边界分开。"
+      },
+      "watch": {
+        "add": "记录敏感字段是否被拒绝写入或被最小化。",
+        "search": "记录脱敏、过滤和候选来源；缺少隐私事件也要标未知。",
+        "answer": "记录最终上下文是否含敏感原文和响应是否泄露。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "当前请求含敏感信息",
+          "use": "触发最小化处理",
+          "sources": []
+        },
+        {
+          "fact": "保险材料与安全传输要求",
+          "use": "当前任务回答",
+          "sources": []
+        }
+      ]
+    },
+    "v33": {
+      "name": "V303 隐式反馈不等于永久厌恶",
+      "q": "应如何利用历史互动为用户排序内容？",
+      "source": "来源：PersonaMem-v3 · persona 36 推荐切片",
+      "leftId": "可见活动",
+      "left": "停留与观看行为，分别对应内容和时间",
+      "link": "反馈语义",
+      "rightId": "候选排序",
+      "right": "把互动作为线索并保留不确定性，不把一次跳过升级成永久拒绝",
+      "add": "保存动作、内容身份和时间；不直接保存作者生成的 implicit_negative 标签。",
+      "search": "按当前候选查找近期相关互动与显式反馈，区分看过、停留和明确喜欢。",
+      "answer": "可以解释排序依据，但不能从单一隐式动作断言用户厌恶。",
+      "trap": "把 hard negative 或跳过动作直接当作长期负偏好；把未来正反馈倒灌到历史。",
+      "document": "personamem-v3-feedback-caution.md",
+      "mark": "≈",
+      "data": {
+        "dataset": "pv3",
+        "record": "36:0017:recsys_2026-04-05_a2",
+        "task": "36:0017:recsys_2026-04-05_a2",
+        "turns": [
+          "event-325716",
+          "event-684397"
+        ],
+        "pack": "dataset/data/prepared/personamem-v3-research.json"
+      },
+      "checks": {
+        "add": "保留动作原值、时间与内容，不把推断标签升级成事实。",
+        "search": "只用 query 时刻之前的活动；区分近期互动和稳定偏好。",
+        "answer": "把推荐作为带不确定性的排序，不泄漏未来标签。"
+      },
+      "watch": {
+        "add": "观察时间切片、动作和内容身份是否完整。",
+        "search": "观察未来事件是否被排除，候选是否引用来源事件。",
+        "answer": "记录排序理由与不确定性；不可只看 top-1。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "query 前的两条互动事件",
+          "use": "排序线索",
+          "sources": [
+            "event-325716",
+            "event-684397"
+          ]
+        }
+      ]
+    },
+    "pv4": {
+      "name": "PV04 遗忘后的长期偏好不回流",
+      "q": "为新居礼物推荐什么？",
+      "source": "来源：PersonaMem-v2 persona-737 / row-29 · ask_to_forget 与距离标注",
+      "leftId": "历史偏好",
+      "left": "曾偏好手工艺品，但明确要求忘记",
+      "link": "撤回",
+      "rightId": "当前问题",
+      "right": "应给一般礼物建议，不重新使用已撤回偏好",
+      "add": "保存明确撤回事件及其作用域；删除/失效后不得从旧片段重新生成该偏好。",
+      "search": "当前查询可检索通用礼物信息，但不能返回被撤回的手工艺偏好。",
+      "answer": "给出不依赖已撤回偏好的实用建议，并不提及被忘记内容。",
+      "trap": "只删除一条摘要，旧对话仍被向量召回；或把“继续回答”误解为恢复长期偏好。",
+      "document": "personamem-sensitive-minimization.md",
+      "mark": "⌫",
+      "data": {
+        "dataset": "persona",
+        "record": "persona-737",
+        "task": "row-29",
+        "turns": [],
+        "pack": "dataset/data/prepared/personamem-v2-research.json"
+      },
+      "checks": {
+        "add": "把记忆撤回当作状态变更，检查旧来源、摘要和索引是否共同失效。",
+        "search": "检查结果不含撤回偏好；若返回旧证据必须报告删除失败。",
+        "answer": "回答不能引用撤回偏好，也不能假装已完成删除。"
+      },
+      "watch": {
+        "add": "记录撤回请求、删除范围和残留索引检查。",
+        "search": "记录过滤/删除结果与残留候选。",
+        "answer": "记录上下文是否含撤回内容和回答是否暗示其存在。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "明确的 ask_to_forget 请求",
+          "use": "状态变更",
+          "sources": []
+        },
+        {
+          "fact": "当前 housewarming 查询",
+          "use": "撤回后回答",
+          "sources": []
+        }
+      ]
     }
   },
   "schemaVersion": 1,
-  "updated": "2026-10-07",
+  "updated": "2026-10-08",
   "defaultState": {
     "schemaVersion": 1,
     "dataset": "beam",

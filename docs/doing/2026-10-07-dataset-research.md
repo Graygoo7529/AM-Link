@@ -19,9 +19,9 @@
 ## done：处理与案例
 
 - 修复 LongMemEval 原始日期解析，保留 source_date 和无时区归一化假设；原 pack 毫秒约定不变。
-- 构建 5 个独立研究 pack：LongMemEval 三题完整 S 历史、PersonaMem-v2 两人完整 32K 历史、MAB 一题完整 455 事实、PersonaMem-v3 两题严格时间切片，以及单独的 6 条件短片段实验包。
+- 构建 6 个独立研究 pack：LongMemEval 七题完整 S 历史、PersonaMem-v2 两人完整 32K 历史、MAB 一题完整 455 事实、PersonaMem-v3 两题严格时间切片、单独的 6 条件短片段实验包，以及跨数据集 Mem0 诊断切片。
 - PersonaMem-v3 除时间/用户隔离外，删除 `conversation_json` 内部 `embeds_pref_idx` 等标签及作者 `interaction_type` 分类；保留原 action 和独立 `user_message` 的记忆限制。
-- 案例库 8 → 16：新增 LM01–03、PV01–02、M01、V301–02；与可视化共用唯一 catalog。
+- 案例库 8 → 16：新增 LM01–03、PV01–02、M01、V301–02；后续扩展到 26 个，与可视化共用唯一 catalog。
 - 可视化加入全量构成条形图、原始字段分流、三跳路径、本地检索结果、五阶段设计检查；网页与会话片段同源。
 
 ## done：实际本地 BM25 对照

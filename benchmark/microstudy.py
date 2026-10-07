@@ -36,7 +36,15 @@ class ObservedMem0:
             (c["id"], s["id"], s["dataset_task"]["task_id"]) for c in plan["cases"] for s in c["searches"]}
 
     def artifact(self, name, value, kind, locator="/"):
-        path = self.directory / (name + ".json")
+        # Record IDs may contain source separators such as ``:``.  Keep the
+        # logical artifact ID in the event, but make its on-disk name portable
+        # across Windows and POSIX so Answer capture cannot abort a run.
+        safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("._") or "artifact"
+        path = self.directory / (safe_name + ".json")
+        suffix = 1
+        while path.exists():
+            path = self.directory / (safe_name + f"-{suffix}.json")
+            suffix += 1
         write_json(path, value)
         return {"id": name, "kind": kind, "artifact": path.relative_to(self.directory).as_posix(),
                 "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "locator": locator}
@@ -119,6 +127,10 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-id",required=True)
     parser.add_argument("--env-file",type=Path,required=True)
+    parser.add_argument("--dataset-pack",type=Path,default=ROOT/"dataset/data/prepared/memory-microstudy.json",
+                        help="prepared diagnostic pack; source annotations are never sent to the target")
+    parser.add_argument("--chunk-size",type=int,default=20)
+    parser.add_argument("--top-k",type=int,default=5)
     args=parser.parse_args()
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}",args.run_id): raise ValueError("invalid run ID")
     directory=ROOT/"benchmark/data/runs"/args.run_id
@@ -146,8 +158,9 @@ def main():
     for component in (memory.llm,memory.embedding_model):
         component.client.max_retries=0
         component.client.timeout=45
-    pack=load_pack(ROOT/"dataset/data/prepared/memory-microstudy.json")
-    plan=build_retrieval_manifest(pack,chunk_size=20,top_k=5)
+    pack_path=args.dataset_pack if args.dataset_pack.is_absolute() else ROOT/args.dataset_pack
+    pack=load_pack(pack_path.resolve())
+    plan=build_retrieval_manifest(pack,chunk_size=args.chunk_size,top_k=args.top_k)
     write_json(directory/"dataset-pack.json",pack);write_json(directory/"plan.json",plan)
     pack_hash = plan["dataset_pack_sha256"]
     with ObservationRecorder(directory/"observability.jsonl",run_id=args.run_id,dataset_pack_sha256=pack_hash) as recorder:

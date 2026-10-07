@@ -27,7 +27,7 @@ CL-bench 两版均为作者的 [evaluation-only 许可](https://huggingface.co/d
 
 `python -m dataset.survey --include-m` 扫描新下载的完整来源，输出 `data/research/survey.json` 并校验 receipt；含 Parquet 的研究使用 `benchmark/requirements-research.txt` 的隔离环境依赖。CL-bench 全量有 621 题可按现有规则拆分，1,278 题边界未认证；Life 405 题均可拆分。它们尚未进行完整方法评分。
 
-`python -m dataset.research_cases` 重建五个研究包：LongMemEval 三题完整 S 历史、PersonaMem-v2 两人完整 32K 历史、MemoryAgentBench 一题完整 455 事实、PersonaMem-v3 两题严格时间切片，以及六条件短片段实验。MAB/v3 当前是限定研究切片，未实现通用全量评测适配。
+`python -m dataset.research_cases` 重建六个研究包：LongMemEval 七题完整 S 历史、PersonaMem-v2 两人完整 32K 历史、MemoryAgentBench 一题完整 455 事实、PersonaMem-v3 两题严格时间切片、六条件短片段实验，以及跨数据集 Mem0 诊断切片。MAB/v3 当前是限定研究切片，未实现通用全量评测适配。
 
 LongMemEval 的 `YYYY/MM/DD (Weekday) HH:MM` 日期原先未被解析，本轮已修复，保留 source_date 和无时区的归一化假设。旧 pack 需要重建。PersonaMem-v3 按同 persona 且早于提问时刻筛选；去掉顶层和嵌套生成标签，保留独立 user_message 中的记忆限制。详细范围见[研究记录](../docs/doing/2026-10-07-dataset-research.md)。
 

@@ -8,7 +8,8 @@
 | 2026-10-05 | [案例库迁移与可复用展示](./2026-10-05-case-library-viewer.md) | done：根目录 casestudies、同源网页/会话视图、手动下载入口；不维护页面选择进度 |
 | 2026-10-05 | [统一可视化与观测接口](./2026-10-05-research-visualization.md) | done：四视角、来源样本与 API trace、版本化内部观测接口；实际二期埋点和方法实验待做 |
 | 2026-10-07 | [Hugging Face 数据重试与核验](./2026-10-07-huggingface-retry.md) | done：LongMemEval、CL-bench、BEAM、MemoryAgentBench、PersonaMem-v2/v3 缺口取得或核验；大包按范围暂不全量转 pack |
-| 2026-10-07 | [全量数据研究与记忆案例](./2026-10-07-dataset-research.md) | done：全量结构、5 个研究包、16 个案例、BM25 与 Mem0 六条件实测、五视角展示 |
-| 2026-10-07 | [研究基础设施闭环](./2026-10-07-research-infrastructure.md) | done：20 个案例、切片运行、标准产物、8 条持久评注、四视角联动与设计检查合并 |
+| 2026-10-07 | [全量数据研究与记忆案例](./2026-10-07-dataset-research.md) | done：全量结构、6 个研究包、26 个案例、BM25 与 Mem0 六条件实测、五视角展示 |
+| 2026-10-07 | [研究基础设施闭环](./2026-10-07-research-infrastructure.md) | done：26 个案例、切片运行、标准产物、持久评注、四视角联动与设计检查合并 |
+| 2026-10-08 | [Add/Search 记忆研究调研综述](./2026-10-08-memory-research-survey.md) | done：跨数据集难点归纳、6 个 Mem0 切片、BEAM 冲突重跑与 AM-Link 设计建议 |
 
 各计划只使用允许获取的公开来源。实施产物、数据许可与限制以各计划和数据目录说明为准。

@@ -127,6 +127,58 @@ def persona3_cases():
     return result
 
 
+def broad_mem0_slices():
+    """Small source-only slices spanning several difficult memory behaviours.
+
+    This is deliberately a diagnostic pack rather than a benchmark: each record
+    keeps one task and the catalog-selected source turns only.  Gold annotations
+    stay on the task side and are never sent to Mem0.  The resulting pack is
+    ignored under ``dataset/data/prepared`` and can be rebuilt before a bounded
+    provider experiment.
+    """
+    from dataset.pack import load_pack
+    from dataset.selection import select_pack
+
+    specs = [
+        ("dataset/data/prepared/longmemeval-research.json", "gpt4_d84a3211", "question",
+         ["answer_2880eb6c_2:2", "answer_2880eb6c_4:6", "answer_2880eb6c_1:6", "answer_2880eb6c_3:8"]),
+        ("dataset/data/prepared/longmemeval-research.json", "099778bb", "question",
+         ["answer_80d6d664_2:2", "answer_80d6d664_1:0"]),
+        ("dataset/data/prepared/longmemeval-research.json", "0edc2aef", "question",
+         ["answer_d586e9cd:0", "answer_d586e9cd:2"]),
+        ("dataset/data/prepared/locomo-full.json", "conv-42", "qa-1",
+         ["D1:10", "D1:11", "D1:12", "D3:4", "D4:9", "D10:9", "D20:2"]),
+        ("dataset/data/prepared/beam-update-cases.json", "2", "knowledge_update:0", ["0:32", "0:66"]),
+        ("dataset/data/prepared/beam-update-cases.json", "2", "contradiction_resolution:0", ["0:32", "0:70"]),
+    ]
+    records = []
+    inputs = {}
+    for relative, record_id, task_id, turns in specs:
+        path = ROOT / relative
+        source = load_pack(path)
+        selected = select_pack(source, record_ids=[record_id], task_ids=[task_id],
+                               scope="anchors", turn_ids=turns, case_id=None,
+                               dataset_key=source["dataset"]["id"])
+        record = selected["records"][0]
+        # Keep IDs stable across future runs while making the source pack clear.
+        record["id"] = f"{source['dataset']['id']}:{record_id}:{task_id}"
+        record.setdefault("attributes", {})["source_record_id"] = record_id
+        record["attributes"]["diagnostic_slice"] = True
+        records.append(record)
+        inputs[relative] = source["preparation"]["input"]["sha256"]
+    return {
+        "schema_version": 1,
+        "dataset": {"id": "mem0-broad-slices", "name": "cross-dataset bounded Mem0 slices"},
+        "preparation": {
+            "input": {"file": "multiple prepared research packs", "sha256": sha256_file(OUT / "longmemeval-research.json")},
+            "selection": {"scope": "catalog-selected source anchors; one task per record; diagnostic only",
+                           "source_inputs": inputs, "cases": [r["id"] for r in records]},
+            "producer": "dataset.research_cases.broad_mem0_slices.v1",
+        },
+        "records": records,
+    }
+
+
 def main():
     longmem = build_longmemeval(dataset_id="longmemeval-s", path=RAW / "longmemeval/longmemeval_s_cleaned.json",
         question_ids=LM_IDS, question_limit=None, session_limit=None, question_type=None)
@@ -137,7 +189,8 @@ def main():
     write_pack(OUT / "memory-microstudy.json", microstudy(longmem, persona))
     write_pack(OUT / "memoryagentbench-cr-research.json", mab_case())
     write_pack(OUT / "personamem-v3-research.json", persona3_cases())
-    print("5 research packs built; controlled excerpts are separate from full histories")
+    write_pack(OUT / "memory-broad-slices.json", broad_mem0_slices())
+    print("6 research packs built; controlled excerpts are separate from full histories")
 
 
 if __name__ == "__main__":

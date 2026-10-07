@@ -18,10 +18,10 @@
 
 ## 已实现
 
-- done：20 个案例的完整记录选择与请求计划全部校验通过；`full / anchors / window` 和严格时间切片，遗漏证据默认报错，显式部分实验不评分。
+- done：原有 20 个案例的完整记录选择与请求计划全部校验通过；本轮新增 6 个案例也已通过同一校验；`full / anchors / window` 和严格时间切片，遗漏证据默认报错，显式部分实验不评分。
 - done：PersonaMem 字符串形式的消息问题解包，保留来源文本；相对 history_root 路径统一解析。
 - done：四视角界面，设计检查合并进理论；中文字段/编码解释、评估侧隔离、结构化阅读、必要事实与来源位置、理论/样本/实际运行相互跳转。
-- done：16 → 20 个案例，新增事件去重、跨会话比例、跨场景偏好和金标准疑点；复核记录见 [LM04–07](../../casestudies/longmemeval-aggregation-preference-audit.md)。
+- done：16 → 20 个案例，新增事件去重、跨会话比例、跨场景偏好和金标准疑点；2026-10-08 再扩展到 26 个，加入交集、顺序、条件分支、隐私与反馈；复核记录见 [LM04–07](../../casestudies/longmemeval-aggregation-preference-audit.md) 和新增案例文档。
 - done：本地 BM25 方法提供 Add/store/Search/retrieve 真实 span、来源链接、候选排序和选择；支持 HTTP 边界与 native 工厂接入。
 - done：可显示产物接口 `amlink.artifact.v1`，路径/大小/哈希校验；未声明的 native 任意结构不自动展示。
 - done：运行自动登记和页面更新；导入既有 Mem0 的真实 Answer/Eval；评注按运行/查询/阶段/span 与 pack/trace 哈希绑定，支持追加修订。

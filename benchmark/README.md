@@ -63,7 +63,7 @@ flowchart LR
 .\.venv\Scripts\python.exe -m benchmark run --dataset-pack dataset/data/prepared/locomo-smoke.json --target mem0-library --system-name Mem0 --system-version "<installed-version>"
 ```
 
-2026-10-07 已在忽略的 `benchmark/data/research-env` 安装 Mem0 2.2.1；固定依赖见 `requirements-research.txt`，未改根虚拟环境。经用户明确授权，`microstudy.py` 六条件实测完成：41 次模型请求、371,647 输入字符，0 请求失败，费用未知。上限为 100 次/50 万字符；模型输入输出、用量、Add 后快照和本地诊断 Answer 已保存。通用来源专用 rubric judge 仍未实现。短片段由证据辅助选择，不能冒充完整历史难度；日期有/无是显式条件。参见[逐例分析](../casestudies/mem0-microstudy.md)与[研究记录](../docs/doing/2026-10-07-dataset-research.md)。
+2026-10-08 已在忽略的 `benchmark/data/research-env` 安装 Mem0 2.2.1；固定依赖见 `requirements-research.txt`，未改根虚拟环境。经用户明确授权，`microstudy.py` 支持自定义诊断 pack；六条件实测保留，新增 6 个跨数据集切片（49 次模型请求、106,607 输入 tokens）及 1 个 BEAM 冲突重跑（5 次、9,088 输入 tokens）。费用未知。上限为 100 次/50 万字符；模型输入输出、用量、Add 后快照和本地诊断 Answer 已保存。通用来源专用 rubric judge 仍未实现。短片段由证据辅助选择，不能冒充完整历史难度；日期有/无是显式条件。参见[逐例分析](../casestudies/mem0-microstudy.md)与[研究记录](../docs/doing/2026-10-07-dataset-research.md)。
 
 Mem0 的默认实例可能访问外部模型，由执行者的包配置决定。通用 package/REST adapter 不传逐消息 timestamp，也没有服务端 request_id 幂等语义，报告会标明差异。不能把适配后的 success 当作内部完整记忆证明。
 
