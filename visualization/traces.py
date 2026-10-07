@@ -27,6 +27,7 @@ def read_run(path: Path, kind: str, max_queries: int = 20) -> dict:
     if kind == "experiment" and any(word in str(system).lower() for word in ("fixture", "test-only")):
         raise ValueError("test fixture cannot be labeled experiment")
     tasks = {(r["id"], t["id"]): t for r in pack["records"] for t in r["tasks"]}
+    record_attributes = {r["id"]: r.get("attributes", {}) for r in pack["records"]}
     planned = {(c["id"], s["id"]): s for c in plan["cases"] for s in c["searches"]}
     add_plans = {(c["id"], a["request_id"]): a for c in plan["cases"] for a in c["adds"]}
     report_queries = {(q["case_id"], q["search_id"]): q for q in report["queries"]}
@@ -81,6 +82,8 @@ def read_run(path: Path, kind: str, max_queries: int = 20) -> dict:
                     "matched_targets": matches[i] if i < len(matches) else [], "rank": i+1}
                     for i, r in enumerate(event["results"])],
                 "answer": None, "evaluation": None, "steps": []})
+            queries[-1]["research_case"] = {k: record_attributes[ref["record_id"]][k]
+                for k in ("dataset_key", "case_id", "variant") if k in record_attributes[ref["record_id"]]}
         else:
             raise ValueError("unsupported trace event; explicit adapter required")
     if seen != set(report_queries):

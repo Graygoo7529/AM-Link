@@ -3,7 +3,7 @@
     <label class="form-label">数据集<select class="form-select" id="ar-dataset"></select></label>
     <label class="form-label">研究视角<select class="form-select" id="ar-lens">
       <option value="composition">① 数据构成</option><option value="sample">② 样本与标注</option>
-      <option value="theory">③ 理论链路</option><option value="observed">④ 运行观测</option>
+      <option value="theory">③ 理论链路</option><option value="observed">④ 运行观测</option><option value="design">⑤ 设计检查</option>
     </select></label>
   </div>
   <div id="ar-status" class="text-small text-muted" aria-live="polite"></div>
@@ -13,6 +13,13 @@
     <label class="form-label" id="ar-query-label">实际问题<select class="form-select" id="ar-query"></select></label>
   </div>
   <section id="ar-composition" aria-label="数据构成">
+    <h3 id="ar-purpose"></h3>
+    <div class="viz-row" id="ar-census"></div>
+    <figure id="ar-distribution" aria-label="全量原始数据构成">
+      <figcaption id="ar-distribution-title"></figcaption>
+      <div id="ar-distribution-bars"></div>
+    </figure>
+    <div id="ar-census-note" class="text-small"></div>
     <h3>原始数据的组成</h3>
     <ol class="ar-chain" id="ar-layers"></ol>
     <div id="ar-unit"></div>
@@ -23,6 +30,7 @@
     <div class="text-small" id="ar-stats"></div>
     <div class="viz-row ar-links" id="ar-links"></div>
     <div class="text-small text-muted" id="ar-basis"></div>
+    <details><summary>结构统计的来源与范围</summary><pre class="ar-text" id="ar-census-source"></pre></details>
   </section>
   <section id="ar-sample" hidden aria-label="样本与标注">
     <label class="form-label">原始字段<select class="form-select" id="ar-field"></select></label>
@@ -55,6 +63,7 @@
       <div class="ar-relation"><span id="ar-relation-label"></span><div id="ar-mark" aria-hidden="true"></div></div>
       <div class="ar-evidence-source"><div class="text-small text-muted" id="ar-right-id"></div><div id="ar-right"></div></div>
     </figure>
+    <ol id="ar-evidence-path" class="ar-chain" aria-label="完整证据路径"></ol>
     <div class="viz-row ar-steps" aria-label="理论阶段">
       <button class="btn" type="button" data-stage="add" aria-pressed="true">Add</button><span aria-hidden="true">→</span>
       <button class="btn" type="button" data-stage="search" aria-pressed="false">Search</button><span aria-hidden="true">→</span>
@@ -65,6 +74,19 @@
     <div class="text-small text-muted" id="ar-theory-source"></div>
   </section>
   <section id="ar-observed" hidden aria-label="运行观测">
+    <div id="ar-baseline">
+      <h3>实际运行 · 原文 BM25 检索</h3>
+      <div id="ar-baseline-scope" class="text-small"></div>
+      <div class="table-responsive"><table class="table table-sm">
+        <thead id="ar-baseline-head"></thead><tbody id="ar-baseline-rows"></tbody>
+      </table></div>
+      <div id="ar-baseline-limit" class="text-small text-muted"></div>
+      <hr>
+    </div>
+    <details id="ar-microstudy" class="ar-detail"><summary>Mem0 六条件实测概览</summary>
+      <div id="ar-microstudy-meta" class="text-small"></div>
+      <div class="table-responsive"><table class="table table-sm"><thead><tr><th>条件</th><th>可见结果</th><th>判断边界</th></tr></thead><tbody id="ar-microstudy-rows"></tbody></table></div>
+    </details>
     <div id="ar-run-empty" class="text-muted"></div>
     <div id="ar-run-body">
       <div id="ar-run-kind" class="ar-run-kind"></div>
@@ -80,6 +102,7 @@
       <div id="ar-observed-add" hidden>
         <label class="form-label">该问题之前的写入<select class="form-select" id="ar-add"></select></label>
         <div id="ar-add-meta" class="ar-detail"></div><div id="ar-add-sources" class="text-small"></div>
+        <div id="ar-memory-meta" class="ar-detail"></div><pre id="ar-memory-text" class="ar-text"></pre>
       </div>
       <div id="ar-observed-search">
         <div id="ar-search-meta" class="text-small"></div>
@@ -101,6 +124,12 @@
       <details class="ar-detail"><summary>来源、可见边界与公开步骤</summary><pre class="ar-text" id="ar-run-provenance"></pre></details>
     </div>
   </section>
+  <section id="ar-design" hidden aria-label="设计检查">
+    <h3>让失败能够定位到具体一步</h3>
+    <div id="ar-design-case"></div>
+    <div class="table-responsive"><table class="table"><thead><tr><th>阶段</th><th>需要观测的事实</th></tr></thead><tbody id="ar-checkpoints"></tbody></table></div>
+    <div class="text-small">按相同 pack、相同问题和相同证据预算比较；来源召回、完整证据、实际回答、延迟与用量分别记录。未采集保留为未知。</div>
+  </section>
   <div class="text-small text-muted ar-footer" id="ar-footer"></div>
 </div>
 <style>
@@ -120,9 +149,13 @@
   #aml-research .ar-parts,#aml-research .ar-steps,#aml-research .ar-links {margin:14px 0;}
   #aml-research .ar-detail {margin:14px 0;}
   #aml-research .ar-footer {margin-top:20px;}
+  #aml-research .ar-bar-row {display:grid;grid-template-columns:minmax(130px,1fr) minmax(70px,2fr) auto;align-items:center;gap:12px;margin:10px 0;}
+  #aml-research #ar-distribution {margin:18px 0;}
+  #aml-research #ar-census {gap:18px;margin:12px 0;}
   @media(max-width:520px){
     #aml-research .ar-compare,#aml-research .ar-route,#aml-research .ar-evidence {grid-template-columns:1fr;gap:10px;}
     #aml-research .ar-route>div:nth-child(even) {justify-self:center;transform:rotate(90deg);}
+    #aml-research .ar-bar-row {grid-template-columns:minmax(100px,1fr) minmax(50px,1fr) auto;gap:8px;}
   }
 </style>
 <script>
@@ -132,36 +165,58 @@
   const el=id=>root.querySelector('#ar-'+id);
   const {catalog,profiles}=bundle;
   const roles={history:['历史','Add → Search','--viz-series-1'],task:['任务输入','Search → Answer','--viz-series-2'],annotations:['评估标注','仅 Eval / 研究复核','--viz-series-3'],auxiliary:['辅助材料','默认不进入 Add','--viz-series-4'],metadata:['身份与类别','分组 / 对齐来源','--viz-series-5']};
-  let selected={dataset:'locomo',lens:'composition',case:'l2',field:0,part:'history',stage:'add',observed:'search'};
+  let selected={dataset:'longmem',lens:'composition',case:'lm1',field:0,part:'history',stage:'add',observed:'search'};
   const txt=(id,value)=>el(id).textContent=value==null?'未记录':String(value);
   const hide=(id,value)=>el(id).hidden=value;
   const options=(id,items,value)=>{const node=el(id);node.replaceChildren();for(const item of items)node.add(new Option(item.label,item.value));if(items.some(x=>String(x.value)===String(value)))node.value=value;return node.value;};
   const chain=(id,items)=>{el(id).replaceChildren();items.forEach(label=>{const li=document.createElement('li');li.textContent=label;el(id).append(li);});};
   const pressed=(attribute,value)=>root.querySelectorAll('button['+attribute+']').forEach(b=>b.setAttribute('aria-pressed',String(b.getAttribute(attribute)===value)));
-  const availableRuns=()=>bundle.runs.filter(r=>r.dataset_id===profiles.datasets[selected.dataset].dataset_id);
+  const availableRuns=()=>bundle.runs.map(r=>({...r,queries:r.queries.filter(q=>r.dataset_id===profiles.datasets[selected.dataset].dataset_id||q.research_case?.dataset_key===selected.dataset)})).filter(r=>r.queries.length);
+  const queryLabel=q=>(catalog.cases[q.research_case?.case_id]?.name||q.record_id)+' / '+q.record_id;
   const currentRun=()=>availableRuns().find(r=>r.run_id===el('run').value);
   const currentQuery=()=>currentRun()?.queries.find(q=>q.search_id===el('query').value);
+  function cells(parent,values,header=false){const row=document.createElement('tr');for(const value of values){const cell=document.createElement(header?'th':'td');cell.textContent=value;row.append(cell);}parent.append(row);}
+  function drawResearch(){const r=bundle.research.datasets[selected.dataset];hide('distribution',!r);hide('census',!r);txt('purpose',r?.purpose||'从来源、样本和证据出发理解记忆任务');txt('census-note',r?.note||'');el('census').replaceChildren();
+    if(r){for(const [label,value] of r.counts){const n=document.createElement('span');n.textContent=`${label}：${Number(value).toLocaleString()}`;el('census').append(n);}
+      txt('distribution-title',r.distribution.title);el('distribution-bars').replaceChildren();const total=r.distribution.values.reduce((sum,x)=>sum+x[1],0);
+      for(const [label,value] of r.distribution.values){const row=document.createElement('div');row.className='ar-bar-row';const name=document.createElement('span');name.textContent=label;
+        const track=document.createElement('div');track.className='progress';track.setAttribute('role','progressbar');track.setAttribute('aria-label',label);track.setAttribute('aria-valuenow',String(value));track.setAttribute('aria-valuemin','0');track.setAttribute('aria-valuemax',String(total));
+        const fill=document.createElement('div');fill.className='progress-bar';fill.style.width=(100*value/total)+'%';track.append(fill);const count=document.createElement('span');count.className='tabular-nums';count.textContent=value.toLocaleString();row.append(name,track,count);el('distribution-bars').append(row);}
+    }
+    txt('census-source',r?`${bundle.research.date} 原始文件全量结构扫描；单位以各图标题为准。\n`+JSON.stringify(r.sources,null,2):'该来源沿用已核验案例目录；本轮未重新扫描原始文件。');
+    el('checkpoints').replaceChildren();for(const row of bundle.research.checkpoints)cells(el('checkpoints'),row);
+    const c=catalog.cases[selected.case];txt('design-case',c?`${c.name}：${c.trap}`:'先核对历史输入边界，再选择可运行的任务。');
+    const b=bundle.research.lexical;hide('baseline',!['longmem','mab'].includes(selected.dataset));el('baseline-head').replaceChildren();el('baseline-rows').replaceChildren();
+    if(selected.dataset==='longmem'){txt('baseline-scope',`完整 S 历史；470 道可回答题，30 道拒答题不计入召回。任一命中 ${b.summary.any5}/470；完整证据 ${b.summary.complete5}/470。`);
+      cells(el('baseline-head'),['题型 / 分母','任一 @5','完整 @5','完整 @10'],true);
+      for(const [key,value] of Object.entries(b.by_type))cells(el('baseline-rows'),[`${b.type_labels[key]} / ${value.questions}`,value.any5,value.complete5,value.complete10]);
+      txt('baseline-limit','按作者标记的不同证据正文计算；不等于语义支持或问答准确率。无模型调用，无 Answer/Eval；也不是 Mem0 或官方成绩。');
+    }else if(selected.dataset==='mab'){txt('baseline-scope','M01：完整 455 条事实，单次 BM25 top-5；必要路径由人工核对。');cells(el('baseline-head'),['需要的证据','是否在 top-5'],true);for(const id of b.mab.required_ids)cells(el('baseline-rows'),[id,b.mab.top5_ids.includes(id)?'已返回':'未返回']);txt('baseline-limit','第一跳能找到，配偶与国籍两跳缺失。扩大相似片段数量不等于完成关系遍历；本次未运行回答模型。');}
+    const m=bundle.research.microstudy;const cases=(m?.cases||[]).filter(c=>c.dataset_key===selected.dataset);hide('microstudy',!cases.length);el('microstudy-rows').replaceChildren();
+    if(cases.length){txt('microstudy-meta',`Mem0 OSS 2.2.1 + gpt-4o-mini；全运行 ${m.calls} 次模型请求。来源短片段，无干扰历史；${m.reviewer}。`);for(const c of cases)cells(el('microstudy-rows'),[c.record_id+' · '+c.label,c.finding,c.limit]);}
+  }
   function showExcerpt(textId,limitId,value){txt(textId,value?.text||'无记录');if(limitId)txt(limitId,value?`原长度 ${value.total_chars} 字符 · ${value.omitted?'仅展示首尾摘录；中间已省略':'完整展示该单元'} · 字符范围 ${JSON.stringify(value.ranges)}`:'');}
   function drawField(){const field=profiles.datasets[selected.dataset].fields[Number(el('field').value)||0];const role=roles[field[1]];txt('field-meaning',field[2]);txt('destination',role[0]);txt('audience',role[1]);txt('field-note',field[3]);root.querySelectorAll('.ar-route>div:nth-child(odd)').forEach(n=>n.style.borderColor='var('+role[2]+')');}
   function drawSample(){const sample=bundle.local.samples[selected.case];hide('sample-body',!sample);hide('sample-empty',!!sample);if(!sample){txt('sample-empty',bundle.scope==='local'?'此来源暂无绑定的真实案例摘录；字段说明不代表取得了原文。':'公共概览未嵌入原文；本地扩展版可查看真实 pack 摘录。');return;}
     txt('sample-id',`${sample.record_id} / ${sample.task_id} · 展示 ${sample.shown_unit_count} / ${sample.history_unit_count} 个历史单元`);
     pressed('data-part',selected.part);hide('turn-label',selected.part!=='history');
-    if(selected.part==='history'){if(!sample.units.some(x=>x.id===el('turn').value))options('turn',sample.units.map(u=>({value:u.id,label:u.id})));const unit=sample.units.find(x=>x.id===el('turn').value)||sample.units[0];txt('source-meta',`pack 来源投影 · session ${unit.session} · ${unit.speaker||'主体见正文'} · ${unit.timestamp||'独立时间字段未提供'}${unit.source_pointer?' · 原文指针 '+unit.source_pointer:''}`);showExcerpt('source-text','source-limit',unit.content);}
+    if(selected.part==='history'){if(!sample.units.some(x=>x.id===el('turn').value))options('turn',sample.units.map(u=>({value:u.id,label:u.id})));const unit=sample.units.find(x=>x.id===el('turn').value)||sample.units[0];txt('source-meta',`pack 来源投影 · session ${unit.session} · ${unit.speaker||'主体见正文'} · ${unit.timestamp?new Date(unit.timestamp).toISOString():'独立时间字段未提供'}${unit.source_pointer?' · 原文指针 '+unit.source_pointer:''}`);showExcerpt('source-text','source-limit',unit.content);}
     else {txt('source-meta',selected.part==='annotations'?'评估侧标注：'+sample.annotation_keys.join('、')+'；不进入 Add/Search 请求':'独立任务输入');showExcerpt('source-text','source-limit',sample[selected.part]);}
   }
-  function drawTheory(){const c=catalog.cases[selected.case];hide('theory',selected.lens!=='theory');if(!c){txt('question','该数据源尚无人工分析案例');root.querySelector('.ar-evidence').hidden=true;root.querySelector('.ar-steps').hidden=true;['stage-content','trap','theory-source'].forEach(id=>txt(id,''));return;}
+  function drawTheory(){const c=catalog.cases[selected.case];hide('theory',selected.lens!=='theory');if(!c){txt('question','该数据源尚无人工分析案例');root.querySelector('.ar-evidence').hidden=true;root.querySelector('.ar-steps').hidden=true;hide('evidence-path',true);['stage-content','trap','theory-source'].forEach(id=>txt(id,''));return;}
     root.querySelector('.ar-evidence').hidden=false;root.querySelector('.ar-steps').hidden=false;
     for(const [id,key] of Object.entries({'question':'q','left-id':'leftId','left':'left','right-id':'rightId','right':'right','relation-label':'link','mark':'mark','trap':'trap','theory-source':'source'}))txt(id,c[key]);
     pressed('data-stage',selected.stage);txt('stage-content',c[selected.stage]);
+    chain('evidence-path',c.path||[]);hide('evidence-path',!c.path);
   }
   function drawRun(){const r=currentRun(),q=currentQuery();hide('run-body',!q);hide('run-empty',!!q);if(!q){txt('run-empty','尚未导入此数据集的运行轨迹。没有记录不等于零分；理论示意不会填成实测。');return;}
-    txt('run-kind',r.kind==='fixture'?'测试服务的真实接口记录 · 仅验证管线':'目标系统运行记录 · 来源为导入报告');
+    txt('run-kind',r.kind==='fixture'?'测试服务的真实接口记录 · 仅验证管线':(q.research_case?.variant?'受控短片段实验 · '+q.research_case.variant+' · 非完整历史测评':'目标系统运行记录 · 来源为导入报告'));
     txt('run-meta',`${r.system.name} / ${r.system.version} · ${r.run_id} · 展示 ${r.shown_queries}/${r.total_queries} 题`);
     txt('run-question',q.query);
     chain('run-chain',[`${q.adds.filter(a=>a.ok).length}/${q.adds.length} 次 Add 成功`,q.ok?`${q.results.length} 条 Search 结果`:'Search 失败',q.answer?'Answer 已导入':'Answer 未记录',q.evaluation?'评估已导入':'回答质量未评分']);
     pressed('data-observed',selected.observed);for(const stage of ['add','search','answer','internal'])hide('observed-'+stage,selected.observed!==stage);
     options('add',q.adds.map(a=>({value:a.id,label:`trace 行 ${a.line} · ${a.ok?'成功':'失败'} · ${a.message_count} 条消息`})),el('add').value);drawAdd();
-    txt('search-meta',`trace 行 ${q.line} · HTTP ${q.status_code??'无响应'} · ${q.latency_ms} ms · top_k=${q.top_k}${q.error?' · '+q.error:''}`);
+    txt('search-meta',`trace 行 ${q.line} · 状态 ${q.status_code??'无响应'} · ${q.latency_ms} ms · top_k=${q.top_k}${q.error?' · '+q.error:''}`);
     txt('matching',q.grading==='ungraded'?'无 gold evidence，不计召回分数。':`字面证据匹配：${q.target_ranks.filter(v=>v!==null).length}/${q.target_ranks.length}；不等于语义支持或答案正确。`);
     options('result',q.results.map(r=>({value:r.rank,label:`第 ${r.rank} 条 · ${r.matched_targets.length?'字面匹配 '+r.matched_targets.length+' 个来源目标':'无字面匹配'}`})),el('result').value);drawResult();
     txt('expected',q.expected.length?q.expected.map(e=>JSON.stringify(e.source)+'\n'+e.content.text).join('\n\n'):'无来源标注');
@@ -180,20 +235,22 @@
     chain('span-links',s.links.map(l=>`${l.from_id} → ${relation[l.relation]} → ${l.to_id}`));
     txt('span-data',JSON.stringify({inputs:s.inputs,outputs:s.outputs,candidates:s.candidates,model:s.model,error:s.error},null,2));
   }
-  function drawAdd(){const q=currentQuery();if(!q)return;const a=q.adds.find(a=>a.id===el('add').value);txt('add-meta',a?`${a.ok?'成功':'失败'} · HTTP ${a.status_code??'无响应'} · ${a.latency_ms} ms · ${a.message_count} 条消息`:'该问题前没有写入记录');txt('add-sources',a?`${a.id}\n来源：`+a.sources.map(s=>`${s.turn_id}[${s.char_start}:${s.char_end}]`).join('、'):'');}
+  function drawAdd(){const q=currentQuery();if(!q)return;const a=q.adds.find(a=>a.id===el('add').value);txt('add-meta',a?`${a.ok?'成功':'失败'} · 状态 ${a.status_code??'无响应'} · ${a.latency_ms} ms · ${a.message_count} 条消息`:'该问题前没有写入记录');txt('add-sources',a?`${a.id}\n来源：`+a.sources.map(s=>`${s.turn_id}[${s.char_start}:${s.char_end}]`).join('、'):'');
+    const snapshot=a?.memory_snapshot;hide('memory-text',!snapshot);txt('memory-meta',snapshot?`写入后可读取的记忆：${snapshot.count} 条；本次变化：${snapshot.changes.map(c=>c.event).join('、')||'无变更'} · ${snapshot.artifact}`:'未采集写入后的记忆正文');txt('memory-text',snapshot?snapshot.memories.map((m,i)=>`${i+1}. ${m.content.text}`).join('\n\n'):'');}
   function drawResult(){const q=currentQuery();if(!q)return;const result=q.results.find(r=>String(r.rank)===el('result').value);showExcerpt('result-text',null,result?.content);txt('result-source',result?`${result.id} · ${result.content.omitted?'正文仅展示首尾摘录':'正文完整展示'} · 无匹配不证明检索失败`:(q.ok?'实际返回空集':'请求失败；不能等同无结果'));}
   function draw(){const d=catalog.datasets[selected.dataset],p=profiles.datasets[selected.dataset];el('dataset').value=selected.dataset;el('lens').value=selected.lens;
     selected.case=options('case',d.cases.map(k=>({value:k,label:catalog.cases[k].name})),selected.case);
-    hide('case-label',!['sample','theory'].includes(selected.lens)||d.cases.length===0);
-    hide('run-label',selected.lens!=='observed');hide('query-label',selected.lens!=='observed');
-    for(const lens of ['composition','sample','theory','observed'])hide(lens,selected.lens!==lens);
+    hide('case-label',!['sample','theory','design'].includes(selected.lens)||d.cases.length===0);
+    hide('run-label',selected.lens!=='observed'||!availableRuns().length);hide('query-label',selected.lens!=='observed'||!availableRuns().length);
+    for(const lens of ['composition','sample','theory','observed','design'])hide(lens,selected.lens!==lens);
+    drawResearch();
     txt('status',d.status);chain('layers',p.layers);txt('unit',p.unit);txt('raw',d.raw);txt('prepared',d.prepared);txt('basis',p.basis);
-    const stats=bundle.local.stats[selected.dataset];txt('stats',stats?`当前 pack：${stats.records} 记录 / ${stats.sessions} 分区或会话 / ${stats.units} 来源单元 / ${stats.tasks} 任务；范围以 ${stats.pack_path} 为准。`:'统计范围来自已核对的案例目录；本视图未重新扫描完整原始文件。');
+    const stats=bundle.local.stats[selected.dataset];txt('stats',stats?`当前 pack：${stats.records} 记录 / ${stats.sessions} 分区或会话 / ${stats.units} 来源单元 / ${stats.tasks} 任务；范围以 ${stats.pack_path} 为准。`:(bundle.research.datasets[selected.dataset]?'上方构成来自原始文件扫描；此版本未嵌入本机 pack 摘录。':'统计范围来自已核对的案例目录；本轮未重新扫描该来源。'));
     el('links').replaceChildren();for(const link of d.links||[]){const a=document.createElement('a');a.textContent=link.label;a.href=link.url;a.target='_blank';a.rel='noopener noreferrer';el('links').append(a);}
     options('field',p.fields.map((f,i)=>({value:i,label:f[0]})),selected.field);drawField();
     options('turn',(bundle.local.samples[selected.case]?.units||[]).map(u=>({value:u.id,label:u.id})));drawSample();drawTheory();
     const rs=availableRuns();const runId=options('run',rs.map(r=>({value:r.run_id,label:r.system.name+' · '+(r.kind==='fixture'?'测试服务':'目标实验')})),el('run').value);
-    options('query',(rs.find(r=>r.run_id===runId)?.queries||[]).map(q=>({value:q.search_id,label:q.record_id+' / '+q.task_id})),el('query').value);drawRun();
+    options('query',(rs.find(r=>r.run_id===runId)?.queries||[]).map(q=>({value:q.search_id,label:queryLabel(q)})),el('query').value);drawRun();
     txt('footer',`${bundle.updated} 内容快照 · ${bundle.scope==='local'?'本机来源摘录与可选运行记录':'公共结构与理论案例'} · 当前视图不执行模型`);
   }
   options('dataset',Object.entries(catalog.datasets).map(([key,d])=>({value:key,label:d.name})),selected.dataset);
@@ -205,7 +262,7 @@
   root.querySelectorAll('[data-part]').forEach(b=>b.addEventListener('click',()=>{selected.part=b.dataset.part;drawSample();}));
   root.querySelectorAll('[data-stage]').forEach(b=>b.addEventListener('click',()=>{selected.stage=b.dataset.stage;drawTheory();}));
   root.querySelectorAll('[data-observed]').forEach(b=>b.addEventListener('click',()=>{selected.observed=b.dataset.observed;drawRun();}));
-  el('run').addEventListener('change',()=>{const r=currentRun();options('query',r.queries.map(q=>({value:q.search_id,label:q.record_id+' / '+q.task_id})));drawRun();});
+  el('run').addEventListener('change',()=>{const r=currentRun();options('query',r.queries.map(q=>({value:q.search_id,label:queryLabel(q)})));drawRun();});
   el('query').addEventListener('change',drawRun);el('result').addEventListener('change',drawResult);el('add').addEventListener('change',drawAdd);
   el('span').addEventListener('change',drawSpan);
   draw();

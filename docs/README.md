@@ -12,7 +12,8 @@
 | 6 | [二期接入调研](./phase-2/integration-research.md) | 当前官方约定、变化与下一步 |
 | 7 | [数据集与 Add/Search 靶场实施](./doing/README.md) | 独立数据层、公开数据获取、靶场双向适配与可观测记录 |
 | 8 | [样本与记忆案例分析](../casestudies/README.md) | 持续积累真实案例、处理方法和可核验的实验经验 |
-| 9 | [统一研究可视化](../visualization/README.md) | 四视角、会话/网页复用、[可观测性标准接口](../benchmark/OBSERVABILITY.md) |
+| 9 | [统一研究可视化](../visualization/README.md) | 五视角、会话/网页复用、[可观测性标准接口](../benchmark/OBSERVABILITY.md) |
+| 10 | [从样本开始设计记忆](./phase-2/memory-design-workbench.md) | 用证据链、时间、归属和遗忘案例决定机制与观测点 |
 
 `private/` 仅本机存在：包含已授权保存的 SSH 账号、服务器环境快照和模型 Key。公开文档只记录接入方法。
 

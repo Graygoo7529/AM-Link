@@ -19,7 +19,7 @@ from dataset.pack import PACK_SCHEMA_VERSION, write_pack
 ROOT = Path(__file__).resolve().parent
 RAW_DIR = ROOT / "data" / "raw"
 CATALOG_PATH = ROOT / "catalog.json"
-BUILDER_VERSION = 4
+BUILDER_VERSION = 5
 CHUNK_READ_SIZE = 1024 * 1024
 SESSION_PATTERN = re.compile(r"^session_(\d+)$")
 DIALOG_ID_PATTERN = re.compile(r"D:?(\d+):(\d+)", re.IGNORECASE)
@@ -420,6 +420,8 @@ def _longmemeval_record(
                 "id": normalized_session_id,
                 "source_id": source_session_id,
                 "timestamp": session_timestamp,
+                "source_date": dates[session_index] if session_index < len(dates) else None,
+                "timestamp_basis": "source calendar date; timezone absent treated as UTC for normalization",
                 "turns": normalized_turns,
             }
         )
@@ -831,7 +833,10 @@ def _parse_timestamp(value: Any) -> int | None:
     try:
         parsed = datetime.fromisoformat(normalized)
     except ValueError:
-        return None
+        try:
+            parsed = datetime.strptime(value, "%Y/%m/%d (%a) %H:%M")
+        except ValueError:
+            return None
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return int(parsed.timestamp() * 1000)

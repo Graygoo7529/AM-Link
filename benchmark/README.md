@@ -29,7 +29,7 @@ flowchart LR
 | 缺失/歧义 | ScriptMem 缺真实历史、PersonaMem 历史未取得时拒绝回放；CL-bench 未分离的单轮 context/task 记入 exclusions。 |
 | 隔离与重试 | 每个 run 使用独立 user/request/session namespace；顺序回放；当前 profile 不自动重试。 |
 
-有证据标注的 LoCoMo/Refined 可做字面证据召回诊断；CL-bench/Life、BEAM 可先观察写入与检索结果。字面匹配会漏掉正确摘要/改写，不能直接作为 Mem0 等抽取式系统的最终质量排名。Answer/rubric judge 尚未实现；当前结果既不是各源原始 QA 分数，也不是比赛官方成绩。[接口依据](https://agentmemories.ai/api-guide)仅用于待测对象边界。
+有证据标注的 LoCoMo/Refined 可做字面证据召回诊断；CL-bench/Life、BEAM 可先观察写入与检索结果。字面匹配会漏掉正确摘要/改写，不能直接作为 Mem0 等抽取式系统的最终质量排名。通用 Answer/rubric judge 尚未实现（已有短片段诊断 Answer）；当前结果既不是各源原始 QA 分数，也不是比赛官方成绩。[接口依据](https://agentmemories.ai/api-guide)仅用于待测对象边界。
 
 ## 构建与查看环境
 
@@ -61,7 +61,18 @@ flowchart LR
 .\.venv\Scripts\python.exe -m benchmark run --dataset-pack dataset/data/prepared/locomo-smoke.json --target mem0-library --system-name Mem0 --system-version "<installed-version>"
 ```
 
-需要安装包并配置其模型/provider 后才能运行真实对照；本轮没有安装包或调用收费模型。Mem0 的默认实例可能访问外部模型，由执行者的包配置决定。当前 package/REST adapter 不传逐消息 timestamp，也没有服务端 request_id 幂等语义，报告会标明差异。不能把适配后的 success 当作内部完整记忆证明。
+2026-10-07 已在忽略的 `benchmark/data/research-env` 安装 Mem0 2.2.1；固定依赖见 `requirements-research.txt`，未改根虚拟环境。经用户明确授权，`microstudy.py` 六条件实测完成：41 次模型请求、371,647 输入字符，0 请求失败，费用未知。上限为 100 次/50 万字符；模型输入输出、用量、Add 后快照和本地诊断 Answer 已保存。通用来源专用 rubric judge 仍未实现。短片段由证据辅助选择，不能冒充完整历史难度；日期有/无是显式条件。参见[逐例分析](../casestudies/mem0-microstudy.md)与[研究记录](../docs/doing/2026-10-07-dataset-research.md)。
+
+Mem0 的默认实例可能访问外部模型，由执行者的包配置决定。通用 package/REST adapter 不传逐消息 timestamp，也没有服务端 request_id 幂等语义，报告会标明差异。不能把适配后的 success 当作内部完整记忆证明。
+
+本地无需模型的参照可重跑：
+
+```powershell
+.\.venv\Scripts\python.exe -m benchmark.lexical_study
+.\.venv\Scripts\python.exe -m visualization.research
+```
+
+它在 LongMemEval-S 500 题上先排名、后读取 gold；470 道可回答题计入证据覆盖，30 道拒答题单列。原文和逐题结果写入忽略目录；可发布聚合进入统一视图。它不是问答准确率，也不是 AM-Link 或 Mem0 的成绩。
 
 对比时固定同一 pack、profile、限量选项与模型配置，给每个对象独立 run；检索召回、延迟、错误、实际 usage 分开比较。接口未提供模型调用/费用时为 `null`。
 

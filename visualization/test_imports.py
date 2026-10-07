@@ -12,6 +12,8 @@ from benchmark.tests.test_replay import FakeTarget
 from visualization.build import build_bundle
 from visualization.sources import excerpt
 from visualization.traces import read_run, attach_observations
+from visualization.spans import read_memory_snapshot
+from visualization.sources import file_digest
 
 
 def write(path, value):
@@ -45,11 +47,25 @@ def span_fixture(path, pack_hash):
 
 
 class ImportTests(unittest.TestCase):
+    def test_memory_snapshot_is_bounded_and_checks_artifact_hash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)
+            file=path/"snapshot.json"
+            write(file,{"memories":{"results":[{"id":"a","memory":"Tea","metadata":{"private":"excluded"}}]},
+                        "response":{"results":[{"id":"a","event":"ADD","extra":"excluded"}]}})
+            ref={"artifact":"snapshot.json","sha256":file_digest(file)}
+            result=read_memory_snapshot(path,ref)
+            self.assertNotIn("excluded",json.dumps(result))
+            self.assertEqual(result["memories"][0]["content"]["text"],"Tea")
+            file.write_text("{}")
+            with self.assertRaisesRegex(ValueError,"hash"):
+                read_memory_snapshot(path,ref)
+
     def test_public_bundle_has_no_local_samples_or_runs(self):
         bundle = build_bundle()
         self.assertEqual(bundle["local"]["samples"], {})
         self.assertEqual(bundle["runs"], [])
-        self.assertEqual(len(bundle["profiles"]["bindings"]), 8)
+        self.assertEqual(set(bundle["profiles"]["bindings"]), set(bundle["catalog"]["cases"]))
         value = excerpt("abcdefghij", 6)
         self.assertEqual(value["ranges"], [[0, 3], [7, 10]])
         self.assertTrue(value["omitted"])

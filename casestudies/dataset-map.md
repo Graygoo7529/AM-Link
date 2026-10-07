@@ -1,34 +1,29 @@
 # 数据地图：原始材料、准备结果与能力边界
 
-本页保留 2026-10-05 案例分析时的样本范围。**2026-10-07 已补齐多项完整文件和 PersonaMem-v2 配套历史**；最新取得状态见[下载清单](./downloads.md)和[获取核验记录](../docs/doing/2026-10-07-huggingface-retry.md)，请勿将下表旧下载缺口当作当前状态。以下能力分析仍可参考；它们不是官方 AML 冻结包或系统评测结论。
+更新：2026-10-07。下载完整、可解析、已适配和完成评测是四种不同状态。[获取记录](../docs/doing/2026-10-07-huggingface-retry.md)、[研究记录](../docs/doing/2026-10-07-dataset-research.md)和[下载清单](./downloads.md)可追溯实际范围。这些材料不等于官方 AML 冻结包。
 
-| 数据源 | 本机材料 | 原始特点 | 当前处理结果 | 适合检查 / 边界 |
-| --- | --- | --- | --- | --- |
-| [LoCoMo 原版](https://github.com/snap-research/locomo) | 10 对话、272 会话、5,882 发言、1,986 题 | 双人跨会话经历，speaker/time/QA evidence；含图像 caption | 完整 pack 1,984 题，排除 2 个不存在的来源引用；保留发言来源和人物 | 时间、多跳、人物归属。对抗题 evidence 可是诱导片段；图片本体不在本机 |
-| [LoCoMo-Refined 社区版](https://github.com/mem-eval-suite/LoCoMo_refined) | 10 对话、1,382 题 | 与本机原版对话完全相同，题目/答案有修改，无类别 5 | 已有六题 smoke pack，原始全文件可用 | 答案精度与完整性；不是独立历史，不应当成无泄漏的测试集 |
-| [PerLTQA 中文](https://github.com/Elvin-Yiming-Du/PerLTQA) | 完整中文双文件；141 人物档案，32 人物有 8,593 题 | 作者生成的资料、关系、事件和对话，已经是结构化记忆 | 32 人物、160 分区、2,211 来源单元、8,593 题；全部引用可解析；另有两人案例包 | 中文关系与来源融合；不等于从零聊天建忆。存在源矛盾，不能只依赖标准答案 |
-| [CL-bench](https://huggingface.co/datasets/tencent/CL-bench) | 3 / 1,899 条 | 新知识、规则、流程、任务和 rubric | 1 条多轮可构造环境；2 条单轮缺可靠边界，保留原输入 | 学习材料后办事；无直接 gold turn evidence |
-| [CL-bench Life](https://huggingface.co/datasets/tencent/CL-bench-Life) | 5 / 405 条：原 3 条＋offset 100 起 2 条 | 比赛日志、社区讨论、信息碎片；messages/rubrics | 5 条均能拆历史和任务；新两条共 7 条历史消息、2 任务 | 引用准确、覆盖不同观点、遵守排除条件；五条不是代表性随机样本 |
-| [BEAM](https://huggingface.co/datasets/Mohammadta/BEAM) | `100K` 档 2 / 20 条历史，共 388 发言、40 probes | 长对话夹杂代码和多种记忆能力；生成背景与真实 chat 并列 | 新第二条完整 3 批、200 发言、20 probes；只 chat 进历史 | 更新、矛盾、长期指令。部分题有 source_chat_ids，但通用 evidence 映射仍未实现 |
-| [ScriptMem](https://github.com/memorax-ai/ScriptMem) | 457 题，无真实剧本 | 多人物事件与关系题；单选、多选、排序 | 任务 pack 可用；缺历史明确标记 | 只能分析题型；不能把题目或合成 schema 示例写成历史 |
-| [PersonaMem-v2](https://huggingface.co/datasets/bowen-upenn/PersonaMem-v2) | 3 题，同 persona 521；缺对应历史 | 隐式偏好、当前问题、32K/128K 历史引用与评估答案 | 任务和标注分离；拒绝缺历史回放 | 可分析个性化任务。确认相对 history 路径属于 HF 数据仓库，不是当前 GitHub 代码仓库；HF 文件仍 502 |
-| [LongMemEval S/M/Oracle](https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned) | 来源公开；本轮仍未下载成功 | 历史会话、日期、问题、has_answer；Oracle 只保留答案会话 | 已有读取器，仍只通过合成结构测试 | 更新、时间、拒答。Oracle 不可冒充 S/M 的完整长历史难度 |
+| 数据源 | 实际原始材料与标注 | 当前处理 | 用途与限制 |
+| --- | --- | --- | --- |
+| [LoCoMo](https://github.com/snap-research/locomo) | 10 对话、272 会话、5,882 发言、1,986 QA；speaker/time/evidence/caption | 完整 pack 1,984 题；排除 2 个不存在的来源引用 | 跨会话、时间、人物归属；图片本体未取得，对抗题 evidence 可能是诱导片段 |
+| [LoCoMo-Refined](https://github.com/mem-eval-suite/LoCoMo_refined) | 10 对话、1,382 QA；与本机原版历史相同、题目修改 | 全文件可用，保留独立来源身份 | 检查答案精度；不能当成独立历史留出集 |
+| [PerLTQA 中文](https://github.com/Elvin-Yiming-Du/PerLTQA) | 141 人物档案，32 人有 8,593 题；结构化资料、关系、事件、对话 | 32 人、160 分区、2,211 来源单元、8,593 题；引用均可解析 | 中文关系融合；已经是生成的结构化记忆，部分源与答案矛盾 |
+| [LongMemEval](https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned) | S/M/Oracle 全部取得，同一批 500 题，30 拒答；日期、has_answer、6 类题型 | 三题研究包保留完整 S 历史；日期解析已修复；全 S 做本地 BM25 | 更新、时间、拒答、多证据；Oracle 是答案会话筛选，不能代替长历史难度 |
+| [CL-bench](https://huggingface.co/datasets/tencent/CL-bench) | 1,899 任务、500 context 分组；4 类/18 子类，31,607 rubric 条目 | 现有规则可拆 621 条，1,278 条未认证边界；不强拆 | 学习新规则并办事；rubric 不是证据位置；evaluation-only |
+| [CL-bench Life](https://huggingface.co/datasets/tencent/CL-bench-Life) | 405 任务、3 类/9 子类，5,348 rubric 条目 | 405 条可按现有规则拆；保留已有案例包 | 工作材料覆盖、引用、排除条件；可拆不等于完成原版评分 |
+| [BEAM](https://huggingface.co/datasets/Mohammadta/BEAM) / [10M](https://huggingface.co/datasets/Mohammadta/BEAM-10M) | 常规三档 90 条、10M 10 条历史，共 2,000 probes | 只 chat 进入历史；全量结构扫描，案例仍为 100K 中两条；10M 为不同深层嵌套 | 主要增长的是历史长度；生成背景不能混入 Add，通用 evidence/评分待适配 |
+| [PersonaMem-v2](https://huggingface.co/datasets/bowen-upenn/PersonaMem-v2) | 5,000 题、200 人，400 份 32K/128K 历史；who/pref_type/updated/sensitive 等独立标注 | 两人完整 32K 历史研究包；排除 system 生成画像，保留对话；128K 未适配 | 他人信息、偏好更新、遗忘；522 他人信息题、1,048 遗忘题；标注不进 Add |
+| [MemoryAgentBench](https://huggingface.co/datasets/ai-hyz/MemoryAgentBench) | 四类完整 Parquet，146 context / 3,671 questions；answer、类别及部分 keypoints | 冲突类一题完整 455 事实 pack，人工核对三跳路径 | 检索/冲突/长理解/从示例学习要分开评分；电影答案可为实体 ID；未做全量通用适配 |
+| [PersonaMem-v3](https://huggingface.co/datasets/bowen-upenn/PersonaMem-v3) | samples 三表：100 人、221,817 事件、15,791 query、31 任务类型 | 两题按同 persona 且严格早于 query 筛选；顶层/嵌套生成标签隔离，保留独立 user_message | 跨应用反馈、时间切面、记忆限制；不能把隐式负信号等同永久厌恶；不宣称超出取得范围 |
+| [ScriptMem](https://github.com/memorax-ai/ScriptMem) | 457 题、选项与任务元数据；缺真实剧本 | 任务包可用，缺历史明确标记 | 仅分析题型；不能用问题或合成 schema 代替历史 |
 
-PerLTQA 的“来源单元”和 LoCoMo 的“发言”、BEAM 的“历史”不是同一统计单位，不能直接比较数量来判断难度或效果。所有派生 pack 仍保留原始材料，只做投影与分离；没有执行模型摘要或自动修复原始事实。
+统计单位不可混淆：BEAM 的一条历史包含许多发言，PerLTQA 的一个来源单元可能是一整份文档，MAB 的一个 context 可对应多题。所有研究包保留来源身份和选择条件；没有用答案修复原始事实。
 
-## 新查到但未取得可用样本的候选
+## 从数据到设计的使用顺序
 
-| 候选 | 能力价值 | 已核对与本轮限制 |
-| --- | --- | --- |
-| [MemoryAgentBench](https://github.com/HUST-AI-HYZ/MemoryAgentBench) / [数据卡](https://huggingface.co/datasets/ai-hyz/MemoryAgentBench) | 准确检索、从示例学习、长程理解、冲突解决；一个 context 对多个问题 | 官方 splits 已确认，CR/TTL 各一条 row 请求读取超时；没有保存不完整样本。已登记来源，未实现 pack reader。数据卡 MIT，复用子数据仍需跟踪来源 |
-| [PersonaMem-v3](https://huggingface.co/datasets/bowen-upenn/PersonaMem-v3) / [作者代码](https://github.com/bowen-upenn/PersonaMem-v3) | 跨平台活动、正负反馈、用户意图与遗忘请求 | 已确认 context/profiles/queries 三类配置；数据卡继承 CC BY-NC 4.0。本轮仅调研，没有下载或适配。作者代码与数据卡的人物数量文案不同，未强行统一 |
+1. LongMemEval、LoCoMo：先建立日期、主体、证据位置和完整链的对照。
+2. PersonaMem-v2：增加引用归属、更新、遗忘边界；不要把被请求编辑的他人简介记成用户本人。
+3. M01：检验关系补齐；问句里没有后两跳实体名称，一次关键词召回容易只到第一跳。
+4. BEAM、CL-bench/Life：扩大历史或任务约束，分别报告相关性、覆盖和工作结果。
+5. PersonaMem-v3：加入提问时间截断、跨应用反馈和当前帮助/长期记忆的区分。
 
-## 使用顺序与比较方式
-
-1. LoCoMo 用来建立可追溯的时间、关系和证据链对照。
-2. PerLTQA 用中文案例检验结构读取、关系方向与源数据质量；结构化输入应单列实验组。
-3. BEAM 用来区分更新、矛盾和长历史干扰；同一问题可在增量检查点重新问，但当前 plan 是全部 Add 完成后 Search。
-4. CL-bench/Life 用来检验“带材料完成工作”。需补统一 Answer 和来源专用 rubric judge，不能只用字面召回排名。
-5. 完整补齐 PersonaMem、LongMemEval 或新候选后，再扩展能力面；不因下载失败而拿 gold 标签伪造历史。
-
-实验至少记录原始输入、pack/plan 版本、实际 Add/Search、来源映射、可见回答上下文、Answer/Eval 和实际调用费用。人工挑选的案例用于解释机制，不能外推成全量效果。
+原文→可用记忆→检索候选→最终上下文→回答分别记录；设计路径与真实执行分开。人工选例用于解释和回归，全量效果必须另外验证。未来方法对比按 persona/context/对话整组留出，避免共享历史泄漏。

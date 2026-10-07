@@ -17,9 +17,17 @@
 
 CL-bench 两版均为作者的 [evaluation-only 许可](https://huggingface.co/datasets/tencent/CL-bench/blob/main/LICENSE.txt)，仅用于评测/测试，禁止训练、微调、校准、蒸馏等参数更新。
 
-[LongMemEval S/M/Oracle](https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned) 已取得固定 revision `98d7416` 的完整文件，并实现共同读取器；S/Oracle 已生成 smoke pack，M 只做流式完整性核验。`_abs` 拒答题与可回答题分开统计。BEAM 常规三档、[BEAM-10M](https://huggingface.co/datasets/Mohammadta/BEAM-10M) 也已下载并逐批解码。MemoryAgentBench 四类 Parquet 已取得并核对字段，尚未实现中立 pack。PersonaMem-v2 的 benchmark 与 400 份配套历史已取得，已生成 persona 521 smoke pack；PersonaMem-v3 只取得 samples 三表。没有找到可独立获取并核验来源的 LongMemEval-Refined 发布，故没有虚构文件或读取器。
+[LongMemEval S/M/Oracle](https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned) 已取得固定 revision `98d7416` 的完整文件，并实现共同读取器；S/Oracle 有 smoke pack，三档均已流式结构扫描。`_abs` 拒答题与可回答题分开统计。BEAM 常规三档、[BEAM-10M](https://huggingface.co/datasets/Mohammadta/BEAM-10M) 也已下载并逐批解码。MemoryAgentBench 四类已取得，仅一条冲突类研究样本转 pack，尚无全量通用适配。PersonaMem-v2 的 benchmark 与 400 份历史已取得，两人完整 32K 历史用于研究；PersonaMem-v3 只取得 samples 三表，已做两个时间切片。没有找到可独立获取并核验来源的 LongMemEval-Refined 发布，故没有虚构文件或读取器。
 
 [`catalog.json`](./catalog.json) 统一登记来源；`pack_adapter` 表示代码能力，`local_verification` 表示真实数据验证状态，`local_acquisition` 记录本机取得范围。来源可用、读取器支持和本机取得范围是不同事实。[最新获取记录](../docs/doing/2026-10-07-huggingface-retry.md)与[样本案例库](../casestudies/README.md)列出核验结果和限制。
+
+## 全量研究与案例包
+
+`python -m dataset.survey --include-m` 扫描新下载的完整来源，输出 `data/research/survey.json` 并校验 receipt；含 Parquet 的研究使用 `benchmark/requirements-research.txt` 的隔离环境依赖。CL-bench 全量有 621 题可按现有规则拆分，1,278 题边界未认证；Life 405 题均可拆分。它们尚未进行完整方法评分。
+
+`python -m dataset.research_cases` 重建五个研究包：LongMemEval 三题完整 S 历史、PersonaMem-v2 两人完整 32K 历史、MemoryAgentBench 一题完整 455 事实、PersonaMem-v3 两题严格时间切片，以及六条件短片段实验。MAB/v3 当前是限定研究切片，未实现通用全量评测适配。
+
+LongMemEval 的 `YYYY/MM/DD (Weekday) HH:MM` 日期原先未被解析，本轮已修复，保留 source_date 和无时区的归一化假设。旧 pack 需要重建。PersonaMem-v3 按同 persona 且早于提问时刻筛选；去掉顶层和嵌套生成标签，保留独立 user_message 中的记忆限制。详细范围见[研究记录](../docs/doing/2026-10-07-dataset-research.md)。
 
 ## 新取得数据的小样本
 

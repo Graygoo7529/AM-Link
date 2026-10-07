@@ -1,6 +1,6 @@
 # 研究可视化体系 v1
 
-状态：首版四视角、真实 pack 摘录、benchmark 轨迹接入；对比试验与自动归因仍为后续工作。
+状态：五视角、16 个案例、真实 pack 摘录、全量结构统计、本地 BM25 对照与 benchmark 轨迹接入；记忆系统对比试验与自动归因仍为后续工作。
 
 ## 共同身份与证据边界
 
@@ -21,11 +21,17 @@ history 保存原文、人物、时间及来源；task 保存当前输入；anno
 
 数据概览区分全量来源、小样本、派生 pack 与展示摘录。LoCoMo 的 turn、PerLTQA 的来源文档、CL-bench 的消息不能混成同一分母。共享历史的原版与 Refined 不是独立数据集切分。
 
+`research.json` 保存原始文件 census 的聚合投影、源文件与本地产物哈希、BM25 的分母及证据覆盖；原文、逐题排名和模型日志留在忽略的 `data/`。`visualization.research` 校验 census 与对照使用同一 LongMemEval 源文件。新增统计先更新生成器再重建，不能只手改页面数字。
+
+PersonaMem-v3 历史按 persona 和 `timestamp < query timestamp` 切片。顶层字段使用可观测字段白名单；嵌套 `conversation_json` 只保留 role/content，同时保留独立 user_message。偏好演化、未来反馈、生成索引和 gold 均不进入 Add。
+
 ## 运行接入契约
 
 当前读取 `benchmark/data/runs/<run-id>/{dataset-pack.json,plan.json,trace.jsonl,report.json}`。校验报告与计划的 pack digest、数据源 ID、run ID 以及 Search 对应的 record/task。`manifest_sha256` 在现有 runner 中是限量前计划 digest，不能用限量后的 plan.json 文件哈希直接比较。
 
 展示当前问题之前已发生的 Add，按完整 namespaced request ID 连接来源，避免凭相同字符串跨用户合并。原文匹配是靶场的字面诊断，不能等同于语义证据支持或答案正确。模型调用次数、费用和 Answer 没有记录时保持未知。
+
+跨来源受控实验可在 record.attributes 中声明 `dataset_key / case_id / variant`；导入器只投影这三个字段到 query.research_case，连接原案例并显示“短片段实验”。它不能把短片段实验冒充完整历史测评，也不能让理论路径成为观测步骤。
 
 真实样本与轨迹只进入本地忽略目录；展示原文有长度上限且标注省略，不修改底层文件。独立网页不对外发布，也不连接目标服务。
 
@@ -69,10 +75,10 @@ history 保存原文、人物、时间及来源；task 保存当前输入；anno
 
 ## 迭代顺序
 
-1. done：四视角共用来源与案例标识；网页/会话同源；真实历史摘录与现有 API 轨迹可视化。
-2. todo：实际记忆方法实验，接入 Answer、评估与公开内部事件；保证日志完整后再做阶段归因。
+1. done：五视角共用来源与案例标识；网页/会话同源；真实历史摘录与现有 API 轨迹可视化。
+2. partial：Mem0 六条件已接入实际 Answer、定性审查、模型 span 与写入快照；完整历史、多方法公平对照及官方评分器尚未完成。
 3. todo：同 pack、同任务、同预算的多方法并排比较；缺失项不混入分母，固定评估器与费用口径。
 4. todo：增量检查点、更新/遗忘轨迹、证据到最终上下文的裁剪可视化。
-5. todo：统计分析页，展示问题类型分布、证据长度、链覆盖、延迟和费用；小样本与完整集分开报告。
+5. partial：已展示全量问题类型分布、本地 BM25 链覆盖和 Mem0 短例延迟/调用；费用未知，多方法并排比较待做。小样本与完整集分开报告。
 
 通过新增 profile、case 或 run 扩展内容；只有新视角才扩展界面。不要把每次分析做成互不相连的新页面。

@@ -1,0 +1,5 @@
+# Optional isolated environment for dataset census and the explicit Mem0 experiment.
+pyarrow==25.0.1
+mem0ai==2.2.1
+openai==3.26.0
+qdrant-client==1.19.1

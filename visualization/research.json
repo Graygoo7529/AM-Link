@@ -1,0 +1,570 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-07",
+  "survey_sha256": "72708e6a7fb19c65de1d6bff6dea3be15ed45e8597b0b616c1a11c83a9eff9ed",
+  "datasets": {
+    "longmem": {
+      "purpose": "区分找事实、收齐跨会话证据、解释时间、处理更新和拒答。",
+      "counts": [
+        [
+          "S 会话数中位数",
+          48.0
+        ],
+        [
+          "M 会话数中位数",
+          476.0
+        ],
+        [
+          "Oracle 会话数中位数",
+          2.0
+        ]
+      ],
+      "distribution": {
+        "title": "500 道题的能力构成",
+        "values": [
+          [
+            "单会话·用户信息",
+            70
+          ],
+          [
+            "跨会话",
+            133
+          ],
+          [
+            "单会话·偏好",
+            30
+          ],
+          [
+            "时间推理",
+            133
+          ],
+          [
+            "知识更新",
+            78
+          ],
+          [
+            "单会话·助手信息",
+            56
+          ]
+        ]
+      },
+      "note": "其中 30 道是拒答题，跨题型分布；S/M/Oracle 是同题不同历史范围。54 个 has_answer 来源发言来自 assistant，不能统一丢弃助手信息。",
+      "sources": [
+        {
+          "path": "dataset/data/raw/longmemeval/longmemeval_s_cleaned.json",
+          "bytes": 277383467,
+          "sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+          "receipt_verified": true
+        }
+      ]
+    },
+    "persona": {
+      "purpose": "检查个性化信息的归属、适用范围、遗忘与敏感信息。",
+      "counts": [
+        [
+          "题目",
+          5000
+        ],
+        [
+          "人物",
+          200
+        ],
+        [
+          "他人信息题",
+          522
+        ]
+      ],
+      "distribution": {
+        "title": "5,000 道题的 pref_type 标签",
+        "values": [
+          [
+            "anti_stereotypical_pref",
+            855
+          ],
+          [
+            "therapy_background",
+            627
+          ],
+          [
+            "neutral_preferences",
+            858
+          ],
+          [
+            "health_and_medical_conditions",
+            568
+          ],
+          [
+            "stereotypical_pref",
+            533
+          ],
+          [
+            "ask_to_forget",
+            1048
+          ],
+          [
+            "sensitive_info",
+            511
+          ]
+        ]
+      },
+      "note": "who / updated / sensitive_info 是独立标注轴，不可相加；遗忘类 1,048，updated=True 1,047，不能互相替代。",
+      "sources": [
+        {
+          "path": "dataset/data/raw/personamem-v2/benchmark.csv",
+          "bytes": 42426457,
+          "sha256": "95f2a8a324aab7baf2af937feae12731369e2abf7cad5ab3e170594cb25a3e52",
+          "receipt_verified": true
+        }
+      ]
+    },
+    "cl": {
+      "purpose": "把新规则、专业材料和流程用于完成工作。",
+      "counts": [
+        [
+          "任务",
+          1899
+        ],
+        [
+          "context 分组",
+          500
+        ],
+        [
+          "每题 rubric 中位数",
+          13
+        ]
+      ],
+      "distribution": {
+        "title": "按任务统计的内容类别",
+        "values": [
+          [
+            "Rule System Application",
+            566
+          ],
+          [
+            "Procedural Task Execution",
+            471
+          ],
+          [
+            "Empirical Discovery & Simulation",
+            199
+          ],
+          [
+            "Domain Knowledge Reasoning",
+            663
+          ]
+        ]
+      },
+      "note": "现有规则的边界识别：保持原输入，边界未认证 1278；可按当前规则拆分 621。rubric 属于评分侧；一条历史消息可含大量评论或日志。",
+      "sources": [
+        {
+          "path": "dataset/data/raw/clbench/CL-bench.jsonl",
+          "bytes": 90085681,
+          "sha256": "d5fc88d4b2eea75c61dd40862021b6ae2fba26bd21b58e8c5e18377a763943be",
+          "receipt_verified": true
+        }
+      ]
+    },
+    "life": {
+      "purpose": "从日志、多人讨论和信息修订中取得足够、合规的工作证据。",
+      "counts": [
+        [
+          "任务",
+          405
+        ],
+        [
+          "context 分组",
+          405
+        ],
+        [
+          "每题 rubric 中位数",
+          11
+        ]
+      ],
+      "distribution": {
+        "title": "按任务统计的内容类别",
+        "values": [
+          [
+            "Behavioral Records & Activity Trails",
+            135
+          ],
+          [
+            "Fragmented Information & Revisions",
+            135
+          ],
+          [
+            "Communication & Social Interactions",
+            135
+          ]
+        ]
+      },
+      "note": "现有规则的边界识别：可按当前规则拆分 405。rubric 属于评分侧；一条历史消息可含大量评论或日志。",
+      "sources": [
+        {
+          "path": "dataset/data/raw/clbench-life/CL-bench Life.jsonl",
+          "bytes": 29262222,
+          "sha256": "4a10701a74bc9e53a84136e1ab0c5aa06989bbaf04a03ca6db6f6b3f17eaac34",
+          "receipt_verified": true
+        }
+      ]
+    },
+    "beam": {
+      "purpose": "在越来越长的聊天与代码中检查同类记忆能力。",
+      "counts": [
+        [
+          "常规历史",
+          90
+        ],
+        [
+          "10M 历史",
+          10
+        ],
+        [
+          "探针合计",
+          2000
+        ]
+      ],
+      "distribution": {
+        "title": "各规模实际题目数",
+        "values": [
+          [
+            "100K",
+            400
+          ],
+          [
+            "1M",
+            700
+          ],
+          [
+            "500K",
+            700
+          ],
+          [
+            "10M",
+            200
+          ]
+        ]
+      },
+      "note": "每条历史都是 20 probes；规模增大主要拉长历史，不等于题目成比例增加。10M chat 的 plan/batch/turns 嵌套与常规档不同，不能复用浅层遍历。",
+      "sources": [
+        {
+          "path": "dataset/data/raw/beam/data/100K-00000-of-00001.parquet",
+          "bytes": 5429768,
+          "sha256": "c0519be25907005ba873c927c50877471d550873039d96c041554d0075a78ace",
+          "receipt_verified": true
+        },
+        {
+          "path": "dataset/data/raw/beam/data/1M-00000-of-00001.parquet",
+          "bytes": 66156374,
+          "sha256": "41b5acbbb55a586b1305514ef9d9fb03365d9b3331b598a1c2dd7603d93ef533",
+          "receipt_verified": true
+        },
+        {
+          "path": "dataset/data/raw/beam/data/500K-00000-of-00001.parquet",
+          "bytes": 33956263,
+          "sha256": "af05921c979355038e1761b7cde3d2dd713200dd3071b278de0200f6c7f30122",
+          "receipt_verified": true
+        },
+        {
+          "path": "dataset/data/raw/beam-10m/data/10M-00000-of-00002.parquet",
+          "bytes": 153844664,
+          "sha256": "31d96fd47ec56221d202e68792f26c00e49467dd4b36ee105c36ebd19ef78ad5",
+          "receipt_verified": true
+        },
+        {
+          "path": "dataset/data/raw/beam-10m/data/10M-00001-of-00002.parquet",
+          "bytes": 189980875,
+          "sha256": "a4f13fe25af51d57405ae41008689c31d1421377f3efde56a024b441deb2ee65",
+          "receipt_verified": true
+        }
+      ]
+    },
+    "mab": {
+      "purpose": "覆盖普通检索、事实冲突、多跳、长摘要与从示例学习；评分必须按子任务区分。",
+      "counts": [
+        [
+          "context",
+          146
+        ],
+        [
+          "问题",
+          3671
+        ],
+        [
+          "已适配研究问题",
+          1
+        ]
+      ],
+      "distribution": {
+        "title": "四类问题数",
+        "values": [
+          [
+            "Accurate_Retrieval",
+            2000
+          ],
+          [
+            "Conflict_Resolution",
+            800
+          ],
+          [
+            "Long_Range_Understanding",
+            171
+          ],
+          [
+            "Test_Time_Learning",
+            700
+          ]
+        ]
+      },
+      "note": "一个 context 对多题；电影推荐输出可能是实体 ID，长摘要有关键点。不能把四类合成一个字符串准确率。",
+      "sources": [
+        {
+          "path": "dataset/data/raw/memoryagentbench/data/Accurate_Retrieval-00000-of-00001.parquet",
+          "bytes": 20024386,
+          "sha256": "56c3cd80fb6731a3e53cd1a6be3148f54df60ff2d290ee50e28f8acebf9655c1",
+          "receipt_verified": true
+        },
+        {
+          "path": "dataset/data/raw/memoryagentbench/data/Conflict_Resolution-00000-of-00001.parquet",
+          "bytes": 1491588,
+          "sha256": "24d5c3f09ce0ce15625cb9f8a98f44f0d864ca6c94d7b4ad04eb697ca3a5ff45",
+          "receipt_verified": true
+        },
+        {
+          "path": "dataset/data/raw/memoryagentbench/data/Long_Range_Understanding-00000-of-00001.parquet",
+          "bytes": 49342452,
+          "sha256": "5ab175461954db67770d4a4cb69e569b513ebb96aceb9ee79b57f67488bcd539",
+          "receipt_verified": true
+        },
+        {
+          "path": "dataset/data/raw/memoryagentbench/data/Test_Time_Learning-00000-of-00001.parquet",
+          "bytes": 3947476,
+          "sha256": "5338753be48f925d03318eed66117286e3489025fabe050a547bd086cd7d79c0",
+          "receipt_verified": true
+        }
+      ]
+    },
+    "pv3": {
+      "purpose": "研究跨应用偏好、负反馈、时间遮罩、短期记忆和适度使用个性化。",
+      "counts": [
+        [
+          "人物",
+          100
+        ],
+        [
+          "事件",
+          221817
+        ],
+        [
+          "任务类型",
+          31
+        ]
+      ],
+      "distribution": {
+        "title": "221,817 条事件的作者交互标签",
+        "values": [
+          [
+            "implicit_positive",
+            44430
+          ],
+          [
+            "explicit_positive",
+            12741
+          ],
+          [
+            "implicit_negative",
+            160853
+          ],
+          [
+            "feed_visible",
+            1070
+          ],
+          [
+            "explicit_negative",
+            2723
+          ]
+        ]
+      },
+      "note": "共 15,791 queries；interaction_type 仅在此统计，Add 保留原动作；implicit_negative 不能直接当永久厌恶。推断标签、嵌套 embeds_pref_idx 和未来事件不进入 Add。",
+      "sources": [
+        {
+          "path": "dataset/data/raw/personamem-v3/samples/persona_context.csv",
+          "bytes": 363695328,
+          "sha256": "d9d8b54ea9ba4a2d29737be9162d68a42ce7ca2c3d23da5e0a979178018f8b7e",
+          "receipt_verified": true
+        },
+        {
+          "path": "dataset/data/raw/personamem-v3/samples/persona_profiles.csv",
+          "bytes": 518329,
+          "sha256": "1bcf9721695c354c046fc5661c42be2c0e30512b84e139771a35e4a874c94334",
+          "receipt_verified": true
+        },
+        {
+          "path": "dataset/data/raw/personamem-v3/samples/persona_queries.csv",
+          "bytes": 90239203,
+          "sha256": "bfd7ce61d41e7e3442626c550ca500d5ed62eb2e6f2e94d9a6581f9cb676a061",
+          "receipt_verified": true
+        }
+      ]
+    }
+  },
+  "lexical": {
+    "source_sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+    "artifact_sha256": "60004353a5fb0d3dc2959faf2addc1e80c338c0a3b24c812f6d56c164bd10e67",
+    "method": "BM25 original turns; k1=1.2 b=0.75; regex English tokenizer; no rewrite/stemming",
+    "questions": 470,
+    "summary": {
+      "any5": 373,
+      "complete5": 262,
+      "complete10": 328
+    },
+    "by_type": {
+      "knowledge-update": {
+        "questions": 72,
+        "any5": 66,
+        "complete5": 52,
+        "complete10": 60
+      },
+      "multi-session": {
+        "questions": 121,
+        "any5": 93,
+        "complete5": 29,
+        "complete10": 55
+      },
+      "single-session-assistant": {
+        "questions": 56,
+        "any5": 48,
+        "complete5": 48,
+        "complete10": 51
+      },
+      "single-session-preference": {
+        "questions": 30,
+        "any5": 12,
+        "complete5": 7,
+        "complete10": 11
+      },
+      "single-session-user": {
+        "questions": 64,
+        "any5": 57,
+        "complete5": 57,
+        "complete10": 61
+      },
+      "temporal-reasoning": {
+        "questions": 127,
+        "any5": 97,
+        "complete5": 69,
+        "complete10": 90
+      }
+    },
+    "type_labels": {
+      "single-session-user": "单会话·用户信息",
+      "single-session-assistant": "单会话·助手信息",
+      "single-session-preference": "单会话·偏好",
+      "multi-session": "跨会话",
+      "temporal-reasoning": "时间推理",
+      "knowledge-update": "知识更新"
+    },
+    "limits": "annotated exact source-unit coverage, not semantic support, answer accuracy, Mem0 or official score; no tuning/holdout claim",
+    "mab": {
+      "top5_ids": [
+        "fact-107",
+        "fact-146",
+        "fact-200",
+        "fact-162",
+        "fact-32"
+      ],
+      "required_ids": [
+        "fact-146",
+        "fact-335",
+        "fact-322"
+      ]
+    }
+  },
+  "checkpoints": [
+    [
+      "输入",
+      "原文、角色、事件时间与独立限制是否完整；gold 是否隔离"
+    ],
+    [
+      "Add",
+      "每条派生记忆来自哪里；更新/撤回处理了哪个旧版本"
+    ],
+    [
+      "Search",
+      "找到了任一证据，还是收齐全部必要关系；缺的哪一跳"
+    ],
+    [
+      "上下文",
+      "哪些候选被保留或裁剪；日期、否定与来源有没有丢"
+    ],
+    [
+      "Answer / Eval",
+      "实际回答是否受证据支持；评分有没有混淆标注问题与方法问题"
+    ]
+  ],
+  "microstudy": {
+    "run_id": "mem0-microstudy-20261007",
+    "reviewer": "Codex 基于可见产物的逐项审查；非官方评分器",
+    "metric": "机制诊断 v1；不汇总为准确率",
+    "calls": 41,
+    "input_chars": 371647,
+    "cost_usd": null,
+    "limitations": [
+      "5 个来源案例，6 个条件，人工选取必要片段，没有干扰历史",
+      "Mem0 OSS 2.2.1 + gpt-4o-mini；不是默认模型配置或完整数据集复现",
+      "输入日期只在 dated variant 正文前缀，OSS add(timestamp=...) 在该版本直接报不支持",
+      "一个 prompt 用于六类 Answer，开放建议过度拒绝暴露评分环境问题"
+    ],
+    "artifacts": {
+      "dataset-pack.json": "72d2cc42e661e2c1559893559ac85d9780665e0a63ac02ffc48922b085a6e049",
+      "trace.jsonl": "538517cc92b0bb1292e17798f0ecbab1a6d953ec72fc0c85f56401d5b961952e",
+      "report.json": "bef3f109c820b93e9e7da7ed4651855d78b52b6a26c03781ffc682bbb089b220",
+      "observability.jsonl": "1408a3c0be9beb4a1d5e472da735e37c8adc8e28b4ad7f14e94f2e8aed6fc9b3",
+      "observations.json": "c959da6aa1841c5daa9001b8da93ab351c2c855140cbc4d6210bf64512b35d69"
+    },
+    "review_sha256": "21bf24ef2f01855ba16e7a757b78efd678cb4230d597e3d27504df069f758a40",
+    "cases": [
+      {
+        "record_id": "abstention",
+        "label": "拒答正确",
+        "finding": "保留猫的类别与名字；问仓鼠时说明未知。",
+        "limit": "支持实体边界，但仅一条短例。",
+        "dataset_key": "longmem"
+      },
+      {
+        "record_id": "time-plain",
+        "label": "时间锚点错误且缺失",
+        "finding": "大都会日期被记为运行日 2026-10-07；MoMA 日期未保留，回答无法计算。",
+        "limit": "未传来源日期是输入适配条件；不能归为纯检索问题。",
+        "dataset_key": "longmem"
+      },
+      {
+        "record_id": "time-dated",
+        "label": "加日期后仍未收齐",
+        "finding": "大都会日期保留为 2023-01-15；MoMA 仍只有 recently，回答无法计算。",
+        "limit": "两条日期在 Add 正文中；应核对抽取产物，不能只检查输入。",
+        "dataset_key": "longmem"
+      },
+      {
+        "record_id": "update",
+        "label": "回答正确；新旧值并存",
+        "finding": "检索首条包含 25:50，第二条包含 27:12；回答采用 25:50。",
+        "limit": "可见输出没有显式版本关联；不能因旧值仍在就断言本题答错。",
+        "dataset_key": "longmem"
+      },
+      {
+        "record_id": "other-person",
+        "label": "归属未越界；回答过度拒绝",
+        "finding": "记忆只说用户请求润色 Mark 的简介，没有记成用户养植物；回答却拒绝一般居家建议。",
+        "limit": "统一 Answer 提示只允许用记忆，过严地限制开放建议；不能把它归为 Mem0 归属失败。",
+        "dataset_key": "persona"
+      },
+      {
+        "record_id": "forget",
+        "label": "未见违例；未检验真正删除",
+        "finding": "首次 Add 没记住园艺偏好，第二次 Add 无变更；回答未沿用园艺。",
+        "limit": "没有先保存待删除的事实，这一结果不足以证明遗忘传播有效。",
+        "dataset_key": "persona"
+      }
+    ]
+  }
+}

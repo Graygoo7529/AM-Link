@@ -37,6 +37,7 @@ def build_bundle(local: bool = False, run_specs: list[tuple[Path, str]] | None =
         "profiles": profiles, "scope": "local" if local else "curated",
         "local": local_sources(profiles) if local else {"samples": {}, "stats": {}, "missing": []},
         "runs": [read_run(path, kind) for path, kind in (run_specs or [])]}
+    bundle["research"] = json.loads((ROOT / "research.json").read_text(encoding="utf-8"))
     if len({r["run_id"] for r in bundle["runs"]}) != len(bundle["runs"]):
         raise ValueError("duplicate run ID")
     if observations:

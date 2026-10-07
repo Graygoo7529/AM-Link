@@ -6,7 +6,22 @@ from datetime import datetime
 from pathlib import Path
 
 from benchmark.observability import VERSION, validate_event
-from visualization.sources import file_digest
+from visualization.sources import excerpt, file_digest
+
+
+def read_memory_snapshot(directory: Path, ref: dict) -> dict:
+    """Explicit Mem0 study snapshot projection; never expose arbitrary response fields."""
+    path = (directory / ref["artifact"]).resolve()
+    if not path.is_relative_to(directory.resolve()) or not path.is_file():
+        raise ValueError("memory snapshot must exist inside run directory")
+    if path.stat().st_size > 1_000_000 or file_digest(path) != ref["sha256"]:
+        raise ValueError("memory snapshot size/hash mismatch")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    memories = data["memories"]["results"]
+    changes = data["response"]["results"]
+    return {"artifact": ref["artifact"], "sha256": ref["sha256"],
+        "count": len(memories), "memories": [{"id": m["id"], "content": excerpt(m["memory"], 2000)} for m in memories[:20]],
+        "changes": [{k: c[k] for k in ("id", "event") if k in c} for c in changes[:20]]}
 
 
 def attach_spans(run: dict, path: Path, request_scope: dict) -> None:
@@ -81,3 +96,9 @@ def attach_spans(run: dict, path: Path, request_scope: dict) -> None:
     for query in run["queries"]:
         requests = {query["search_id"]} | {a["id"] for a in query["adds"]}
         query["spans"] = [e for e in ordered if e["request_id"] in requests]
+        if run["system"].get("target") == "mem0-research":
+            for add in query["adds"]:
+                outputs = [ref for e in query["spans"] if e["operation"] == "add" and e["request_id"] == add["id"]
+                    for ref in e["outputs"] if ref["kind"] == "memory"]
+                if len(outputs) == 1:
+                    add["memory_snapshot"] = read_memory_snapshot(path, outputs[0])

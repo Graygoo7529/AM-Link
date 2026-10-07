@@ -2,16 +2,25 @@
 
 统一展示入口：[独立网页](./index.html)。`view.html` 是同源会话片段；原始样本与轨迹的本地扩展版在被忽略的 `data/local/`。原案例文档仍保留在 [`casestudies/`](../casestudies/README.md)。
 
-## 四个连通视角
+## 五个连通视角
 
-1. **数据构成**：本机取得范围、统计单位、来源层级、处理前后区别。
+1. **数据构成**：本机取得范围、统计单位、全量结构分布、来源层级、处理前后区别。
 2. **样本与标注**：原始字段走向历史、任务或评估侧；查看选定案例的真实来源摘录、问题、答案和 evidence 等标注。原文只在本地扩展版嵌入。
 3. **理论链路**：复用案例库，沿 Add → Search → Answer 查看合理处理、所需证据与失败风险；始终标成方法示意。
 4. **运行观测**：导入现有 benchmark 的 plan、pack、trace、report；按查询查看实际 Add、返回结果及来源匹配。未记录的内部索引、模型推理和 Answer 不推断。
+5. **设计检查**：把当前案例连接到输入、Add、Search、上下文、Answer/Eval 五个检查点，为二期实现和埋点提供起点。
+
+2026-10-07 已扩至 16 个案例，增加 LongMemEval、PersonaMem-v2/v3 与 MemoryAgentBench。运行观测中已有完整 LongMemEval-S 的本地 BM25 证据覆盖对照，以及 M01 的三跳缺口；它们没有执行回答模型，不是 Mem0 或 AM-Link 的成绩。分析与重建过程见[研究记录](../docs/doing/2026-10-07-dataset-research.md)，设计建议见[记忆设计工作台](../docs/phase-2/memory-design-workbench.md)。
 
 这是一套展示和分析层，不执行记忆系统或收费模型。无需保存页面选择。内容、数据来源与运行记录独立维护，网页和会话展示共同生成。
 
 ## 构建与再次加载
+
+[Mem0 六条件实测](../casestudies/mem0-microstudy.md)已接入：公共视图显示定性摘要，本地视图可查看写入后记忆、Search、Answer、逐例审查及 63 个 span。重新加载已有运行（不会调用模型）：
+
+```powershell
+.\.venv\Scripts\python.exe -m visualization.build --local --web --run benchmark/data/runs/mem0-microstudy-20261007 --run-kind experiment --observations benchmark/data/runs/mem0-microstudy-20261007/observations-reviewed.json
+```
 
 在仓库根目录：
 
@@ -34,10 +43,12 @@
 ## 维护入口
 
 - `profiles.json`：各数据源层级、字段语义、案例与本地 pack 的对应关系；明确本机观察与未下载来源的边界。
+- `research.json`：可发布的聚合统计与本地 BM25 结果摘要，保留源哈希，不含原文；由 `python -m visualization.research` 从忽略目录中的 census 与实验产物生成。
 - `../casestudies/catalog.json` 和案例 Markdown：案例内容唯一来源，原案例网页继续可用。
 - `sources.py`：从 pack 生成有限的真实样本摘录及统计，保留文件 SHA 与来源身份。
 - `traces.py`：从 benchmark 产物提取可观测证据，验证 pack 身份和任务对应，不复制鉴权配置或任意 raw response。
 - `spans.py`：校验内部步骤的父子关系、来源引用及请求身份；缺失父步骤标记不完整。
-- `view.template.html`：四个视角的共同界面；生成文件不直接编辑。
+- Mem0 研究快照只投影记忆正文、ID 与变更类型；读文件前验证路径、大小及 SHA，额外 metadata 不自动显示。
+- `view.template.html`：五个视角的共同界面；生成文件不直接编辑。
 
 本地输出含原文，保持 Git 忽略；公开视图不自动混入私有轨迹。统计和评分的分母、粒度、来源版本必须明确。全部构建产物只是快照，不是实时系统状态。

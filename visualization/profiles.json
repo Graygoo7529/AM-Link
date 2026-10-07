@@ -186,7 +186,7 @@
     },
     "cl": {
       "dataset_id": "clbench",
-      "basis": "2026-10-07：完整 1899 行已核对；现有三条 pack 中两条边界未明确",
+      "basis": "2026-10-07 全量扫描：621 可拆分 / 1278 未分离；500 个 context_id",
       "layers": [
         "1899 条完整样本",
         "4 类能力领域",
@@ -234,11 +234,11 @@
       "layers": [
         "5,000 道题",
         "200 persona",
-        "400 份 32K/128K 历史",
-        "persona 521 smoke"
+        "400 份历史",
+        "521/737 两人研究包"
       ],
       "unit": "题目和偏好标注不是用户历史的替代品。",
-      "pack": "dataset/data/prepared/personamem-v2-persona521-smoke.json",
+      "pack": "dataset/data/prepared/personamem-v2-research.json",
       "fields": [
         [
           "chat_history_32k_link / chat_history_128k_link",
@@ -269,14 +269,14 @@
         "M 2.74 GB",
         "30 道拒答题"
       ],
-      "unit": "S / M / Oracle 历史范围不同；当前本地 pack 为 S smoke，不能代表全量。",
-      "pack": "dataset/data/prepared/longmemeval-s-smoke.json",
+      "unit": "同一批 500 题的不同历史长度；当前研究 pack 保留三道选例的完整 S 历史。",
+      "pack": "dataset/data/prepared/longmemeval-research.json",
       "fields": [
         [
           "haystack_sessions / haystack_dates",
           "history",
           "历史与日期",
-          "保留原始会话边界。"
+          "保留原始日期；非 ISO 日期也归一化。未声明时区统一按 UTC 处理，仅作为适配假设。"
         ],
         [
           "question / question_date",
@@ -287,27 +287,27 @@
         [
           "answer / answer_session_ids / has_answer",
           "annotations",
-          "答案、来源和可回答性",
+          "答案、证据会话/发言标记",
           "30 道 `_abs` 拒答题单独标记；不可回答不推出 Search 必须为空。"
         ]
       ]
     },
     "mab": {
       "dataset_id": "memoryagentbench-cr",
-      "basis": "四类 Parquet 已下载并逐批解码；尚未适配 pack",
+      "basis": "2026-10-07 全量结构扫描；一条冲突记录已转研究 pack",
       "layers": [
         "检索 22 rows",
         "冲突 8 rows",
         "长程 110 rows",
         "学习 6 rows"
       ],
-      "unit": "共享 context 对应多题；当前只核对字段和行数，不作为 Add/Search pack。",
+      "unit": "146 个共享 context，共 3,671 道问题；不同子任务评分不可统一为字符串相等。",
       "fields": [
         [
           "context",
           "history",
           "给定上下文",
-          "待读取器接入。"
+          "研究包仅将第 0 行 455 条编号事实按顺序作为历史。"
         ],
         [
           "questions",
@@ -319,9 +319,10 @@
           "answers / metadata",
           "annotations",
           "答案及评估信息",
-          "待核对具体子任务结构。"
+          "保留对齐关系；电影推荐答案可能是实体 ID，长摘要另有 keypoints。"
         ]
-      ]
+      ],
+      "pack": "dataset/data/prepared/memoryagentbench-cr-research.json"
     },
     "pv3": {
       "dataset_id": "personamem-v3",
@@ -332,13 +333,19 @@
         "15791 queries",
         "31 类任务"
       ],
-      "unit": "三张表覆盖当前发布的全部人物事件与问题；原版评估代码读取 backend 布局，转换适配尚未实现。",
+      "unit": "samples 全量结构已扫描；两道题使用严格早于问题时刻的活动投影，未等同原版 backend 协议。",
       "fields": [
         [
           "persona_context: timestamp / app / conversation_json 等",
           "history",
           "跨平台活动与时间",
-          "只允许问题时间之前的可观察事件；表内附带 preferences 等标注需另行分离。"
+          "按 persona 隔离且 timestamp < query.timestamp；嵌套 conversation_json 仅保留 role/content。"
+        ],
+        [
+          "user_message / action",
+          "history",
+          "独立指令与反馈",
+          "不能只读取 conversation_json；隐式负面动作不等于永久厌恶。"
         ],
         [
           "persona_queries: user_query / prior_conversation",
@@ -357,8 +364,15 @@
           "auxiliary",
           "生成的人物档案与潜在偏好",
           "不能默认作为 Add 输入，先核对上游评估协议。"
+        ],
+        [
+          "preferences / preference_details / preference_evolution / embeds_pref_idx / interaction_type",
+          "annotations",
+          "生成标签和部分跨时间归纳",
+          "顶层与嵌套标签都隔离；interaction_type 仅用于结构统计，Add 保留原动作；lifetime 或未来强化信息不能泄漏。"
         ]
-      ]
+      ],
+      "pack": "dataset/data/prepared/personamem-v3-research.json"
     }
   },
   "bindings": {
@@ -427,6 +441,79 @@
       "record": "a760132c-d3bc-2931-f3e5-db24be64d0b8",
       "task": "a760132c-d3bc-2931-f3e5-db24be64d0b8",
       "turns": []
+    },
+    "lm1": {
+      "dataset": "longmem",
+      "record": "6a1eabeb",
+      "task": "question",
+      "turns": [
+        "answer_a25d4a91_1:4",
+        "answer_a25d4a91_2:0"
+      ]
+    },
+    "lm2": {
+      "dataset": "longmem",
+      "record": "gpt4_59149c77",
+      "task": "question",
+      "turns": [
+        "answer_d00ba6d0_1:0",
+        "answer_d00ba6d0_2:6"
+      ]
+    },
+    "lm3": {
+      "dataset": "longmem",
+      "record": "0862e8bf_abs",
+      "task": "question",
+      "turns": [
+        "answer_c6fd8ebd_abs:10"
+      ]
+    },
+    "pv1": {
+      "dataset": "persona",
+      "record": "persona-521",
+      "task": "row-7",
+      "turns": [
+        "107",
+        "108"
+      ]
+    },
+    "pv2": {
+      "dataset": "persona",
+      "record": "persona-737",
+      "task": "row-32",
+      "turns": [
+        "49",
+        "50",
+        "51",
+        "52"
+      ]
+    },
+    "m1": {
+      "dataset": "mab",
+      "record": "cr-0",
+      "task": "q0",
+      "turns": [
+        "fact-107",
+        "fact-146",
+        "fact-164",
+        "fact-335",
+        "fact-294",
+        "fact-322"
+      ]
+    },
+    "v31": {
+      "dataset": "pv3",
+      "record": "36:0017:recsys_2026-04-05_a2",
+      "task": "36:0017:recsys_2026-04-05_a2",
+      "turns": ["event-325716", "event-684397"]
+    },
+    "v32": {
+      "dataset": "pv3",
+      "record": "68:0142:pshift_68_005_chatbot",
+      "task": "68:0142:pshift_68_005_chatbot",
+      "turns": [
+        "event-987393"
+      ]
     }
   }
 }

@@ -6,6 +6,7 @@
 - 每次开始先读根 README、`docs/README.md`、`docs/phase-2/integration-research.md`；只按任务需要读历史长文，不把旧文档的当前状态当成今天的事实。
 - 统一研究展示入口是 `visualization/README.md`，覆盖数据构成、样本标注、理论链路与运行观测；`casestudies/` 留在根目录保存案例文档与唯一案例 catalog，两个视图共用它。网页 `index.html` 与会话片段 `view.html` 同源生成，原文/轨迹只进入忽略的 `visualization/data/`。用户不需要保存页面选择状态。
 - AM-Link 二期埋点遵循 `benchmark/OBSERVABILITY.md`；`observability.py` 提供标准事件校验与 recorder。未采集是未知，理论方案与实测分开；目前尚未在真实二期方法中埋点。
+- 2026-10-07 研究已扩至 16 个案例和五视角展示；全量结构、BM25 与 Mem0 六条件实测见 `docs/doing/2026-10-07-dataset-research.md`。`casestudies/mem0-microstudy.md` 记录真实短例结果与局限，已有轨迹可直接加载，不必重跑模型；不得把短例定性结果当成全量准确率。
 - reference\TinySoul-Agent 是我进行的另一个项目，可以探索和参考它使用的记忆设计理念和 Inspect、Search 原型方法
 
 ## 环境
