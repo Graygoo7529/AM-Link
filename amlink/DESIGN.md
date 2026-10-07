@@ -232,11 +232,13 @@ created_at / updated_at
 
 校验失败时不应用该批结构化 mutation；原始事件仍保持可检索，观测明确标记 `reflection.error`。成功的 mutation 与索引更新必须原子提交，避免 Search 看到半套图。
 
-### 5.4 缓存何时清空
+### 5.4 缓存何时清空与失败重放
 
-只有在本批 mutation 和相关派生索引完成后，WorkingMemory 才把对应事件推进 watermark。失败或超时则保留未整理事件，下一次 Add 可以重试同一逻辑工作；重试不能重新追加 RawEvent，也不能复制已经提交的 fact。
+只有在本批 mutation 和相关派生索引完成后，WorkingMemory 才把对应事件推进 watermark。失败或超时则保留未整理事件，并把 request 标记为 incomplete；本次请求不在服务内部再次调用模型或 embedding。
 
-这里的“重试”是下一次请求内的可恢复工作，不是隐藏后台补偿。是否允许在一次 Add 内对同一模型请求做一次 schema 修复，需要以真实延迟/费用实验决定；默认最多一次受控修复，不能叠加多层重试。
+如果比赛调用方重放相同 request_id，服务根据持久化阶段状态只补做未完成部分：raw event 已提交就不再写入，成功的 mutation 不再应用，失败的 reflection 才有一次新的外部请求机会。相同 payload 的完整成功重放只返回缓存响应，不调用模型；不同 payload 永久返回幂等冲突。这个“失败重放”属于官方调用方触发的下一次 HTTP 请求，不是 AM-Link 的内部重试。
+
+确定性降级不叫重试：例如 embedding 失败后，本次 Search 可以使用已经拿到的 lexical 候选；但不能在同一请求里再试一次 embedding、换一个 provider 或启动后台队列。若没有合法降级结果，就返回依赖错误，让官方调用方按自己的规则重投。
 
 ## 6. Search：从 query 到证据闭包
 
@@ -293,7 +295,7 @@ Search 由以下有限操作组成，既可以由确定性代码执行，也可�
 }
 ```
 
-plan 不能写答案，也不能把一个相似句子宣布为已满足的 evidence slot。计划器失败、超时或 schema 不合法时，回退到确定性 query + lexical/temporal plan。
+plan 不能写答案，也不能把一个相似句子宣布为已满足的 evidence slot。计划器失败、超时或 schema 不合法时，可以在同一次请求中回退到预先定义的确定性 query + lexical/temporal plan；这是一条单次请求的降级分支，不是再次调用模型。若确定性分支也无法提供合法结果，则直接返回明确错误。
 
 ### 6.5 Select 和 Rerank 的区别
 
@@ -395,11 +397,11 @@ Answer: 可以给一般礼物建议，不引用已撤回偏好
 
 | 失败位置 | 可保留的能力 | 不能声称 |
 | --- | --- | --- |
-| Add schema/DB 失败 | 无 | Add 成功 |
-| Reflection 模型失败 | raw、working、lexical Search | 结构化整理完成 |
-| Embedding 失败 | lexical、时间和已提交 ref | 语义召回完整 |
-| Query plan 失败 | 确定性 discovery/Inspect | 复杂意图已识别 |
-| Select/Rerank 失败 | 稳定确定性排序 | 模型筛选成功 |
+| Add schema/DB 失败 | 无 | Add 成功；由调用方重试 |
+| Reflection 模型失败 | raw、working、lexical Search；参评增强模式返回 incomplete | 结构化整理完成；服务不内部重试 |
+| Embedding 失败 | lexical、时间和已提交 ref | 语义召回完整；服务不换 provider 重试 |
+| Query plan 失败 | 本次请求的确定性 discovery/Inspect | 复杂意图已识别；服务不再次调用模型 |
+| Select/Rerank 失败 | 稳定确定性排序 | 模型筛选成功；无合法降级时返回错误 |
 | Graph/ref 不一致 | 可验证 raw evidence | 多跳证据闭合 |
 | Search 空结果 | 明确无结果 | 系统故障或用户没有相关事实 |
 | 撤回过滤失败 | 可记录错误 | 记忆已删除 |
