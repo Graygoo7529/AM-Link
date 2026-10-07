@@ -11,7 +11,7 @@ from dataset.pack import write_pack
 from dataset.survey import RAW, ROOT, csv_rows, parquet_rows
 
 OUT = ROOT / "dataset/data/prepared"
-LM_IDS = ["6a1eabeb", "gpt4_59149c77", "0862e8bf_abs"]
+LM_IDS = ["6a1eabeb", "gpt4_59149c77", "0862e8bf_abs", "gpt4_d84a3211", "099778bb", "0edc2aef", "0a995998"]
 
 
 def pack(dataset_id, path, records, selection):
@@ -28,6 +28,8 @@ def microstudy(longmem, persona):
             "attributes": {"dataset_key": dataset, "case_id": case, "variant": variant, "provenance": provenance}})
 
     for r in longmem["records"]:
+        if r["id"] not in LM_IDS[:3]:
+            continue
         tid = r["id"]; task = r["tasks"][0]
         evidence = set(task["annotations"]["evidence_turn_ids"])
         if tid.endswith("_abs"):
@@ -51,7 +53,7 @@ def microstudy(longmem, persona):
                                              ("persona-737", "row-32", [49,50,51,52], "forget", "pv2")]:
         r = next(r for r in persona["records"] if r["id"] == rid)
         task = next(t for t in r["tasks"] if t["id"] == task_id)
-        task = copy.deepcopy(task); task["input"]["text"] = ast.literal_eval(task["input"]["text"])["content"]
+        task = copy.deepcopy(task)
         turns = [copy.deepcopy(t) for t in r["sessions"][0]["turns"] if int(t["id"]) in indices]
         if len(turns) != len(indices): raise ValueError("missing PersonaMem source turns")
         # Ingestion is staged before/after the explicit forgetting request.

@@ -102,9 +102,10 @@ class ReplayTests(unittest.TestCase):
         self.assertTrue(target.add_requests[0]["request_id"].startswith("arena:run-1:"))
         self.assertTrue(target.add_requests[0]["user_id"].startswith("arena:run-1:"))
         self.assertEqual(target.search_requests[0]["user_id"], target.add_requests[0]["user_id"])
-        self.assertEqual(report["summary"]["retrieval"]["overall"]["evidence_recall@5"], 1.0)
+        self.assertIsNone(report["summary"]["retrieval"]["overall"]["evidence_recall@5"])
         self.assertEqual(report["summary"]["retrieval"]["overall"]["chain_coverage@1"], 0.0)
-        self.assertEqual(report["summary"]["retrieval"]["overall"]["chain_coverage@5"], 1.0)
+        self.assertIsNone(report["summary"]["retrieval"]["overall"]["chain_coverage@5"])
+        self.assertEqual(report["summary"]["retrieval"]["overall"]["eligible_queries@5"], 0)
         self.assertEqual(events[1]["target_ranks"], [2, 3])
         self.assertEqual(events[1]["results"][1]["content"], "Alice prefers tea.")
         self.assertEqual(

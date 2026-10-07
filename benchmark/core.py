@@ -164,6 +164,9 @@ def run_replay(
                     })
             for original in case["adds"]:
                 request = _namespace_add(original, run_id)
+                if hasattr(target, "set_observation_context"):
+                    target.set_observation_context(record_id=case["id"], task_id=None,
+                        request_id=request["request_id"])
                 started = time.perf_counter()
                 response = _invoke(target.add, request)
                 latency_ms = (time.perf_counter() - started) * 1000.0
@@ -201,6 +204,9 @@ def run_replay(
 
             for search in case["searches"]:
                 request = _namespace_search(search["request"], run_id)
+                if hasattr(target, "set_observation_context"):
+                    target.set_observation_context(record_id=case["id"],
+                        task_id=search["dataset_task"]["task_id"], request_id=search["id"])
                 started = time.perf_counter()
                 response = _invoke(target.search, request)
                 latency_ms = (time.perf_counter() - started) * 1000.0
@@ -429,6 +435,7 @@ def _observe_query(
         "category": search.get("category", "general"),
         "latency_ms": round(latency_ms, 3),
         "result_count": len(results),
+        "requested_top_k": top_k,
         "target_count": len(ranks),
         "target_ranks": ranks,
         "evidence_diagnosis": evidence_diagnosis,
@@ -489,22 +496,24 @@ def _group_metrics(queries: list[dict[str, Any]]) -> dict[str, Any]:
     target_total = sum(query["target_count"] for query in graded)
     result: dict[str, Any] = {"queries": len(queries), "graded_queries": len(graded)}
     for cutoff in TOP_K_LIMITS:
+        eligible = [query for query in graded if query.get("requested_top_k", 0) >= cutoff]
         target_hits = sum(
             rank is not None and rank <= cutoff
-            for query in graded
+            for query in eligible
             for rank in query["target_ranks"]
         )
         query_hits = sum(
             any(rank is not None and rank <= cutoff for rank in query["target_ranks"])
-            for query in graded
+            for query in eligible
         )
         complete_chains = sum(
             all(rank is not None and rank <= cutoff for rank in query["target_ranks"])
-            for query in graded
+            for query in eligible
         )
-        result[f"evidence_recall@{cutoff}"] = _ratio(target_hits, target_total)
-        result[f"hit_rate@{cutoff}"] = _ratio(query_hits, len(graded))
-        result[f"chain_coverage@{cutoff}"] = _ratio(complete_chains, len(graded))
+        result[f"eligible_queries@{cutoff}"] = len(eligible)
+        result[f"evidence_recall@{cutoff}"] = _ratio(target_hits, sum(q["target_count"] for q in eligible))
+        result[f"hit_rate@{cutoff}"] = _ratio(query_hits, len(eligible))
+        result[f"chain_coverage@{cutoff}"] = _ratio(complete_chains, len(eligible))
     first_ranks = [
         1.0 / query["first_relevant_rank"] if query["first_relevant_rank"] is not None else 0.0
         for query in graded

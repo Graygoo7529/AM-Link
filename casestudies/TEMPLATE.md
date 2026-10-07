@@ -31,3 +31,8 @@
 ## 实验记录
 
 未运行。实际运行后补充对象/版本、数据包和运行路径、请求结果、证据覆盖、Answer/Eval、耗时、真实调用和费用；无 gold evidence 时不报 gold recall。
+# 可运行案例扩展字段
+
+在 catalog 中同时维护 `data`（dataset、pack、record、task、turns）、`evidence_plan`（fact、use、sources），以及 `checks/watch` 的 add/search/answer 三阶段说明。标记哪些是必要证据、冲突材料或旧值；人工锚点与作者标注分开。
+
+先用 `benchmark study --case <id> --plan-only` 检查完整记录，再决定是否增加 anchors/window 实验。实际运行与评注放在忽略目录，通过 run/pack/trace 哈希链接，不把理论说明填进真实轨迹。

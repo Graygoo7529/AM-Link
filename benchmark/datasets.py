@@ -91,8 +91,9 @@ def build_retrieval_manifest(
                 continue
             annotations = task.get("annotations", {})
             evidence_ids = annotations.get("evidence_turn_ids")
+            disabled = task.get("attributes", {}).get("retrieval_grading_disabled")
             expected = []
-            if isinstance(evidence_ids, list):
+            if isinstance(evidence_ids, list) and not disabled:
                 for turn_id in dict.fromkeys(evidence_ids):
                     mapped = turn_map.get(turn_id)
                     if mapped is None:
@@ -115,7 +116,7 @@ def build_retrieval_manifest(
                         )
             # An unanswerable QA can still have relevant history. Only an explicit
             # retrieval annotation may require an empty Search response.
-            expect_empty = annotations.get("retrieval_expect_empty") is True
+            expect_empty = annotations.get("retrieval_expect_empty") is True and not disabled
             grading = "evidence" if expected else "empty" if expect_empty else "ungraded"
             attributes = task.get("attributes", {})
             searches.append(

@@ -264,12 +264,12 @@
       "dataset_id": "longmemeval-s",
       "basis": "S/M/Oracle 固定 revision=98d7416 已核对",
       "layers": [
-        "S 500 题 / 246,750 turns",
-        "Oracle 500 题 / 10,960 turns",
-        "M 2.74 GB",
-        "30 道拒答题"
+        "S：500 题 / 246,750 条发言",
+        "Oracle：500 题 / 10,960 条发言",
+        "M：2.74 GB 长历史",
+        "30 道拒答题（跨题型）"
       ],
-      "unit": "同一批 500 题的不同历史长度；当前研究 pack 保留三道选例的完整 S 历史。",
+      "unit": "同一批 500 题的不同历史长度；当前研究 pack 保留七道选例的完整 S 历史。",
       "pack": "dataset/data/prepared/longmemeval-research.json",
       "fields": [
         [
@@ -373,147 +373,6 @@
         ]
       ],
       "pack": "dataset/data/prepared/personamem-v3-research.json"
-    }
-  },
-  "bindings": {
-    "l1": {
-      "dataset": "locomo",
-      "record": "conv-26",
-      "task": "qa-11",
-      "turns": [
-        "D3:13",
-        "D4:3"
-      ]
-    },
-    "l2": {
-      "dataset": "locomo",
-      "record": "conv-26",
-      "task": "qa-0",
-      "turns": [
-        "D1:3"
-      ]
-    },
-    "l3": {
-      "dataset": "locomo",
-      "record": "conv-26",
-      "task": "qa-153",
-      "turns": [
-        "D2:8"
-      ]
-    },
-    "p1": {
-      "dataset": "perltqa",
-      "record": "character-3",
-      "task": "social_relationship:4_0:0",
-      "turns": [
-        "social_relationship:4_0"
-      ]
-    },
-    "p2": {
-      "dataset": "perltqa",
-      "record": "character-0",
-      "task": "dialogues:1_0_0#0:2",
-      "turns": [
-        "events:1_0_0",
-        "dialogues:1_0_0#0"
-      ]
-    },
-    "b1": {
-      "dataset": "beam",
-      "record": "2",
-      "task": "knowledge_update:0",
-      "turns": [
-        "0:32",
-        "0:66"
-      ]
-    },
-    "b2": {
-      "dataset": "beam",
-      "record": "2",
-      "task": "contradiction_resolution:0",
-      "turns": [
-        "0:32",
-        "0:70"
-      ]
-    },
-    "c1": {
-      "dataset": "life",
-      "record": "a760132c-d3bc-2931-f3e5-db24be64d0b8",
-      "task": "a760132c-d3bc-2931-f3e5-db24be64d0b8",
-      "turns": []
-    },
-    "lm1": {
-      "dataset": "longmem",
-      "record": "6a1eabeb",
-      "task": "question",
-      "turns": [
-        "answer_a25d4a91_1:4",
-        "answer_a25d4a91_2:0"
-      ]
-    },
-    "lm2": {
-      "dataset": "longmem",
-      "record": "gpt4_59149c77",
-      "task": "question",
-      "turns": [
-        "answer_d00ba6d0_1:0",
-        "answer_d00ba6d0_2:6"
-      ]
-    },
-    "lm3": {
-      "dataset": "longmem",
-      "record": "0862e8bf_abs",
-      "task": "question",
-      "turns": [
-        "answer_c6fd8ebd_abs:10"
-      ]
-    },
-    "pv1": {
-      "dataset": "persona",
-      "record": "persona-521",
-      "task": "row-7",
-      "turns": [
-        "107",
-        "108"
-      ]
-    },
-    "pv2": {
-      "dataset": "persona",
-      "record": "persona-737",
-      "task": "row-32",
-      "turns": [
-        "49",
-        "50",
-        "51",
-        "52"
-      ]
-    },
-    "m1": {
-      "dataset": "mab",
-      "record": "cr-0",
-      "task": "q0",
-      "turns": [
-        "fact-107",
-        "fact-146",
-        "fact-164",
-        "fact-335",
-        "fact-294",
-        "fact-322"
-      ]
-    },
-    "v31": {
-      "dataset": "pv3",
-      "record": "36:0017:recsys_2026-04-05_a2",
-      "task": "36:0017:recsys_2026-04-05_a2",
-      "turns": ["event-325716", "event-684397"]
-    },
-    "v32": {
-      "dataset": "pv3",
-      "record": "68:0142:pshift_68_005_chatbot",
-      "task": "68:0142:pshift_68_005_chatbot",
-      "turns": [
-        "event-987393"
-      ]
     }
   }
 }

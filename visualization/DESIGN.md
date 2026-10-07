@@ -1,6 +1,6 @@
 # 研究可视化体系 v1
 
-状态：五视角、16 个案例、真实 pack 摘录、全量结构统计、本地 BM25 对照与 benchmark 轨迹接入；记忆系统对比试验与自动归因仍为后续工作。
+状态：四视角、20 个案例、切片实验与真实步骤、持久运行档案及评注已连接；AM-Link 二期方法与自动归因仍待实现。
 
 ## 共同身份与证据边界
 
@@ -14,6 +14,18 @@
 - `missing`：未采集/未运行/无评分依据；不能渲染成 0 分或成功。
 
 Answer 是下游回答阶段，正式比赛仍由主办方负责。可视化呈现结果不等于 AM-Link 要提供 Answer API。所谓“推理路径”限于可核验的证据依赖与公开执行步骤，不臆造模型隐藏思维链。
+
+## 案例、运行与评注
+
+案例 catalog 的 `data` 保存 dataset/pack/record/task/turns，独立于 profiles；`evidence_plan` 表达必要事实、对照用途和原文 ID。`checks/watch` 随理论阶段展示，不再设独立“设计检查”视角。来源未取得时，公共理论仍可读，但不生成假样本。
+
+`benchmark study` 将中立选择固定成 pack 快照，运行后登记到本地 workspace。界面接收 `selection` 明示完整基础记录与人工片段的差异；缺证据切片只有显式 allow_partial 才可运行且不评分。登记运行保存 Answer/Eval 导入路径，避免以后忘记重新指定。
+
+`amlink.note.v1` 是追加式研究评注，绑定 run_id/dataset_pack_sha256/trace_sha256/search_id/stage/span_id，区分 observation/hypothesis/next_experiment；author/text/created_at 必填。`supersedes` 保留修订链。导入器拒绝错运行、错步骤、错指纹或重复 ID。网页生成可复制草稿不等于落盘；页面展示已导入记录。
+
+会话片段保持小于 1 MB：已验证的 span 和引用去重编码，浏览器恢复原对象，未丢弃载入查询的步骤。正文有显式摘录上限；默认最近最多五个运行、每运行最多 20 道查询，超容量可缩减较早运行但必须展示档案范围。全量 bundle 与源 trace 保持原始契约，不因显示编码改变。
+
+native 方法通过 `Artifacts.text` 显式声明可读产物，格式为 schema_version=`amlink.artifact.v1`、title、text。仅此格式自动展开；路径、大小和 SHA 均校验。更复杂图/表产物今后应增加显式版本化投影，不读取任意 metadata 并假定安全。完整操作和用法见 [实验指南](../benchmark/STUDIES.md)。
 
 ## 原始材料到评分的分流
 

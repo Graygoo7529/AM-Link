@@ -31,6 +31,15 @@ def load_catalog(path: Path = ROOT / "catalog.json") -> dict:
         doc = (path.parent / case["document"]).resolve()
         if not doc.is_relative_to(path.parent.resolve()) or not doc.is_file():
             raise ValueError(f"missing or external case document: {key}")
+        if "data" in case:
+            data = case["data"]
+            if set(data) != {"dataset", "pack", "record", "task", "turns"} or data["dataset"] not in datasets or key not in datasets[data["dataset"]]["cases"]:
+                raise ValueError(f"invalid source binding: {key}")
+            pack_path = Path(data["pack"])
+            if pack_path.is_absolute() or ".." in pack_path.parts or not data["pack"].startswith("dataset/data/prepared/"):
+                raise ValueError(f"invalid case pack path: {key}")
+            if not all(isinstance(data[k], str) and data[k] for k in ("record", "task")) or not isinstance(data["turns"], list) or not all(isinstance(t,str) and t for t in data["turns"]) or len(set(data["turns"])) != len(data["turns"]):
+                raise ValueError(f"invalid source IDs: {key}")
     default = catalog["defaultState"]
     if default["dataset"] not in datasets or default["case"] not in datasets[default["dataset"]]["cases"]:
         raise ValueError("invalid default selection")

@@ -8,7 +8,7 @@
 
 - [独立网页](./index.html)：在浏览器打开即可浏览，不需要启动服务；导出文件自带展示资源。没有公网部署。
 - `view.html`：同一份内容的会话内交互版本，供后续 Codex 会话直接加载。
-- [catalog.json](./catalog.json)：数据集状态、原始/处理后特点、16 个案例、来源文档和下载入口的唯一展示内容源。
+- [catalog.json](./catalog.json)：数据集状态、原始/处理后特点、20 个案例、来源文档和下载入口的唯一内容源；`data` 保存可运行的 pack/record/task/turn 绑定，`evidence_plan` 保存必要事实与来源，`checks/watch` 连接理论与观测设计。
 - [手动下载清单](./downloads.md)：尚未完整取得的材料、文件链接、大小及保存位置。
 
 按照用户要求，只持久保存内容和可复用展示，不维护页面选择或已读进度。导出工具自带的浏览器偏好缓存不作为项目状态或实验记录。
@@ -45,6 +45,7 @@
 | B01/B02 | [正常更新与未解决冲突](./beam-update-and-conflict.md) | 版本变化、矛盾保留、澄清 | done：真实样本、转换、分析；未实测系统 |
 | C01 | [社区讨论的证据覆盖](./clbench-life-evidence-diversity.md) | 多立场覆盖、引用去重、排除条件 | done：真实样本、转换、分析；未实测系统 |
 | LM01–03 | [更新、时间与拒答](./longmemeval-evidence-chain.md) | 最新值、会话日期、错误前提 | done：完整 S 历史、日期修复；另有全量 BM25 对照 |
+| LM04–07 | [事件去重、比例、偏好迁移与标注复核](./longmemeval-aggregation-preference-audit.md) | 提及与事件分离、同口径分子分母、跨场景偏好、源答案疑点 | done：7 题完整 S 研究包；四次新的 BM25 运行与 8 条持久评注 |
 | PV01–02 | [他人信息与遗忘](./personamem-ownership-forgetting.md) | 引文归属、撤回传播 | done：两人完整 32K 历史与 Mem0 短片段诊断 |
 | M01 | [更新后的三跳路径](./memoryagentbench-latest-path.md) | 最新作者→最新配偶→最新国籍 | done：455 条完整事实；实测单次 BM25 缺后两跳 |
 | V301–02 | [时间切片、反馈与短期帮助](./personamem-v3-time-feedback.md) | 排除未来、反馈语义、记忆许可 | done：两题严格时间切片与嵌套标签隔离；未实测系统 |

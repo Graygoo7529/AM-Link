@@ -74,11 +74,8 @@
     const fields={'question':'q','source-label':'source','left-id':'leftId','left':'left','link-label':'link','right-id':'rightId','right':'right','add':'add','search':'search','answer':'answer','trap':'trap'};
     Object.entries(fields).forEach(([id,field])=>el(id).textContent=c[field]);
   }
-  function persist(){if(window.openai&&window.openai.setWidgetState)window.openai.setWidgetState({modelContent:{dataset:ds.value,case:cs.value||null},privateContent:null}).catch(()=>{});}
-  function restore(state){const s=state&&state.modelContent||catalog.defaultState;draw(s.dataset,s.case);}
-  ds.addEventListener('change',()=>{draw(ds.value);persist();});
-  cs.addEventListener('change',()=>{draw(ds.value,cs.value);persist();});
-  window.addEventListener('openai:set_globals',event=>{const g=event.detail&&event.detail.globals;if(g&&Object.prototype.hasOwnProperty.call(g,'widgetState'))restore(g.widgetState);});
-  restore(window.openai&&window.openai.widgetState);
+  ds.addEventListener('change',()=>draw(ds.value));
+  cs.addEventListener('change',()=>draw(ds.value,cs.value));
+  draw(catalog.defaultState.dataset,catalog.defaultState.case);
 })();
 </script>

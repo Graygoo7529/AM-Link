@@ -93,9 +93,46 @@ def attach_spans(run: dict, path: Path, request_scope: dict) -> None:
         "capture_declared_complete": complete}
     run["artifacts"][source.name] = file_digest(source)
     ordered = sorted(events, key=lambda e: (datetime.fromisoformat(e["started_at"]), e["span_id"]))
+    # Only the explicit local method artifact format is projected as text. Other
+    # producers retain references; a response is not an invitation to read files.
+    previews = {}
+    native = run["system"].get("target") == "native"
+    if run["system"].get("target") == "lexical" or native:
+        verified = set()
+        for event in ordered:
+            for ref in event["inputs"] + event["outputs"]:
+                if ref["id"] in verified:
+                    continue
+                artifact = (path / ref["artifact"]).resolve()
+                if not artifact.is_relative_to(path.resolve()) or not artifact.is_file() or artifact.stat().st_size > 5_000_000 or file_digest(artifact) != ref["sha256"]:
+                    raise ValueError("local method artifact path/size/hash mismatch")
+                verified.add(ref["id"])
+            if not native and event["operation"] not in {"store", "retrieve"}:
+                continue
+            selected_refs = event["outputs"][:8]
+            projected = []
+            for ref in selected_refs:
+                value = json.loads((path / ref["artifact"]).read_text(encoding="utf-8"))
+                if native:
+                    if not isinstance(value, dict) or value.get("schema_version") != "amlink.artifact.v1":
+                        continue
+                    if set(value) != {"schema_version", "title", "text"} or not isinstance(value["title"], str) or not isinstance(value["text"], str):
+                        raise ValueError("invalid native display artifact")
+                    summary, content = value["title"], value["text"]
+                elif event["operation"] == "store":
+                    items = value["items"]
+                    summary = f"本批保存 {len(items)} 条；该用户累计 {value['user_total']} 条。正文展示该批首尾消息的有限摘录。"
+                    shown = items[:1] + (items[-1:] if len(items)>1 else [])
+                    content = "\n\n".join(f"{item['role']} · 时间 {item.get('timestamp')}\n{item['content']}" for item in shown)
+                else:
+                    summary = f"候选第 {value['rank']} 名；分数 {value['score']:.4f}；{'返回' if value['selected'] else '未返回'}；{value['corpus_size']} 条存储消息中 {value['positive_candidates']} 条正分。"
+                    content = value["content"]
+                projected.append({"id": ref["id"], "summary": summary, "content": excerpt(content, 350)})
+            previews[event["span_id"]] = projected
     for query in run["queries"]:
         requests = {query["search_id"]} | {a["id"] for a in query["adds"]}
         query["spans"] = [e for e in ordered if e["request_id"] in requests]
+        query["span_previews"] = {key: value for key, value in previews.items() if key in {s["span_id"] for s in query["spans"]}}
         if run["system"].get("target") == "mem0-research":
             for add in query["adds"]:
                 outputs = [ref for e in query["spans"] if e["operation"] == "add" and e["request_id"] == add["id"]

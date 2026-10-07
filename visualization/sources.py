@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from dataset.pack import load_pack
+from visualization.semantics import readable
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -53,9 +54,17 @@ def local_sources(profiles: dict) -> dict:
         # Receipt details can contain local acquisition plumbing; expose only identity.
         stats[key]["source"] = {k: stats[key]["source"][k] for k in ("file", "sha256")}
     for case_id, binding in profiles["bindings"].items():
-        if binding["dataset"] not in packs:
+        binding_path = (REPO / binding.get("pack", profiles["datasets"][binding["dataset"]]["pack"])).resolve()
+        if not binding_path.is_relative_to(REPO / "dataset/data/prepared"):
+            raise ValueError("case pack must be in dataset/data/prepared")
+        if not binding_path.exists():
             continue
-        pack = packs[binding["dataset"]]
+        pack = packs.get(str(binding_path))
+        if pack is None:
+            pack = load_pack(binding_path)
+            packs[str(binding_path)] = pack
+        if pack["dataset"]["id"] != profiles["datasets"][binding["dataset"]]["dataset_id"]:
+            raise ValueError("case dataset identity mismatch")
         record = next((r for r in pack["records"] if r["id"] == binding["record"]), None)
         if record is None:
             raise ValueError(f"missing record for {case_id}")
@@ -67,12 +76,14 @@ def local_sources(profiles: dict) -> dict:
         if set(selected) - turns.keys():
             raise ValueError(f"missing source turn for {case_id}")
         samples[case_id] = {"record_id": record["id"], "task_id": task["id"],
+            "readable_input": readable(task["input"]), "readable_annotations": readable(task.get("annotations", {})),
             "history_unit_count": len(turns), "shown_unit_count": len(selected),
             "input": excerpt(task["input"], 5000), "annotations": excerpt(task.get("annotations", {}), 6000),
             "annotation_keys": list(task.get("annotations", {})),
             "units": [{"id": tid, "session": turns[tid][0],
                 "speaker": turns[tid][1].get("speaker", turns[tid][1].get("role")),
                 "timestamp": turns[tid][1].get("timestamp"),
+                "readable": readable(turns[tid][1]["content"]),
                 "content": excerpt(turns[tid][1]["content"]),
                 "source_pointer": turns[tid][1].get("attributes", {}).get("source_pointer")}
                 for tid in selected]}

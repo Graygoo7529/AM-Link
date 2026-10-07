@@ -148,6 +148,14 @@ def _build_target(arguments: argparse.Namespace):
 def main() -> None:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
+    if len(sys.argv) > 1 and sys.argv[1] in {"study", "workspace"}:
+        from benchmark.study import main as study_main, workspace_main
+        try:
+            (study_main if sys.argv[1] == "study" else workspace_main)(sys.argv[2:])
+        except (OSError, ValueError, KeyError, RuntimeError) as error:
+            print(f"research command failed: {type(error).__name__}: {error}", file=sys.stderr)
+            raise SystemExit(1) from error
+        return
     arguments = _parser().parse_args()
     try:
         if arguments.command == "inspect":

@@ -2,6 +2,8 @@
 
 `dataset/` 是独立数据层，负责原始数据获取、结构分析、预处理、选择与切分。数据集无需与比赛或待测系统绑定，产物是中立的 dataset pack；Add/Search、分块、角色映射和评分属于 [`benchmark/`](../benchmark/README.md)。依赖方向为 `benchmark → dataset`。
 
+`selection.py` 提供记录/任务/原文片段/相邻窗口与严格时间选择；保留来源顺序和基础包指纹，遗漏证据默认拒绝。通过 [案例实验入口](../benchmark/STUDIES.md) 可直接加载某案例的完整记录或诊断片段。PersonaMem-v2 的字符串消息容器会解包为真正问题，原始写法保留在 `input.source_text`；该额外字段不会进入 Search。
+
 ## 已取得的数据（2026-10-07）
 
 | 来源 | 本机实际取得 | 读取与使用 |

@@ -640,6 +640,7 @@ def build_personamem_v2(
     task_limit: int | None,
 ) -> dict[str, Any]:
     """Join PersonaMem-v2 benchmark rows with the separately published history files."""
+    history_root = history_root.resolve()
     requested = set(persona_ids or [])
     if task_limit is not None and task_limit < 1:
         raise ValueError("task-limit must be positive")
@@ -696,8 +697,16 @@ def build_personamem_v2(
             if task_limit is not None and used_tasks >= task_limit:
                 break
             row = item["row"]
+            query = row["user_query"]
+            # CSV stores some questions as Python-literal message dictionaries.
+            # Decode the container, never execute it or send role/encoding noise as query.
+            if isinstance(query, str) and query.lstrip().startswith("{"):
+                decoded = ast.literal_eval(query)
+                if not isinstance(decoded, dict) or decoded.get("role") != "user" or not isinstance(decoded.get("content"), str):
+                    raise ValueError("PersonaMem user_query must contain a user message")
+                query = decoded["content"]
             tasks.append({"id": f"row-{item['index']}", "kind": "personalization",
-                "input": {"text": row["user_query"]},
+                "input": {"text": query, "source_text": row["user_query"]},
                 "annotations": {k: v for k, v in row.items() if k not in {"user_query", "persona_id", "chat_history_32k_link", "chat_history_128k_link"}},
                 "attributes": {"persona_id": persona_id, "history_link": link,
                     "history_window": "32k", "history_path": str(history_path.relative_to(history_root))}})

@@ -234,7 +234,7 @@ class PrepareTests(unittest.TestCase):
             root = Path(directory)
             source = root / "benchmark.csv"
             source.write_text("persona_id,chat_history_32k_link,chat_history_128k_link,user_query,correct_answer,preference\n"
-                "1,data/chat_history_32k/p.json,data/chat_history_128k/q.json,What?,yes,tea\n", encoding="utf-8")
+                "1,data/chat_history_32k/p.json,data/chat_history_128k/q.json,\"{'role': 'user', 'content': 'What?'}\",yes,tea\n", encoding="utf-8")
             history = root / "data/chat_history_32k/p.json"
             history.parent.mkdir(parents=True)
             history.write_text(json.dumps({"chat_history": [
@@ -250,6 +250,7 @@ class PrepareTests(unittest.TestCase):
                 prepare.build_personamem_v2(path=source, history_root=root, persona_ids=["1"], task_limit=1)
         self.assertEqual(len(pack["records"][0]["sessions"][0]["turns"]), 2)
         self.assertEqual(pack["records"][0]["tasks"][0]["input"]["text"], "What?")
+        self.assertIn("'role': 'user'", pack["records"][0]["tasks"][0]["input"]["source_text"])
         self.assertEqual(pack["records"][0]["tasks"][0]["annotations"]["preference"], "tea")
         self.assertNotIn("persona prompt", json.dumps(pack["records"][0]["sessions"]))
 
