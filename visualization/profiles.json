@@ -1,0 +1,432 @@
+{
+  "schema_version": 1,
+  "updated": "2026-10-07",
+  "datasets": {
+    "locomo": {
+      "dataset_id": "locomo",
+      "basis": "本机完整原始文件与读取器已核对",
+      "layers": [
+        "10 个长期对话",
+        "272 场会话",
+        "5,882 条发言",
+        "1,986 道原始题目"
+      ],
+      "unit": "一条 record 是两个人的长期对话；一条 task 是其中一道题。",
+      "pack": "dataset/data/prepared/locomo-full.json",
+      "fields": [
+        [
+          "conversation.session_N[].text / speaker / dia_id",
+          "history",
+          "原始发言、人物与来源 ID",
+          "Add 保留正文与说话者；不能只保留主题摘要。"
+        ],
+        [
+          "conversation.session_N_date_time",
+          "history",
+          "会话时间锚点",
+          "用于解释昨天、去年等；不等于写入系统的时间。"
+        ],
+        [
+          "qa[].question",
+          "task",
+          "当前问题",
+          "当前 profile 将其作为 Search query。"
+        ],
+        [
+          "qa[].answer / evidence / category",
+          "annotations",
+          "答案、来源引用、题型",
+          "仅评估侧；evidence 可能是对抗题的诱导片段。"
+        ],
+        [
+          "qa[].adversarial_answer",
+          "annotations",
+          "对抗题诱导答案",
+          "不是正确答案，不得写入 Add。"
+        ],
+        [
+          "event_summary / observation / session_summary",
+          "auxiliary",
+          "作者附带的摘要和观察",
+          "本地 reader 不用这些生成性材料代替原始聊天。"
+        ]
+      ]
+    },
+    "refined": {
+      "dataset_id": "locomo-refined-community",
+      "basis": "本机完整文件已核对；字段沿用 LoCoMo",
+      "layers": [
+        "10 个对话",
+        "与原版相同历史",
+        "1,382 道修改题目"
+      ],
+      "unit": "修改问答版本；不是独立的聊天历史。",
+      "pack": "dataset/data/prepared/locomo-refined-smoke.json",
+      "fieldsFrom": "locomo"
+    },
+    "perltqa": {
+      "dataset_id": "perltqa-zh",
+      "basis": "本机中文双文件已核对",
+      "layers": [
+        "141 人物资料",
+        "5 类记忆资料",
+        "32 人物有 QA",
+        "8,593 道题"
+      ],
+      "unit": "每个来源单元是资料文档；五个分区不是五次按时间发生的聊天。",
+      "pack": "dataset/data/prepared/perltqa-zh-full.json",
+      "fields": [
+        [
+          "perltmem: profile / profile_description",
+          "history",
+          "人物资料及描述",
+          "连同资料主体写入；不要假装整份档案是本人一次发言。"
+        ],
+        [
+          "perltmem: social_relationship / events / dialogues",
+          "history",
+          "有 ID 的关系、事件和对话",
+          "保留关系方向、事件链接、内层说话者与时间。"
+        ],
+        [
+          "perltqa: Question",
+          "task",
+          "问题",
+          "独立任务输入。"
+        ],
+        [
+          "Answer / Reference Memory",
+          "annotations",
+          "答案和来源文档引用",
+          "引用可解析只证明来源存在，不证明答案正确。"
+        ],
+        [
+          "Memory Anchors",
+          "annotations",
+          "字符位置标注",
+          "存在 [-1,-1]；当前不认证字符级金标。"
+        ]
+      ]
+    },
+    "beam": {
+      "dataset_id": "beam",
+      "basis": "2026-10-07：三档及 10M Parquet 完整取得、解码核对；案例仍使用原小样本",
+      "layers": [
+        "100K：20 条",
+        "500K：35 条",
+        "1M：35 条",
+        "10M：10 条"
+      ],
+      "unit": "一条 record 包含多批 chat 与能力探针；100K 是上游 split 名称。",
+      "pack": "dataset/data/prepared/beam-update-cases.json",
+      "fields": [
+        [
+          "chat[batch][turn]",
+          "history",
+          "真实发布的聊天及其中代码",
+          "只有 chat 进入本地历史；保留批次和发言 ID。"
+        ],
+        [
+          "probing_questions.*.question",
+          "task",
+          "按能力分组的问题",
+          "字符串格式先安全解析，问题作为 Search 输入。"
+        ],
+        [
+          "ideal_response / rubric / source_chat_ids",
+          "annotations",
+          "预期回答、评分要求与部分来源线索",
+          "当前未统一验证所有 source_chat_ids，不能宣称全量证据评分。"
+        ],
+        [
+          "conversation_seed / narratives / user_profile / conversation_plan / user_questions",
+          "auxiliary",
+          "生成背景、画像和计划",
+          "不当成已通过聊天告知智能体的事实。"
+        ]
+      ]
+    },
+    "life": {
+      "dataset_id": "clbench-life",
+      "basis": "2026-10-07：完整 405 行已核对；本页 pack 仍为原案例切片",
+      "layers": [
+        "405 条完整样本",
+        "9 类子领域",
+        "历史与任务",
+        "rubrics 评分标准"
+      ],
+      "unit": "消息不是评论；一条长消息可能装入整篇社区讨论。",
+      "pack": "dataset/data/prepared/clbench-life-extra.json",
+      "fields": [
+        [
+          "messages[].content 中 TASK 之前 / 多轮历史",
+          "history",
+          "上下文材料",
+          "保存发言、引文与回复边界，不混入后面的任务要求。"
+        ],
+        [
+          "TASK 之后 / 最后用户任务消息",
+          "task",
+          "当前工作要求",
+          "拆分依据明确分隔符或多轮结构。"
+        ],
+        [
+          "rubrics",
+          "annotations",
+          "多项评分标准",
+          "只交给评估，不当作检索证据。"
+        ],
+        [
+          "metadata.task_id / context_category / context_subcategory",
+          "metadata",
+          "身份与类别",
+          "用于分组与统计，不是记忆正文。"
+        ]
+      ]
+    },
+    "cl": {
+      "dataset_id": "clbench",
+      "basis": "2026-10-07：完整 1899 行已核对；现有三条 pack 中两条边界未明确",
+      "layers": [
+        "1899 条完整样本",
+        "4 类能力领域",
+        "18 类子领域",
+        "rubrics"
+      ],
+      "unit": "有边界才拆历史/任务；不凭猜测把单消息任意切开。",
+      "pack": "dataset/data/prepared/clbench-smoke.json",
+      "fieldsFrom": "life"
+    },
+    "script": {
+      "dataset_id": "scriptmem",
+      "basis": "公开任务文件已核对；真实剧本缺失",
+      "layers": [
+        "4 部作品",
+        "457 道题",
+        "选择 / 多选 / 排序",
+        "缺原始剧本"
+      ],
+      "unit": "任务可分析，缺历史时不能回放记忆实验。",
+      "fields": [
+        [
+          "conversation",
+          "auxiliary",
+          "省略说明与合成格式示例",
+          "不是剧本原文，不可进入 Add。"
+        ],
+        [
+          "questions / options",
+          "task",
+          "问题与选项（语义分组）",
+          "完整题型需专用 Answer/Eval。"
+        ],
+        [
+          "reference answers / question metadata",
+          "annotations",
+          "参考答案与任务信息（语义分组）",
+          "不当作原始事件。"
+        ]
+      ]
+    },
+    "persona": {
+      "dataset_id": "personamem-v2",
+      "basis": "本机 5,000 题、200 persona、400 份历史已核对",
+      "layers": [
+        "5,000 道题",
+        "200 persona",
+        "400 份 32K/128K 历史",
+        "persona 521 smoke"
+      ],
+      "unit": "题目和偏好标注不是用户历史的替代品。",
+      "pack": "dataset/data/prepared/personamem-v2-persona521-smoke.json",
+      "fields": [
+        [
+          "chat_history_32k_link / chat_history_128k_link",
+          "history",
+          "与题目配套的历史文件",
+          "显式加载配套 32K 历史；当前排除 system 人物生成画像，保留 user/assistant 原文及历史哈希。"
+        ],
+        [
+          "current query",
+          "task",
+          "当前问题（语义分组）",
+          "用于请求检索与个性化回答。"
+        ],
+        [
+          "preference / evaluation answer",
+          "annotations",
+          "偏好及回答标注（语义分组）",
+          "不允许将标签作为已检索到的偏好。"
+        ]
+      ]
+    },
+    "longmem": {
+      "dataset_id": "longmemeval-s",
+      "basis": "S/M/Oracle 固定 revision=98d7416 已核对",
+      "layers": [
+        "S 500 题 / 246,750 turns",
+        "Oracle 500 题 / 10,960 turns",
+        "M 2.74 GB",
+        "30 道拒答题"
+      ],
+      "unit": "S / M / Oracle 历史范围不同；当前本地 pack 为 S smoke，不能代表全量。",
+      "pack": "dataset/data/prepared/longmemeval-s-smoke.json",
+      "fields": [
+        [
+          "haystack_sessions / haystack_dates",
+          "history",
+          "历史与日期",
+          "保留原始会话边界。"
+        ],
+        [
+          "question / question_date",
+          "task",
+          "问题及提问时间",
+          "查询时间与历史事件时间分别保留。"
+        ],
+        [
+          "answer / answer_session_ids / has_answer",
+          "annotations",
+          "答案、来源和可回答性",
+          "30 道 `_abs` 拒答题单独标记；不可回答不推出 Search 必须为空。"
+        ]
+      ]
+    },
+    "mab": {
+      "dataset_id": "memoryagentbench-cr",
+      "basis": "四类 Parquet 已下载并逐批解码；尚未适配 pack",
+      "layers": [
+        "检索 22 rows",
+        "冲突 8 rows",
+        "长程 110 rows",
+        "学习 6 rows"
+      ],
+      "unit": "共享 context 对应多题；当前只核对字段和行数，不作为 Add/Search pack。",
+      "fields": [
+        [
+          "context",
+          "history",
+          "给定上下文",
+          "待读取器接入。"
+        ],
+        [
+          "questions",
+          "task",
+          "任务数组",
+          "逐题关联身份。"
+        ],
+        [
+          "answers / metadata",
+          "annotations",
+          "答案及评估信息",
+          "待核对具体子任务结构。"
+        ]
+      ]
+    },
+    "pv3": {
+      "dataset_id": "personamem-v3",
+      "basis": "samples 三表已下载并核对；backend 未取",
+      "layers": [
+        "100 profiles",
+        "221817 events",
+        "15791 queries",
+        "31 类任务"
+      ],
+      "unit": "三张表覆盖当前发布的全部人物事件与问题；原版评估代码读取 backend 布局，转换适配尚未实现。",
+      "fields": [
+        [
+          "persona_context: timestamp / app / conversation_json 等",
+          "history",
+          "跨平台活动与时间",
+          "只允许问题时间之前的可观察事件；表内附带 preferences 等标注需另行分离。"
+        ],
+        [
+          "persona_queries: user_query / prior_conversation",
+          "task",
+          "问题与当前对话",
+          "逐题保留 timestamp，后续适配时间遮罩。"
+        ],
+        [
+          "groundtruth_preference / supporting_history / golden_response / rubrics",
+          "annotations",
+          "真值、参考证据、答案与评分",
+          "只能供评估与复核，不能当成智能体已知历史。"
+        ],
+        [
+          "persona_profiles",
+          "auxiliary",
+          "生成的人物档案与潜在偏好",
+          "不能默认作为 Add 输入，先核对上游评估协议。"
+        ]
+      ]
+    }
+  },
+  "bindings": {
+    "l1": {
+      "dataset": "locomo",
+      "record": "conv-26",
+      "task": "qa-11",
+      "turns": [
+        "D3:13",
+        "D4:3"
+      ]
+    },
+    "l2": {
+      "dataset": "locomo",
+      "record": "conv-26",
+      "task": "qa-0",
+      "turns": [
+        "D1:3"
+      ]
+    },
+    "l3": {
+      "dataset": "locomo",
+      "record": "conv-26",
+      "task": "qa-153",
+      "turns": [
+        "D2:8"
+      ]
+    },
+    "p1": {
+      "dataset": "perltqa",
+      "record": "character-3",
+      "task": "social_relationship:4_0:0",
+      "turns": [
+        "social_relationship:4_0"
+      ]
+    },
+    "p2": {
+      "dataset": "perltqa",
+      "record": "character-0",
+      "task": "dialogues:1_0_0#0:2",
+      "turns": [
+        "events:1_0_0",
+        "dialogues:1_0_0#0"
+      ]
+    },
+    "b1": {
+      "dataset": "beam",
+      "record": "2",
+      "task": "knowledge_update:0",
+      "turns": [
+        "0:32",
+        "0:66"
+      ]
+    },
+    "b2": {
+      "dataset": "beam",
+      "record": "2",
+      "task": "contradiction_resolution:0",
+      "turns": [
+        "0:32",
+        "0:70"
+      ]
+    },
+    "c1": {
+      "dataset": "life",
+      "record": "a760132c-d3bc-2931-f3e5-db24be64d0b8",
+      "task": "a760132c-d3bc-2931-f3e5-db24be64d0b8",
+      "turns": []
+    }
+  }
+}

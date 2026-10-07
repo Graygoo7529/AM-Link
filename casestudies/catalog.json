@@ -19,9 +19,9 @@
     },
     "beam": {
       "name": "BEAM · 长历史更新与冲突",
-      "status": "已取得：100K 档 2 / 20 条历史，388 发言、40 probes",
+      "status": "已取得：100K/500K/1M 三档 90 条记录，另有 10M 两个分片；Parquet 已校验",
       "raw": "长 chat＋代码＋生成背景＋十类能力探针",
-      "prepared": "只 chat 进入历史；新增案例：200 发言＋20 任务；来源评分尚未适配",
+      "prepared": "只 chat 进入历史；已有 100K 案例 pack；全量 Parquet 已解码核对，尚未构建全量 pack",
       "cases": [
         "b1",
         "b2"
@@ -36,13 +36,13 @@
           "url": "https://huggingface.co/datasets/Mohammadta/BEAM-10M/tree/main/data"
         }
       ],
-      "downloadNote": "Parquet 文件；下载后需解码并核验。10M 尚未下载。"
+      "downloadNote": "常规三档约 105.6 MB，10M 两片约 343.8 MB；已取得，需按规模选择处理。"
     },
     "life": {
       "name": "CL-bench Life · 带材料完成工作",
-      "status": "已取得：5 / 405 条；新增 offset 100、101 两条",
+      "status": "完整文件已取得：405 条，29.3 MB；原有案例小样本保留",
       "raw": "比赛日志、社区讨论与信息碎片；附任务和评分要求",
-      "prepared": "历史 / 任务 / rubric 分离；新增两条 → 7 条历史消息＋2 任务",
+      "prepared": "历史 / 任务 / rubric 分离；已有 7 条历史消息＋2 任务小样本，完整文件尚未构建全量 pack",
       "cases": [
         "c1"
       ],
@@ -52,7 +52,7 @@
           "url": "https://huggingface.co/datasets/tencent/CL-bench-Life/resolve/cd2589f/CL-bench%20Life.jsonl?download=true"
         }
       ],
-      "downloadNote": "仅取得 5 条样本，尚缺完整文件。"
+      "downloadNote": "完整 JSONL 已保存并校验；使用评测用途许可，不写入 Git。"
     },
     "locomo": {
       "name": "LoCoMo · 跨会话记忆",
@@ -89,9 +89,9 @@
     },
     "cl": {
       "name": "CL-bench · 学习新规则与流程",
-      "status": "已取得：3 / 1,899 条",
+      "status": "完整文件已取得：1,899 条，90.1 MB；原有 3 条小样本 pack 保留",
       "raw": "新知识、流程或规则＋messages＋rubrics",
-      "prepared": "1 条能构造多轮历史；2 条单轮缺可靠任务边界，保留原文",
+      "prepared": "1 条能构造多轮历史；2 条单轮缺可靠任务边界；完整文件已核对，尚未构建全量 pack",
       "cases": [],
       "empty": "能力重点：记住约束并应用规则。先确认材料 / 任务边界，再做 Add → Search → Answer；不能把 rubric 当作历史。",
       "links": [
@@ -100,7 +100,7 @@
           "url": "https://huggingface.co/datasets/tencent/CL-bench/resolve/66122c88771ac4f09f163415902828b933e78899/CL-bench.jsonl?download=true"
         }
       ],
-      "downloadNote": "仅取得 3 条样本，尚缺完整文件。"
+      "downloadNote": "完整 JSONL 已保存并校验；rubric 仍只属于评估侧。"
     },
     "script": {
       "name": "ScriptMem · 当前缺少剧本",
@@ -118,12 +118,12 @@
       "downloadNote": "公开题目已齐；作者未发布原始剧本。"
     },
     "persona": {
-      "name": "PersonaMem-v2 · 当前缺少历史",
-      "status": "已取得 3 题，均为 persona 521；历史文件下载返回 502",
+      "name": "PersonaMem-v2 · 题目与历史已配套",
+      "status": "已取得 5,000 题、200 persona、400 份 32K/128K 历史；Persona 521 smoke 已构建",
       "raw": "当前问题、偏好标签、评估答案、长历史路径",
-      "prepared": "任务与标签分离；无历史时拒绝回放",
+      "prepared": "任务与标签分离；persona 521 使用 32K 历史构建 188 turns / 3 tasks smoke pack",
       "cases": [],
-      "empty": "能力重点：隐式偏好。题目标签中的偏好不是从历史检索出的记忆；需先取得作者 HF 仓库中的对应 history。",
+      "empty": "能力重点：隐式偏好。题目标签中的偏好不是从历史检索出的记忆；需核对原始系统画像与真实对话的输入边界。",
       "links": [
         {
           "label": "文本题目 CSV",
@@ -138,13 +138,13 @@
           "url": "https://huggingface.co/datasets/bowen-upenn/PersonaMem-v2/tree/main/data/chat_history_128k"
         }
       ],
-      "downloadNote": "题目和历史须配套下载；文件在 Hugging Face 数据仓库。"
+      "downloadNote": "文本 benchmark 与引用的两套历史已取得并逐文件校验；多模态目录未下载。"
     },
     "longmem": {
-      "name": "LongMemEval · 尚未取得真实样本",
-      "status": "来源与读取器已登记；S 行接口 500，Oracle 文件 502",
+      "name": "LongMemEval · S / M / Oracle 已取得",
+      "status": "S 277.4 MB、M 2.74 GB、Oracle 15.4 MB 均已取得；S/Oracle 500 题",
       "raw": "长会话＋日期＋问题＋可回答性标注；S / M / Oracle",
-      "prepared": "读取器仅通过合成结构测试；无本机真实 pack",
+      "prepared": "S smoke 6 题 / 299 会话 / 3,159 turns；Oracle smoke 6 题；30 道拒答题已单列",
       "cases": [],
       "empty": "能力重点：时间、更新、拒答。Oracle 仅保留答案会话，不能代替完整 S / M 历史的检索难度。",
       "links": [
@@ -161,13 +161,13 @@
           "url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416/longmemeval_m_cleaned.json?download=true"
         }
       ],
-      "downloadNote": "三个真实文件都未取得；优先 S。"
+      "downloadNote": "三份固定 revision=98d7416 文件均已保存并校验；M 仅建议按需切片处理。"
     },
     "mab": {
       "name": "MemoryAgentBench · 新发现候选",
-      "status": "官方 splits 已确认；CR / TTL 单条样本下载均超时",
+      "status": "四类 Parquet 均已取得：8/6/22/110 rows，约 76.6 MB；尚未适配读取器",
       "raw": "共享 context → 多个 questions / answers；检索、学习、长程理解、冲突",
-      "prepared": "已登记来源；未取得样本，未实现读取器",
+      "prepared": "已完成 Parquet 逐批解码和字段核对；context/questions/answers/metadata 尚未转 pack",
       "cases": [],
       "empty": "下一步能力补充：Test_Time_Learning 与 Conflict_Resolution。当前不能作为可运行数据集。",
       "links": [
@@ -176,22 +176,22 @@
           "url": "https://huggingface.co/datasets/ai-hyz/MemoryAgentBench/tree/main/data"
         }
       ],
-      "downloadNote": "先取 Conflict_Resolution / Test_Time_Learning；尚无本地读取器。"
+      "downloadNote": "四类文件及 entity2id.json 已保存；需要专用 Parquet 读取器和来源许可核对。"
     },
     "pv3": {
       "name": "PersonaMem-v3 · 新发现候选",
-      "status": "已核对 context / profiles / queries 三类配置；尚未下载",
+      "status": "预览表已取得：100 profiles、221,817 events、15,791 queries；backend 原始目录未下载",
       "raw": "跨平台活动、反馈、用户意图与遗忘请求",
-      "prepared": "仅调研；无本地原文或读取器",
+      "prepared": "三份 CSV 已保存并核对列结构；完整 backend 仍未取，暂不构建记忆 pack",
       "cases": [],
-      "empty": "下一步能力补充：跨平台个性化与遗忘。作者页面对人物总量的文案不同，暂不使用统一规模结论。",
+      "empty": "公开三表覆盖当前 100 persona 的事件与问题；原版评估代码使用 backend 目录。需要按查询时间遮罩历史并隔离金标。",
       "links": [
         {
           "label": "作者完整文件页",
           "url": "https://huggingface.co/datasets/bowen-upenn/PersonaMem-v3/tree/main"
         }
       ],
-      "downloadNote": "仍是候选；保留人物目录以及资料、历史、问题的配套关系。"
+      "downloadNote": "仅取得公开 samples 预览表和 README；backend 约 1.49 GB，后续按 persona 选择下载。"
     }
   },
   "cases": {
@@ -325,7 +325,7 @@
     }
   },
   "schemaVersion": 1,
-  "updated": "2026-10-05",
+  "updated": "2026-10-07",
   "defaultState": {
     "schemaVersion": 1,
     "dataset": "beam",

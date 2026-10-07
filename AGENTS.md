@@ -4,7 +4,8 @@
 - 截至 2026-09-23：一期 Smoke 通过、Full completed，在 [AM-Link 排行榜开源榜文本赛道](https://agentmemories.ai/leaderboard/academic/textual)排名第 21 名；一期公网 API、部署代码、数据库数据和专用证书均已清理。服务器现保留与项目无关的通用 Nginx、Certbot renewal 基础和 `/hello` 示例。二期处于调研阶段，还没有新实现。具体收尾状态见 `docs/phase-1/closeout.md`。
 - 一期代码在 `archive/phase-1/`，版本 0.3.0；代码基线 `1881abe`，归档前 HEAD `447608a`。保持归档作为历史参考，二期代码应另建目录。
 - 每次开始先读根 README、`docs/README.md`、`docs/phase-2/integration-research.md`；只按任务需要读历史长文，不把旧文档的当前状态当成今天的事实。
-- 数据集/案例展示长期入口是根目录 `casestudies/README.md`；`catalog.json` 保存展示内容，`view.html` 可在会话内复用，`index.html` 是独立网页。新增案例后从同一 catalog 重建两者；操作见该目录 README。用户不需要保存页面选择状态。
+- 统一研究展示入口是 `visualization/README.md`，覆盖数据构成、样本标注、理论链路与运行观测；`casestudies/` 留在根目录保存案例文档与唯一案例 catalog，两个视图共用它。网页 `index.html` 与会话片段 `view.html` 同源生成，原文/轨迹只进入忽略的 `visualization/data/`。用户不需要保存页面选择状态。
+- AM-Link 二期埋点遵循 `benchmark/OBSERVABILITY.md`；`observability.py` 提供标准事件校验与 recorder。未采集是未知，理论方案与实测分开；目前尚未在真实二期方法中埋点。
 - reference\TinySoul-Agent 是我进行的另一个项目，可以探索和参考它使用的记忆设计理念和 Inspect、Search 原型方法
 
 ## 环境

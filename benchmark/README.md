@@ -82,6 +82,8 @@ flowchart LR
 
 ## 扩展方向
 
+AM-Link 自身的内部埋点使用 [可观测性标准接口 v1](./OBSERVABILITY.md)：统一来源引用、父子步骤、候选排序、上下文、模型用量与失败信息。接口定义、recorder 和导入校验已实现，二期实际埋点尚未接入。[研究可视化](../visualization/README.md) 可将这些记录连接到样本和理论案例。
+
 保持环境策略独立，可以继续加入增量历史检查点、干扰历史、更新时间过滤、特定能力选题，以及“统一 Answer → 来源专用 Eval”阶段。后者必须固定 answer/judge 版本和预算，单独记录调用与费用，才能公平比较抽取、压缩和原文检索系统。当前不把 rubric 当 evidence，也不凭关键词猜 gold spans。
 
 ```powershell

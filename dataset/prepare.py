@@ -19,7 +19,7 @@ from dataset.pack import PACK_SCHEMA_VERSION, write_pack
 ROOT = Path(__file__).resolve().parent
 RAW_DIR = ROOT / "data" / "raw"
 CATALOG_PATH = ROOT / "catalog.json"
-BUILDER_VERSION = 3
+BUILDER_VERSION = 4
 CHUNK_READ_SIZE = 1024 * 1024
 SESSION_PATTERN = re.compile(r"^session_(\d+)$")
 DIALOG_ID_PATTERN = re.compile(r"D:?(\d+):(\d+)", re.IGNORECASE)
@@ -379,10 +379,18 @@ def _longmemeval_record(
     history = []
     evidence_turn_ids = []
     seen_targets: set[str] = set()
+    used_session_ids: set[str] = set()
     for session_index, (session_id, turns) in enumerate(selected_sessions):
         if not isinstance(turns, list):
             raise ValueError(f"question {question_id} contains an invalid session")
         session_timestamp = _parse_timestamp(dates[session_index] if session_index < len(dates) else None)
+        source_session_id = str(session_id)
+        normalized_session_id = source_session_id
+        suffix = 1
+        while normalized_session_id in used_session_ids:
+            suffix += 1
+            normalized_session_id = f"{source_session_id}#{suffix}"
+        used_session_ids.add(normalized_session_id)
         normalized_turns = []
         for turn_index, turn in enumerate(turns):
             if not isinstance(turn, dict):
@@ -392,7 +400,7 @@ def _longmemeval_record(
             if role not in {"user", "assistant"} or not isinstance(content, str) or not content.strip():
                 raise ValueError(f"question {question_id} contains an invalid role/content")
             message_timestamp = _parse_timestamp(turn.get("timestamp")) or session_timestamp
-            turn_id = f"{session_id}:{turn_index}"
+            turn_id = f"{normalized_session_id}:{turn_index}"
             normalized_turns.append(
                 {
                     "id": turn_id,
@@ -409,8 +417,8 @@ def _longmemeval_record(
                     evidence_turn_ids.append(turn_id)
         history.append(
             {
-                "id": str(session_id),
-                "source_id": str(session_id),
+                "id": normalized_session_id,
+                "source_id": source_session_id,
                 "timestamp": session_timestamp,
                 "turns": normalized_turns,
             }
@@ -431,7 +439,9 @@ def _longmemeval_record(
                     "answer": answer,
                     "evidence_turn_ids": evidence_turn_ids,
                     "answer_session_ids": [str(value) for value in answer_session_ids],
-                    "is_answerable": bool(answer_session_ids),
+                    # The author evaluator identifies abstention by _abs in the ID;
+                    # these records still carry answer_session_ids from their source.
+                    "is_answerable": "_abs" not in question_id and bool(answer_session_ids),
                 },
                 "attributes": {"question_type": record.get("question_type", "unknown")},
             }
@@ -621,6 +631,83 @@ def build_tasks(*, dataset_id: str, path: Path, task_limit: int | None, task_ids
         dataset_id=dataset_id, dataset=source_entry(dataset_id), path=path,
         selection={"record_ids": [r["id"] for r in records], "task_limit": task_limit, "task_ids": sorted(requested)}, records=records,
     )
+
+
+def build_personamem_v2(
+    *, path: Path, history_root: Path, persona_ids: list[str] | None,
+    task_limit: int | None,
+) -> dict[str, Any]:
+    """Join PersonaMem-v2 benchmark rows with the separately published history files."""
+    requested = set(persona_ids or [])
+    if task_limit is not None and task_limit < 1:
+        raise ValueError("task-limit must be positive")
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for index, row in enumerate(iter_rows(path)):
+        persona_id = str(row.get("persona_id", ""))
+        if not persona_id or (requested and persona_id not in requested):
+            continue
+        grouped.setdefault(persona_id, []).append({"index": index, "row": row})
+        if task_limit is not None and sum(len(values) for values in grouped.values()) >= task_limit:
+            break
+    if requested - set(grouped):
+        raise ValueError(f"persona IDs not found: {', '.join(sorted(requested - set(grouped)))}")
+    if not grouped:
+        raise ValueError("no PersonaMem-v2 rows selected")
+    records = []
+    used_tasks = 0
+    history_sources = []
+    for persona_id, selected in grouped.items():
+        row = selected[0]["row"]
+        link = row.get("chat_history_32k_link")
+        if not isinstance(link, str) or not link:
+            raise ValueError(f"persona {persona_id} has no 32K history link")
+        history_path = (history_root / link).resolve()
+        if not history_path.is_relative_to(history_root.resolve()) or not history_path.exists():
+            raise ValueError(f"missing history for persona {persona_id}: {link}")
+        if any(item["row"].get("chat_history_32k_link") != link for item in selected):
+            raise ValueError(f"persona {persona_id} refers to multiple 32K histories")
+        history_hash = sha256_file(history_path)
+        receipt_path = history_path.with_suffix(history_path.suffix + ".receipt.json")
+        history_receipt = json.loads(receipt_path.read_text(encoding="utf-8")) if receipt_path.exists() else None
+        if history_receipt and history_receipt.get("sha256") != history_hash:
+            raise ValueError(f"history for persona {persona_id} differs from receipt")
+        history_sources.append({"file": link, "sha256": history_hash, "acquisition": history_receipt})
+        source = json.loads(history_path.read_text(encoding="utf-8"))
+        source_persona = source.get("metadata", {}).get("persona_id") if isinstance(source, dict) else None
+        if source_persona is not None and str(source_persona) != persona_id:
+            raise ValueError(f"history belongs to a different persona: {persona_id}")
+        messages = source.get("chat_history") if isinstance(source, dict) else None
+        if not isinstance(messages, list):
+            raise ValueError(f"history for persona {persona_id} has no chat_history list")
+        turns = []
+        for message_index, message in enumerate(messages):
+            if not isinstance(message, dict):
+                raise ValueError(f"history for persona {persona_id} has invalid message {message_index}")
+            if message.get("role") == "system":
+                continue
+            if message.get("role") not in {"user", "assistant"} or not isinstance(message.get("content"), str) or not message["content"].strip():
+                raise ValueError(f"history for persona {persona_id} has invalid message {message_index}")
+            turns.append({"id": str(message_index), "role": message["role"], "content": message["content"],
+                "attributes": {"source_index": message_index}})
+        tasks = []
+        for item in selected:
+            if task_limit is not None and used_tasks >= task_limit:
+                break
+            row = item["row"]
+            tasks.append({"id": f"row-{item['index']}", "kind": "personalization",
+                "input": {"text": row["user_query"]},
+                "annotations": {k: v for k, v in row.items() if k not in {"user_query", "persona_id", "chat_history_32k_link", "chat_history_128k_link"}},
+                "attributes": {"persona_id": persona_id, "history_link": link,
+                    "history_window": "32k", "history_path": str(history_path.relative_to(history_root))}})
+            used_tasks += 1
+        records.append({"id": f"persona-{persona_id}", "group_id": f"persona-{persona_id}",
+            "sessions": [{"id": "history-32k", "source_id": link, "turns": turns}], "tasks": tasks,
+            "history_references": {"chat_history_32k_link": link}})
+    result = _dataset_pack(dataset_id="personamem-v2", dataset=source_entry("personamem-v2"), path=path,
+        selection={"record_ids": [record["id"] for record in records], "persona_ids": sorted(requested),
+            "task_limit": task_limit, "history_window": "32k", "system_messages": "excluded_generation_background"}, records=records)
+    result["preparation"]["history_inputs"] = history_sources
+    return result
 
 
 def _beam_record(row: dict[str, Any], index: int) -> dict[str, Any]:
@@ -832,7 +919,7 @@ def _inspect_file(dataset_id: str, path: Path) -> dict[str, Any]:
         record_count += 1
         question_types[str(record.get("question_type", "unknown"))] += 1
         answer_session_ids = record.get("answer_session_ids")
-        if isinstance(answer_session_ids, list) and answer_session_ids:
+        if isinstance(answer_session_ids, list) and answer_session_ids and "_abs" not in str(record.get("question_id", "")):
             answerable += 1
         sessions_for_record = record.get("haystack_sessions", [])
         if isinstance(sessions_for_record, list):
@@ -1023,6 +1110,8 @@ def main() -> None:
     build_parser.add_argument("--category", type=int, action="append", default=None)
     build_parser.add_argument("--task-ids", default=None)
     build_parser.add_argument("--task-limit", type=int, default=None)
+    build_parser.add_argument("--persona-ids", default=None, help="comma-separated PersonaMem-v2 personas")
+    build_parser.add_argument("--history-root", type=Path, default=None, help="PersonaMem-v2 data root")
     build_parser.add_argument("--qa-input", type=Path, default=None, help="paired PerLTQA questions file")
     build_parser.add_argument("--character-names", default=None, help="comma-separated PerLTQA subjects")
     build_parser.add_argument("--character-limit", type=int, default=None)
@@ -1034,6 +1123,13 @@ def main() -> None:
     slice_parser.add_argument("--limit", type=int, required=True)
     arguments = parser.parse_args()
     try:
+        if arguments.command == "build":
+            if arguments.history_root is not None and arguments.dataset != "personamem-v2":
+                raise ValueError("--history-root is only supported for PersonaMem-v2")
+            if arguments.persona_ids and arguments.history_root is None:
+                raise ValueError("--persona-ids requires --history-root")
+            if arguments.history_root is not None and arguments.task_ids:
+                raise ValueError("joined PersonaMem-v2 history supports --persona-ids and --task-limit, not --task-ids")
         if arguments.command == "inspect":
             result = inspect_dataset(arguments.dataset, arguments.input)
         elif arguments.command == "slice":
@@ -1085,6 +1181,13 @@ def main() -> None:
                     dataset_id=arguments.dataset,
                     path=input_path,
                     task_ids=_comma_list(arguments.task_ids),
+                    task_limit=arguments.task_limit,
+                )
+            elif adapter == "personamem-v2-v1" and arguments.history_root is not None:
+                result = build_personamem_v2(
+                    path=input_path,
+                    history_root=(arguments.history_root or input_path.parent).resolve(),
+                    persona_ids=_comma_list(arguments.persona_ids),
                     task_limit=arguments.task_limit,
                 )
             else:

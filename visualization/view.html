@@ -1,0 +1,213 @@
+<div id="aml-research">
+  <div class="viz-controls">
+    <label class="form-label">数据集<select class="form-select" id="ar-dataset"></select></label>
+    <label class="form-label">研究视角<select class="form-select" id="ar-lens">
+      <option value="composition">① 数据构成</option><option value="sample">② 样本与标注</option>
+      <option value="theory">③ 理论链路</option><option value="observed">④ 运行观测</option>
+    </select></label>
+  </div>
+  <div id="ar-status" class="text-small text-muted" aria-live="polite"></div>
+  <div class="viz-controls ar-secondary">
+    <label class="form-label" id="ar-case-label">案例<select class="form-select" id="ar-case"></select></label>
+    <label class="form-label" id="ar-run-label">运行记录<select class="form-select" id="ar-run"></select></label>
+    <label class="form-label" id="ar-query-label">实际问题<select class="form-select" id="ar-query"></select></label>
+  </div>
+  <section id="ar-composition" aria-label="数据构成">
+    <h3>原始数据的组成</h3>
+    <ol class="ar-chain" id="ar-layers"></ol>
+    <div id="ar-unit"></div>
+    <div class="ar-compare">
+      <div><h3>原始材料</h3><div id="ar-raw"></div></div>
+      <div><h3>当前处理</h3><div id="ar-prepared"></div></div>
+    </div>
+    <div class="text-small" id="ar-stats"></div>
+    <div class="viz-row ar-links" id="ar-links"></div>
+    <div class="text-small text-muted" id="ar-basis"></div>
+  </section>
+  <section id="ar-sample" hidden aria-label="样本与标注">
+    <label class="form-label">原始字段<select class="form-select" id="ar-field"></select></label>
+    <figure aria-label="字段流向" class="ar-route">
+      <div><div class="text-small text-muted">来源含义</div><div id="ar-field-meaning"></div></div>
+      <div aria-hidden="true">→</div><div><div class="text-small text-muted">处理后去向</div><div id="ar-destination"></div></div>
+      <div aria-hidden="true">→</div><div><div class="text-small text-muted">可见阶段</div><div id="ar-audience"></div></div>
+    </figure>
+    <div id="ar-field-note"></div>
+    <hr>
+    <div id="ar-sample-empty" class="text-muted"></div>
+    <div id="ar-sample-body">
+      <div id="ar-sample-id" class="text-small text-muted"></div>
+      <div class="viz-row ar-parts" id="ar-parts" aria-label="真实样本组成">
+        <button class="btn" type="button" data-part="history" aria-pressed="true">历史摘录</button>
+        <button class="btn" type="button" data-part="input" aria-pressed="false">任务输入</button>
+        <button class="btn" type="button" data-part="annotations" aria-pressed="false">额外标注</button>
+      </div>
+      <label class="form-label" id="ar-turn-label">来源单元<select class="form-select" id="ar-turn"></select></label>
+      <div id="ar-source-meta" class="text-small text-muted"></div>
+      <pre class="ar-text" id="ar-source-text"></pre>
+      <div class="text-small text-muted" id="ar-source-limit"></div>
+    </div>
+  </section>
+  <section id="ar-theory" hidden aria-label="理论链路">
+    <div class="text-small text-muted">理论分析 · 人工设计示意 · 未代表目标实际行为</div>
+    <h3 id="ar-question"></h3>
+    <figure class="ar-evidence" aria-label="案例证据关系">
+      <div class="ar-evidence-source"><div class="text-small text-muted" id="ar-left-id"></div><div id="ar-left"></div></div>
+      <div class="ar-relation"><span id="ar-relation-label"></span><div id="ar-mark" aria-hidden="true"></div></div>
+      <div class="ar-evidence-source"><div class="text-small text-muted" id="ar-right-id"></div><div id="ar-right"></div></div>
+    </figure>
+    <div class="viz-row ar-steps" aria-label="理论阶段">
+      <button class="btn" type="button" data-stage="add" aria-pressed="true">Add</button><span aria-hidden="true">→</span>
+      <button class="btn" type="button" data-stage="search" aria-pressed="false">Search</button><span aria-hidden="true">→</span>
+      <button class="btn" type="button" data-stage="answer" aria-pressed="false">Answer</button>
+    </div>
+    <div id="ar-stage-content" class="ar-detail" aria-live="polite"></div>
+    <div class="text-small" id="ar-trap"></div>
+    <div class="text-small text-muted" id="ar-theory-source"></div>
+  </section>
+  <section id="ar-observed" hidden aria-label="运行观测">
+    <div id="ar-run-empty" class="text-muted"></div>
+    <div id="ar-run-body">
+      <div id="ar-run-kind" class="ar-run-kind"></div>
+      <div id="ar-run-meta" class="text-small text-muted"></div>
+      <h3 id="ar-run-question"></h3>
+      <ol class="ar-chain" id="ar-run-chain"></ol>
+      <div class="viz-row ar-parts" aria-label="观测阶段">
+        <button class="btn" type="button" data-observed="add" aria-pressed="false">实际 Add</button>
+        <button class="btn" type="button" data-observed="search" aria-pressed="true">实际 Search</button>
+        <button class="btn" type="button" data-observed="answer" aria-pressed="false">Answer / Eval</button>
+        <button class="btn" type="button" data-observed="internal" aria-pressed="false">内部步骤</button>
+      </div>
+      <div id="ar-observed-add" hidden>
+        <label class="form-label">该问题之前的写入<select class="form-select" id="ar-add"></select></label>
+        <div id="ar-add-meta" class="ar-detail"></div><div id="ar-add-sources" class="text-small"></div>
+      </div>
+      <div id="ar-observed-search">
+        <div id="ar-search-meta" class="text-small"></div>
+        <div id="ar-matching" class="text-small text-muted"></div>
+        <label class="form-label">按实际返回顺序查看<select class="form-select" id="ar-result"></select></label>
+        <pre class="ar-text" id="ar-result-text"></pre><div id="ar-result-source" class="text-small text-muted"></div>
+        <details><summary>评估侧期望证据（未送入 Search）</summary><pre class="ar-text" id="ar-expected"></pre></details>
+      </div>
+      <div id="ar-observed-answer" hidden><div id="ar-answer-status"></div><pre class="ar-text" id="ar-answer-text"></pre><div id="ar-eval"></div></div>
+      <div id="ar-observed-internal" hidden>
+        <div id="ar-span-status"></div>
+        <div id="ar-span-body">
+          <label class="form-label">已记录步骤（按开始时间列出）<select class="form-select" id="ar-span"></select></label>
+          <div id="ar-span-meta" class="ar-detail"></div>
+          <ol id="ar-span-links" class="ar-chain" aria-label="产物来源关联"></ol>
+          <pre id="ar-span-data" class="ar-text"></pre>
+        </div>
+      </div>
+      <details class="ar-detail"><summary>来源、可见边界与公开步骤</summary><pre class="ar-text" id="ar-run-provenance"></pre></details>
+    </div>
+  </section>
+  <div class="text-small text-muted ar-footer" id="ar-footer"></div>
+</div>
+<style>
+  #aml-research {color:var(--foreground);overflow-wrap:anywhere;}
+  #aml-research [hidden] {display:none !important;}
+  #aml-research h3 {margin:14px 0 8px;}
+  #aml-research .ar-secondary {margin:12px 0;}
+  #aml-research .ar-chain {display:flex;flex-wrap:wrap;gap:12px;list-style:none;padding:0;margin:18px 0;}
+  #aml-research .ar-chain li {flex:1;min-width:110px;border-top:3px solid var(--viz-series-1);padding-top:8px;}
+  #aml-research .ar-compare {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin:16px 0;}
+  #aml-research .ar-route {display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr);gap:12px;align-items:center;margin:22px 0;}
+  #aml-research .ar-route>div:nth-child(odd) {border-left:3px solid var(--viz-series-1);padding-left:10px;}
+  #aml-research .ar-evidence {display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:16px;align-items:center;margin:22px 0;}
+  #aml-research .ar-evidence-source {border-left:3px solid var(--viz-series-1);padding-left:12px;}
+  #aml-research .ar-relation {text-align:center;color:var(--muted-foreground);}
+  #aml-research .ar-text {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-height:none;margin:12px 0;}
+  #aml-research .ar-parts,#aml-research .ar-steps,#aml-research .ar-links {margin:14px 0;}
+  #aml-research .ar-detail {margin:14px 0;}
+  #aml-research .ar-footer {margin-top:20px;}
+  @media(max-width:520px){
+    #aml-research .ar-compare,#aml-research .ar-route,#aml-research .ar-evidence {grid-template-columns:1fr;gap:10px;}
+    #aml-research .ar-route>div:nth-child(even) {justify-self:center;transform:rotate(90deg);}
+  }
+</style>
+<script>
+(() => {
+  const bundle={"schema_version":1,"updated":"2026-10-07","catalog":{"datasets":{"perltqa":{"name":"PerLTQA 中文 · 新增完整数据","status":"已取得：141 人物档案；其中 32 人物有 8,593 题","raw":"人物资料＋关系＋事件＋对话；作者生成的结构化记忆","prepared":"32 人物 → 2,211 来源文档＋8,593 任务；答案与 anchors 分离","cases":["p1","p2"],"links":[{"label":"作者中文发布","url":"https://github.com/Elvin-Yiming-Du/PerLTQA/tree/8d9e19868e239740ef701e603ec205cd581f221b/Dataset/zh"}],"downloadNote":"中文双文件已齐；英文版尚未下载。"},"beam":{"name":"BEAM · 长历史更新与冲突","status":"已取得：100K/500K/1M 三档 90 条记录，另有 10M 两个分片；Parquet 已校验","raw":"长 chat＋代码＋生成背景＋十类能力探针","prepared":"只 chat 进入历史；已有 100K 案例 pack；全量 Parquet 已解码核对，尚未构建全量 pack","cases":["b1","b2"],"links":[{"label":"全部三档文件","url":"https://huggingface.co/datasets/Mohammadta/BEAM/tree/main/data"},{"label":"10M 分片","url":"https://huggingface.co/datasets/Mohammadta/BEAM-10M/tree/main/data"}],"downloadNote":"常规三档约 105.6 MB，10M 两片约 343.8 MB；已取得，需按规模选择处理。"},"life":{"name":"CL-bench Life · 带材料完成工作","status":"完整文件已取得：405 条，29.3 MB；原有案例小样本保留","raw":"比赛日志、社区讨论与信息碎片；附任务和评分要求","prepared":"历史 / 任务 / rubric 分离；已有 7 条历史消息＋2 任务小样本，完整文件尚未构建全量 pack","cases":["c1"],"links":[{"label":"完整文件 · 29.3 MB","url":"https://huggingface.co/datasets/tencent/CL-bench-Life/resolve/cd2589f/CL-bench%20Life.jsonl?download=true"}],"downloadNote":"完整 JSONL 已保存并校验；使用评测用途许可，不写入 Git。"},"locomo":{"name":"LoCoMo · 跨会话记忆","status":"已取得：10 对话、272 会话、5,882 发言、1,986 题","raw":"双人多次聊天；说话者、会话日期、图像 caption、问题与证据 ID","prepared":"完整保留历史；1,984 任务可用；排除 2 个不存在的来源引用","cases":["l1","l2","l3"],"links":[{"label":"作者发布","url":"https://github.com/snap-research/locomo"}],"downloadNote":"文本 JSON 已齐；本机没有图片本体。"},"refined":{"name":"LoCoMo-Refined · 修改问答版","status":"已取得：10 对话、1,382 题；与原版历史相同","raw":"社区修改问题与答案；去掉类别 5 的对抗题","prepared":"已有 6 题 smoke 包；完整原始文件可用；不可与原版视为独立历史","cases":[],"empty":"能力重点：答案精度与完整性。与原版共享历史，不能作为无泄漏的独立测试集。","links":[{"label":"社区发布","url":"https://github.com/mem-eval-suite/LoCoMo_refined"}],"downloadNote":"当前社区版本已齐；不是 AML 私有冻结包。"},"cl":{"name":"CL-bench · 学习新规则与流程","status":"完整文件已取得：1,899 条，90.1 MB；原有 3 条小样本 pack 保留","raw":"新知识、流程或规则＋messages＋rubrics","prepared":"1 条能构造多轮历史；2 条单轮缺可靠任务边界；完整文件已核对，尚未构建全量 pack","cases":[],"empty":"能力重点：记住约束并应用规则。先确认材料 / 任务边界，再做 Add → Search → Answer；不能把 rubric 当作历史。","links":[{"label":"完整文件 · 90.1 MB","url":"https://huggingface.co/datasets/tencent/CL-bench/resolve/66122c88771ac4f09f163415902828b933e78899/CL-bench.jsonl?download=true"}],"downloadNote":"完整 JSONL 已保存并校验；rubric 仍只属于评估侧。"},"script":{"name":"ScriptMem · 当前缺少剧本","status":"已取得 457 题；对应真实剧本未取得","raw":"多人物关系与事件；单选、多选、排序问题","prepared":"可检查题型；任务包标记缺历史，不能实际回放","cases":[],"empty":"缺口：原始剧本。题目、答案与合成格式示例均不能充当历史。","links":[{"label":"作者说明","url":"https://github.com/memorax-ai/ScriptMem"}],"downloadNote":"公开题目已齐；作者未发布原始剧本。"},"persona":{"name":"PersonaMem-v2 · 题目与历史已配套","status":"已取得 5,000 题、200 persona、400 份 32K/128K 历史；Persona 521 smoke 已构建","raw":"当前问题、偏好标签、评估答案、长历史路径","prepared":"任务与标签分离；persona 521 使用 32K 历史构建 188 turns / 3 tasks smoke pack","cases":[],"empty":"能力重点：隐式偏好。题目标签中的偏好不是从历史检索出的记忆；需核对原始系统画像与真实对话的输入边界。","links":[{"label":"文本题目 CSV","url":"https://huggingface.co/datasets/bowen-upenn/PersonaMem-v2/tree/main/benchmark/text"},{"label":"32K 历史","url":"https://huggingface.co/datasets/bowen-upenn/PersonaMem-v2/tree/main/data/chat_history_32k"},{"label":"128K 历史","url":"https://huggingface.co/datasets/bowen-upenn/PersonaMem-v2/tree/main/data/chat_history_128k"}],"downloadNote":"文本 benchmark 与引用的两套历史已取得并逐文件校验；多模态目录未下载。"},"longmem":{"name":"LongMemEval · S / M / Oracle 已取得","status":"S 277.4 MB、M 2.74 GB、Oracle 15.4 MB 均已取得；S/Oracle 500 题","raw":"长会话＋日期＋问题＋可回答性标注；S / M / Oracle","prepared":"S smoke 6 题 / 299 会话 / 3,159 turns；Oracle smoke 6 题；30 道拒答题已单列","cases":[],"empty":"能力重点：时间、更新、拒答。Oracle 仅保留答案会话，不能代替完整 S / M 历史的检索难度。","links":[{"label":"S · 277 MB","url":"https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416/longmemeval_s_cleaned.json?download=true"},{"label":"Oracle · 15.4 MB","url":"https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416/longmemeval_oracle.json?download=true"},{"label":"M · 2.74 GB","url":"https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416/longmemeval_m_cleaned.json?download=true"}],"downloadNote":"三份固定 revision=98d7416 文件均已保存并校验；M 仅建议按需切片处理。"},"mab":{"name":"MemoryAgentBench · 新发现候选","status":"四类 Parquet 均已取得：8/6/22/110 rows，约 76.6 MB；尚未适配读取器","raw":"共享 context → 多个 questions / answers；检索、学习、长程理解、冲突","prepared":"已完成 Parquet 逐批解码和字段核对；context/questions/answers/metadata 尚未转 pack","cases":[],"empty":"下一步能力补充：Test_Time_Learning 与 Conflict_Resolution。当前不能作为可运行数据集。","links":[{"label":"四类数据文件","url":"https://huggingface.co/datasets/ai-hyz/MemoryAgentBench/tree/main/data"}],"downloadNote":"四类文件及 entity2id.json 已保存；需要专用 Parquet 读取器和来源许可核对。"},"pv3":{"name":"PersonaMem-v3 · 新发现候选","status":"预览表已取得：100 profiles、221,817 events、15,791 queries；backend 原始目录未下载","raw":"跨平台活动、反馈、用户意图与遗忘请求","prepared":"三份 CSV 已保存并核对列结构；完整 backend 仍未取，暂不构建记忆 pack","cases":[],"empty":"公开三表覆盖当前 100 persona 的事件与问题；原版评估代码使用 backend 目录。需要按查询时间遮罩历史并隔离金标。","links":[{"label":"作者完整文件页","url":"https://huggingface.co/datasets/bowen-upenn/PersonaMem-v3/tree/main"}],"downloadNote":"仅取得公开 samples 预览表和 README；backend 约 1.49 GB，后续按 persona 选择下载。"}},"cases":{"p1":{"name":"P01 关系方向与主体","q":"张小红的兄弟是谁？","source":"来源：social_relationship:4_0 · 中文原文含义","leftId":"资料主体","left":"张小红","link":"弟弟","rightId":"关系对象","right":"张小明","add":"张小红 — 弟弟 → 张小明；保留关系方向、主体和来源 4_0。","search":"定位张小红的关系资料；返回“张小明是张小红的弟弟”的原文。","answer":"张小明，是她的弟弟。","trap":"容易错：跨档案合并同名“小明”，或把关系方向反转。","document":"perltqa-structured-memory.md","mark":"→"},"p2":{"name":"P02 原文与答案冲突","q":"王小明和姐姐已经到达目的地了吗？","source":"来源：events:1_0_0 与 dialogues:1_0_0#0 · 原文信息摘要","leftId":"事件＋当天对话","left":"2022-05-12 出发／今天出发","link":"时间冲突","rightId":"同一段 05-12 08:00 对话","right":"昨天抵达；作者答案却写 05-12 抵达","add":"保留事件、对话时间和原句；保留相互关联；标注时间冲突。","search":"返回冲突两端与原始日期；不从 gold 答案补造历史。","answer":"对话称已抵达；出发与抵达时间前后矛盾，不能确定具体日期。","trap":"容易错：用标准答案“修复”记忆，或把合理质疑算成记忆失效。","document":"perltqa-structured-memory.md","mark":"≠"},"b1":{"name":"B01 配额明确更新","q":"这个项目当前每日 API 调用配额是多少？","source":"来源：conversation_id=2 · 历史中文转述，不是现实产品规格","leftId":"0:32 · 先前要求","left":"1,000 次 / 天；另有 60 次 / 分钟","link":"明确更新","rightId":"0:66 · 后续要求","right":"新的每日配额：1,200 次","add":"同一项目、同一属性：1,000 → 1,200；保留旧值、顺序与来源。","search":"问“当前”返回 0:66；问“最初”返回 0:32；按需附更新链。","answer":"当前每天 1,200 次。","trap":"容易错：召回旧配额、混淆每天 / 每分钟、把重复代码当作多次独立确认。","document":"beam-update-and-conflict.md","mark":"→"},"b2":{"name":"B02 互相矛盾的经历","q":"用户是否已经取得这个项目的 API Key？","source":"来源：conversation_id=2 · 历史中文转述","leftId":"0:32 · 先前陈述","left":"2024-03-10 已取得 Key","link":"经历矛盾 ≠ 更新","rightId":"0:70 · 后续陈述","right":"从未真正取得这个项目的 Key","add":"保留两条相反陈述及来源；标记待澄清，不自动覆盖。","search":"同时返回“已取得”与“从未取得”的证据。","answer":"前后说法不一致，需要澄清。","trap":"容易错：自行编造“Key 已失效”或“换了项目”来消除矛盾。","document":"beam-update-and-conflict.md","mark":"≠"},"c1":{"name":"C01 多观点覆盖与引用","q":"仅根据评论比较 iPhone / Android，并满足所有引用要求","source":"来源：Life offset 100 · task a760132c… · 任务约束摘要","leftId":"三个主要观点","left":"3 个观点 × 3 句引文 = 9 处","link":"全部互不重复","rightId":"五类立场表格","right":"5 类立场 × 3 句引文 = 15 处","add":"保存评论作者、回复关系、原帖 / 评论边界、原文与立场上下文。","search":"覆盖子需求；排除原帖；为 24 处不同引文保留出处。","answer":"按评论证据总结倾向并组织表格；不把局部检索分布当全体比例。","trap":"容易错：最相似的几段挤满上下文，却缺立场、重复引用或混入原帖。","document":"clbench-life-evidence-diversity.md","mark":"＋"},"l1":{"name":"L01 跨会话语义关联","q":"Caroline 四年前从哪里搬来？","source":"来源：conv-26 / qa[11] · 历史中文转述","leftId":"D3:13 · 2023-06-09","left":"四年前离开自己的祖国","link":"同一人的祖国","rightId":"D4:3 · 2023-06-27","right":"祖国瑞典的奶奶，在她小时候送了项链","add":"保留 Caroline 的迁居事件；将“祖国”关联到瑞典；两段原文仍可追溯。","search":"同时返回 D3:13 与 D4:3，形成完整两跳证据链。","answer":"瑞典。","trap":"容易错：只搜“搬家”漏掉项链片段；只搜到“瑞典”缺少迁居关系。","document":"locomo-cross-session.md","mark":"↔"},"l2":{"name":"L02 相对时间定位","q":"Caroline 何时参加了 LGBTQ 支持小组？","source":"来源：conv-26 / qa[0] · 原文时间关系","leftId":"会话时间","left":"2023-05-08 13:56","link":"昨天 → 前一天","rightId":"D1:3 · 相对时间","right":"昨天参加了支持小组","add":"同时保留原句、会话日期和事件日期 2023-05-07；来源未声明时区。","search":"返回 D1:3＋日期锚点＋归一化的事件日期。","answer":"2023 年 5 月 7 日。","trap":"容易错：用 Add 的接收时间或今天的日期解释“昨天”。","document":"locomo-time-anchor.md","mark":"→"},"l3":{"name":"L03 人物混淆与错误前提","q":"Melanie 今年夏天有哪些收养计划？","source":"来源：conv-26 / qa[153] · 对抗题；D2:8 为关键辨析片段","leftId":"问题中的人物","left":"Melanie 的收养计划？","link":"人物不一致","rightId":"D2:8 · 实际说话者","right":"Caroline 正在研究收养机构","add":"把计划归到 Caroline；保留说话者、会话和原句。","search":"返回可辨析归属的证据；不能把 Caroline 的计划改记给 Melanie。","answer":"现有证据不足以支持 Melanie 的收养计划。","trap":"容易错：将 adversarial_answer 诱导答案当正确答案；命中 evidence 不等于回答正确。","document":"locomo-speaker-confusion.md","mark":"≠"}},"schemaVersion":1,"updated":"2026-10-07","defaultState":{"schemaVersion":1,"dataset":"beam","case":"b1"}},"profiles":{"schema_version":1,"updated":"2026-10-07","datasets":{"locomo":{"dataset_id":"locomo","basis":"本机完整原始文件与读取器已核对","layers":["10 个长期对话","272 场会话","5,882 条发言","1,986 道原始题目"],"unit":"一条 record 是两个人的长期对话；一条 task 是其中一道题。","pack":"dataset/data/prepared/locomo-full.json","fields":[["conversation.session_N[].text / speaker / dia_id","history","原始发言、人物与来源 ID","Add 保留正文与说话者；不能只保留主题摘要。"],["conversation.session_N_date_time","history","会话时间锚点","用于解释昨天、去年等；不等于写入系统的时间。"],["qa[].question","task","当前问题","当前 profile 将其作为 Search query。"],["qa[].answer / evidence / category","annotations","答案、来源引用、题型","仅评估侧；evidence 可能是对抗题的诱导片段。"],["qa[].adversarial_answer","annotations","对抗题诱导答案","不是正确答案，不得写入 Add。"],["event_summary / observation / session_summary","auxiliary","作者附带的摘要和观察","本地 reader 不用这些生成性材料代替原始聊天。"]]},"refined":{"dataset_id":"locomo-refined-community","basis":"本机完整文件已核对；字段沿用 LoCoMo","layers":["10 个对话","与原版相同历史","1,382 道修改题目"],"unit":"修改问答版本；不是独立的聊天历史。","pack":"dataset/data/prepared/locomo-refined-smoke.json","fieldsFrom":"locomo","fields":[["conversation.session_N[].text / speaker / dia_id","history","原始发言、人物与来源 ID","Add 保留正文与说话者；不能只保留主题摘要。"],["conversation.session_N_date_time","history","会话时间锚点","用于解释昨天、去年等；不等于写入系统的时间。"],["qa[].question","task","当前问题","当前 profile 将其作为 Search query。"],["qa[].answer / evidence / category","annotations","答案、来源引用、题型","仅评估侧；evidence 可能是对抗题的诱导片段。"],["qa[].adversarial_answer","annotations","对抗题诱导答案","不是正确答案，不得写入 Add。"],["event_summary / observation / session_summary","auxiliary","作者附带的摘要和观察","本地 reader 不用这些生成性材料代替原始聊天。"]]},"perltqa":{"dataset_id":"perltqa-zh","basis":"本机中文双文件已核对","layers":["141 人物资料","5 类记忆资料","32 人物有 QA","8,593 道题"],"unit":"每个来源单元是资料文档；五个分区不是五次按时间发生的聊天。","pack":"dataset/data/prepared/perltqa-zh-full.json","fields":[["perltmem: profile / profile_description","history","人物资料及描述","连同资料主体写入；不要假装整份档案是本人一次发言。"],["perltmem: social_relationship / events / dialogues","history","有 ID 的关系、事件和对话","保留关系方向、事件链接、内层说话者与时间。"],["perltqa: Question","task","问题","独立任务输入。"],["Answer / Reference Memory","annotations","答案和来源文档引用","引用可解析只证明来源存在，不证明答案正确。"],["Memory Anchors","annotations","字符位置标注","存在 [-1,-1]；当前不认证字符级金标。"]]},"beam":{"dataset_id":"beam","basis":"2026-10-07：三档及 10M Parquet 完整取得、解码核对；案例仍使用原小样本","layers":["100K：20 条","500K：35 条","1M：35 条","10M：10 条"],"unit":"一条 record 包含多批 chat 与能力探针；100K 是上游 split 名称。","pack":"dataset/data/prepared/beam-update-cases.json","fields":[["chat[batch][turn]","history","真实发布的聊天及其中代码","只有 chat 进入本地历史；保留批次和发言 ID。"],["probing_questions.*.question","task","按能力分组的问题","字符串格式先安全解析，问题作为 Search 输入。"],["ideal_response / rubric / source_chat_ids","annotations","预期回答、评分要求与部分来源线索","当前未统一验证所有 source_chat_ids，不能宣称全量证据评分。"],["conversation_seed / narratives / user_profile / conversation_plan / user_questions","auxiliary","生成背景、画像和计划","不当成已通过聊天告知智能体的事实。"]]},"life":{"dataset_id":"clbench-life","basis":"2026-10-07：完整 405 行已核对；本页 pack 仍为原案例切片","layers":["405 条完整样本","9 类子领域","历史与任务","rubrics 评分标准"],"unit":"消息不是评论；一条长消息可能装入整篇社区讨论。","pack":"dataset/data/prepared/clbench-life-extra.json","fields":[["messages[].content 中 TASK 之前 / 多轮历史","history","上下文材料","保存发言、引文与回复边界，不混入后面的任务要求。"],["TASK 之后 / 最后用户任务消息","task","当前工作要求","拆分依据明确分隔符或多轮结构。"],["rubrics","annotations","多项评分标准","只交给评估，不当作检索证据。"],["metadata.task_id / context_category / context_subcategory","metadata","身份与类别","用于分组与统计，不是记忆正文。"]]},"cl":{"dataset_id":"clbench","basis":"2026-10-07：完整 1899 行已核对；现有三条 pack 中两条边界未明确","layers":["1899 条完整样本","4 类能力领域","18 类子领域","rubrics"],"unit":"有边界才拆历史/任务；不凭猜测把单消息任意切开。","pack":"dataset/data/prepared/clbench-smoke.json","fieldsFrom":"life","fields":[["messages[].content 中 TASK 之前 / 多轮历史","history","上下文材料","保存发言、引文与回复边界，不混入后面的任务要求。"],["TASK 之后 / 最后用户任务消息","task","当前工作要求","拆分依据明确分隔符或多轮结构。"],["rubrics","annotations","多项评分标准","只交给评估，不当作检索证据。"],["metadata.task_id / context_category / context_subcategory","metadata","身份与类别","用于分组与统计，不是记忆正文。"]]},"script":{"dataset_id":"scriptmem","basis":"公开任务文件已核对；真实剧本缺失","layers":["4 部作品","457 道题","选择 / 多选 / 排序","缺原始剧本"],"unit":"任务可分析，缺历史时不能回放记忆实验。","fields":[["conversation","auxiliary","省略说明与合成格式示例","不是剧本原文，不可进入 Add。"],["questions / options","task","问题与选项（语义分组）","完整题型需专用 Answer/Eval。"],["reference answers / question metadata","annotations","参考答案与任务信息（语义分组）","不当作原始事件。"]]},"persona":{"dataset_id":"personamem-v2","basis":"本机 5,000 题、200 persona、400 份历史已核对","layers":["5,000 道题","200 persona","400 份 32K/128K 历史","persona 521 smoke"],"unit":"题目和偏好标注不是用户历史的替代品。","pack":"dataset/data/prepared/personamem-v2-persona521-smoke.json","fields":[["chat_history_32k_link / chat_history_128k_link","history","与题目配套的历史文件","显式加载配套 32K 历史；当前排除 system 人物生成画像，保留 user/assistant 原文及历史哈希。"],["current query","task","当前问题（语义分组）","用于请求检索与个性化回答。"],["preference / evaluation answer","annotations","偏好及回答标注（语义分组）","不允许将标签作为已检索到的偏好。"]]},"longmem":{"dataset_id":"longmemeval-s","basis":"S/M/Oracle 固定 revision=98d7416 已核对","layers":["S 500 题 / 246,750 turns","Oracle 500 题 / 10,960 turns","M 2.74 GB","30 道拒答题"],"unit":"S / M / Oracle 历史范围不同；当前本地 pack 为 S smoke，不能代表全量。","pack":"dataset/data/prepared/longmemeval-s-smoke.json","fields":[["haystack_sessions / haystack_dates","history","历史与日期","保留原始会话边界。"],["question / question_date","task","问题及提问时间","查询时间与历史事件时间分别保留。"],["answer / answer_session_ids / has_answer","annotations","答案、来源和可回答性","30 道 `_abs` 拒答题单独标记；不可回答不推出 Search 必须为空。"]]},"mab":{"dataset_id":"memoryagentbench-cr","basis":"四类 Parquet 已下载并逐批解码；尚未适配 pack","layers":["检索 22 rows","冲突 8 rows","长程 110 rows","学习 6 rows"],"unit":"共享 context 对应多题；当前只核对字段和行数，不作为 Add/Search pack。","fields":[["context","history","给定上下文","待读取器接入。"],["questions","task","任务数组","逐题关联身份。"],["answers / metadata","annotations","答案及评估信息","待核对具体子任务结构。"]]},"pv3":{"dataset_id":"personamem-v3","basis":"samples 三表已下载并核对；backend 未取","layers":["100 profiles","221817 events","15791 queries","31 类任务"],"unit":"三张表覆盖当前发布的全部人物事件与问题；原版评估代码读取 backend 布局，转换适配尚未实现。","fields":[["persona_context: timestamp / app / conversation_json 等","history","跨平台活动与时间","只允许问题时间之前的可观察事件；表内附带 preferences 等标注需另行分离。"],["persona_queries: user_query / prior_conversation","task","问题与当前对话","逐题保留 timestamp，后续适配时间遮罩。"],["groundtruth_preference / supporting_history / golden_response / rubrics","annotations","真值、参考证据、答案与评分","只能供评估与复核，不能当成智能体已知历史。"],["persona_profiles","auxiliary","生成的人物档案与潜在偏好","不能默认作为 Add 输入，先核对上游评估协议。"]]}},"bindings":{"l1":{"dataset":"locomo","record":"conv-26","task":"qa-11","turns":["D3:13","D4:3"]},"l2":{"dataset":"locomo","record":"conv-26","task":"qa-0","turns":["D1:3"]},"l3":{"dataset":"locomo","record":"conv-26","task":"qa-153","turns":["D2:8"]},"p1":{"dataset":"perltqa","record":"character-3","task":"social_relationship:4_0:0","turns":["social_relationship:4_0"]},"p2":{"dataset":"perltqa","record":"character-0","task":"dialogues:1_0_0#0:2","turns":["events:1_0_0","dialogues:1_0_0#0"]},"b1":{"dataset":"beam","record":"2","task":"knowledge_update:0","turns":["0:32","0:66"]},"b2":{"dataset":"beam","record":"2","task":"contradiction_resolution:0","turns":["0:32","0:70"]},"c1":{"dataset":"life","record":"a760132c-d3bc-2931-f3e5-db24be64d0b8","task":"a760132c-d3bc-2931-f3e5-db24be64d0b8","turns":[]}}},"scope":"curated","local":{"samples":{},"stats":{},"missing":[]},"runs":[]};
+  const root=document.getElementById('aml-research');
+  const el=id=>root.querySelector('#ar-'+id);
+  const {catalog,profiles}=bundle;
+  const roles={history:['历史','Add → Search','--viz-series-1'],task:['任务输入','Search → Answer','--viz-series-2'],annotations:['评估标注','仅 Eval / 研究复核','--viz-series-3'],auxiliary:['辅助材料','默认不进入 Add','--viz-series-4'],metadata:['身份与类别','分组 / 对齐来源','--viz-series-5']};
+  let selected={dataset:'locomo',lens:'composition',case:'l2',field:0,part:'history',stage:'add',observed:'search'};
+  const txt=(id,value)=>el(id).textContent=value==null?'未记录':String(value);
+  const hide=(id,value)=>el(id).hidden=value;
+  const options=(id,items,value)=>{const node=el(id);node.replaceChildren();for(const item of items)node.add(new Option(item.label,item.value));if(items.some(x=>String(x.value)===String(value)))node.value=value;return node.value;};
+  const chain=(id,items)=>{el(id).replaceChildren();items.forEach(label=>{const li=document.createElement('li');li.textContent=label;el(id).append(li);});};
+  const pressed=(attribute,value)=>root.querySelectorAll('button['+attribute+']').forEach(b=>b.setAttribute('aria-pressed',String(b.getAttribute(attribute)===value)));
+  const availableRuns=()=>bundle.runs.filter(r=>r.dataset_id===profiles.datasets[selected.dataset].dataset_id);
+  const currentRun=()=>availableRuns().find(r=>r.run_id===el('run').value);
+  const currentQuery=()=>currentRun()?.queries.find(q=>q.search_id===el('query').value);
+  function showExcerpt(textId,limitId,value){txt(textId,value?.text||'无记录');if(limitId)txt(limitId,value?`原长度 ${value.total_chars} 字符 · ${value.omitted?'仅展示首尾摘录；中间已省略':'完整展示该单元'} · 字符范围 ${JSON.stringify(value.ranges)}`:'');}
+  function drawField(){const field=profiles.datasets[selected.dataset].fields[Number(el('field').value)||0];const role=roles[field[1]];txt('field-meaning',field[2]);txt('destination',role[0]);txt('audience',role[1]);txt('field-note',field[3]);root.querySelectorAll('.ar-route>div:nth-child(odd)').forEach(n=>n.style.borderColor='var('+role[2]+')');}
+  function drawSample(){const sample=bundle.local.samples[selected.case];hide('sample-body',!sample);hide('sample-empty',!!sample);if(!sample){txt('sample-empty',bundle.scope==='local'?'此来源暂无绑定的真实案例摘录；字段说明不代表取得了原文。':'公共概览未嵌入原文；本地扩展版可查看真实 pack 摘录。');return;}
+    txt('sample-id',`${sample.record_id} / ${sample.task_id} · 展示 ${sample.shown_unit_count} / ${sample.history_unit_count} 个历史单元`);
+    pressed('data-part',selected.part);hide('turn-label',selected.part!=='history');
+    if(selected.part==='history'){if(!sample.units.some(x=>x.id===el('turn').value))options('turn',sample.units.map(u=>({value:u.id,label:u.id})));const unit=sample.units.find(x=>x.id===el('turn').value)||sample.units[0];txt('source-meta',`pack 来源投影 · session ${unit.session} · ${unit.speaker||'主体见正文'} · ${unit.timestamp||'独立时间字段未提供'}${unit.source_pointer?' · 原文指针 '+unit.source_pointer:''}`);showExcerpt('source-text','source-limit',unit.content);}
+    else {txt('source-meta',selected.part==='annotations'?'评估侧标注：'+sample.annotation_keys.join('、')+'；不进入 Add/Search 请求':'独立任务输入');showExcerpt('source-text','source-limit',sample[selected.part]);}
+  }
+  function drawTheory(){const c=catalog.cases[selected.case];hide('theory',selected.lens!=='theory');if(!c){txt('question','该数据源尚无人工分析案例');root.querySelector('.ar-evidence').hidden=true;root.querySelector('.ar-steps').hidden=true;['stage-content','trap','theory-source'].forEach(id=>txt(id,''));return;}
+    root.querySelector('.ar-evidence').hidden=false;root.querySelector('.ar-steps').hidden=false;
+    for(const [id,key] of Object.entries({'question':'q','left-id':'leftId','left':'left','right-id':'rightId','right':'right','relation-label':'link','mark':'mark','trap':'trap','theory-source':'source'}))txt(id,c[key]);
+    pressed('data-stage',selected.stage);txt('stage-content',c[selected.stage]);
+  }
+  function drawRun(){const r=currentRun(),q=currentQuery();hide('run-body',!q);hide('run-empty',!!q);if(!q){txt('run-empty','尚未导入此数据集的运行轨迹。没有记录不等于零分；理论示意不会填成实测。');return;}
+    txt('run-kind',r.kind==='fixture'?'测试服务的真实接口记录 · 仅验证管线':'目标系统运行记录 · 来源为导入报告');
+    txt('run-meta',`${r.system.name} / ${r.system.version} · ${r.run_id} · 展示 ${r.shown_queries}/${r.total_queries} 题`);
+    txt('run-question',q.query);
+    chain('run-chain',[`${q.adds.filter(a=>a.ok).length}/${q.adds.length} 次 Add 成功`,q.ok?`${q.results.length} 条 Search 结果`:'Search 失败',q.answer?'Answer 已导入':'Answer 未记录',q.evaluation?'评估已导入':'回答质量未评分']);
+    pressed('data-observed',selected.observed);for(const stage of ['add','search','answer','internal'])hide('observed-'+stage,selected.observed!==stage);
+    options('add',q.adds.map(a=>({value:a.id,label:`trace 行 ${a.line} · ${a.ok?'成功':'失败'} · ${a.message_count} 条消息`})),el('add').value);drawAdd();
+    txt('search-meta',`trace 行 ${q.line} · HTTP ${q.status_code??'无响应'} · ${q.latency_ms} ms · top_k=${q.top_k}${q.error?' · '+q.error:''}`);
+    txt('matching',q.grading==='ungraded'?'无 gold evidence，不计召回分数。':`字面证据匹配：${q.target_ranks.filter(v=>v!==null).length}/${q.target_ranks.length}；不等于语义支持或答案正确。`);
+    options('result',q.results.map(r=>({value:r.rank,label:`第 ${r.rank} 条 · ${r.matched_targets.length?'字面匹配 '+r.matched_targets.length+' 个来源目标':'无字面匹配'}`})),el('result').value);drawResult();
+    txt('expected',q.expected.length?q.expected.map(e=>JSON.stringify(e.source)+'\n'+e.content.text).join('\n\n'):'无来源标注');
+    txt('answer-status',q.answer?`导入记录 · ${q.answer.model} · prompt ${q.answer.prompt_version} · 上下文结果序号 ${q.answer.context_result_ranks.join(', ')||'空'}`:'未执行或未采集 Answer；不能展示“实际答对了”。');
+    hide('answer-text',!q.answer);txt('answer-text',q.answer?.text.text||'');txt('eval',q.evaluation?`${q.evaluation.label} · ${q.evaluation.metric} · ${q.evaluation.evaluator}`:'回答质量：未评分');
+    const obs=r.observability;
+    txt('span-status',obs.status==='missing'?'目标未采集内部步骤；不能推断抽取、索引或模型调用。':`${obs.status==='incomplete'?'存在缺少父步骤的记录':'已验证步骤关联'} · 本题相关 ${q.spans.length} 步 · 全运行模型调用 ${obs.model_calls??'总数未知'} · USD ${obs.cost_usd??'费用未知'}${obs.capture_declared_complete?' · 采集方声明已完整记录模型调用':' · 未声明完整采集'}`);
+    hide('span-body',!q.spans.length);
+    options('span',q.spans.map(s=>({value:s.span_id,label:`${s.operation} · ${s.name} · ${s.status} · ${s.duration_ms} ms`})),el('span').value);drawSpan();
+    txt('run-provenance',`pack SHA-256: ${r.dataset_pack_sha256}\n源文件 SHA-256: ${r.source_sha256}\n数据选择: ${JSON.stringify(r.selection)}\ntrace SHA-256: ${r.artifacts['trace.jsonl']}\nAPI 调用: ${JSON.stringify(r.api_calls)}\nAPI 报告的模型使用/费用: ${r.provider_usage===null?'未记录':JSON.stringify(r.provider_usage)}\n补充导入步骤: ${q.steps.length?JSON.stringify(q.steps,null,2):'未提供'}${q.answer?'\nAnswer 来源: '+q.answer.source_artifact:''}${q.evaluation?'\nEval 来源: '+q.evaluation.source_artifact:''}${obs.status!=='missing'?'\n内部观测 SHA-256: '+r.artifacts['observability.jsonl']:''}`);
+  }
+  function drawSpan(){const q=currentQuery();if(!q)return;const s=q.spans.find(s=>s.span_id===el('span').value);if(!s)return;
+    const parent=q.spans.find(p=>p.span_id===s.parent_span_id);
+    txt('span-meta',`${s.status} · 第 ${s.attempt} 次尝试 · replay=${s.replay} · 父步骤：${parent?parent.name:(s.parent_span_id?'未采集':'请求根步骤')} · ${s.started_at}`);
+    const relation={derived_from:'派生自',retrieved_from:'检索自',selected_from:'选自',supports:'支持',contradicts:'冲突于',supersedes:'替代'};
+    chain('span-links',s.links.map(l=>`${l.from_id} → ${relation[l.relation]} → ${l.to_id}`));
+    txt('span-data',JSON.stringify({inputs:s.inputs,outputs:s.outputs,candidates:s.candidates,model:s.model,error:s.error},null,2));
+  }
+  function drawAdd(){const q=currentQuery();if(!q)return;const a=q.adds.find(a=>a.id===el('add').value);txt('add-meta',a?`${a.ok?'成功':'失败'} · HTTP ${a.status_code??'无响应'} · ${a.latency_ms} ms · ${a.message_count} 条消息`:'该问题前没有写入记录');txt('add-sources',a?`${a.id}\n来源：`+a.sources.map(s=>`${s.turn_id}[${s.char_start}:${s.char_end}]`).join('、'):'');}
+  function drawResult(){const q=currentQuery();if(!q)return;const result=q.results.find(r=>String(r.rank)===el('result').value);showExcerpt('result-text',null,result?.content);txt('result-source',result?`${result.id} · ${result.content.omitted?'正文仅展示首尾摘录':'正文完整展示'} · 无匹配不证明检索失败`:(q.ok?'实际返回空集':'请求失败；不能等同无结果'));}
+  function draw(){const d=catalog.datasets[selected.dataset],p=profiles.datasets[selected.dataset];el('dataset').value=selected.dataset;el('lens').value=selected.lens;
+    selected.case=options('case',d.cases.map(k=>({value:k,label:catalog.cases[k].name})),selected.case);
+    hide('case-label',!['sample','theory'].includes(selected.lens)||d.cases.length===0);
+    hide('run-label',selected.lens!=='observed');hide('query-label',selected.lens!=='observed');
+    for(const lens of ['composition','sample','theory','observed'])hide(lens,selected.lens!==lens);
+    txt('status',d.status);chain('layers',p.layers);txt('unit',p.unit);txt('raw',d.raw);txt('prepared',d.prepared);txt('basis',p.basis);
+    const stats=bundle.local.stats[selected.dataset];txt('stats',stats?`当前 pack：${stats.records} 记录 / ${stats.sessions} 分区或会话 / ${stats.units} 来源单元 / ${stats.tasks} 任务；范围以 ${stats.pack_path} 为准。`:'统计范围来自已核对的案例目录；本视图未重新扫描完整原始文件。');
+    el('links').replaceChildren();for(const link of d.links||[]){const a=document.createElement('a');a.textContent=link.label;a.href=link.url;a.target='_blank';a.rel='noopener noreferrer';el('links').append(a);}
+    options('field',p.fields.map((f,i)=>({value:i,label:f[0]})),selected.field);drawField();
+    options('turn',(bundle.local.samples[selected.case]?.units||[]).map(u=>({value:u.id,label:u.id})));drawSample();drawTheory();
+    const rs=availableRuns();const runId=options('run',rs.map(r=>({value:r.run_id,label:r.system.name+' · '+(r.kind==='fixture'?'测试服务':'目标实验')})),el('run').value);
+    options('query',(rs.find(r=>r.run_id===runId)?.queries||[]).map(q=>({value:q.search_id,label:q.record_id+' / '+q.task_id})),el('query').value);drawRun();
+    txt('footer',`${bundle.updated} 内容快照 · ${bundle.scope==='local'?'本机来源摘录与可选运行记录':'公共结构与理论案例'} · 当前视图不执行模型`);
+  }
+  options('dataset',Object.entries(catalog.datasets).map(([key,d])=>({value:key,label:d.name})),selected.dataset);
+  el('dataset').addEventListener('change',()=>{selected.dataset=el('dataset').value;selected.case='';selected.field=0;draw();});
+  el('lens').addEventListener('change',()=>{selected.lens=el('lens').value;draw();});
+  el('case').addEventListener('change',()=>{selected.case=el('case').value;draw();});
+  el('field').addEventListener('change',()=>{selected.field=Number(el('field').value);drawField();});
+  el('turn').addEventListener('change',drawSample);
+  root.querySelectorAll('[data-part]').forEach(b=>b.addEventListener('click',()=>{selected.part=b.dataset.part;drawSample();}));
+  root.querySelectorAll('[data-stage]').forEach(b=>b.addEventListener('click',()=>{selected.stage=b.dataset.stage;drawTheory();}));
+  root.querySelectorAll('[data-observed]').forEach(b=>b.addEventListener('click',()=>{selected.observed=b.dataset.observed;drawRun();}));
+  el('run').addEventListener('change',()=>{const r=currentRun();options('query',r.queries.map(q=>({value:q.search_id,label:q.record_id+' / '+q.task_id})));drawRun();});
+  el('query').addEventListener('change',drawRun);el('result').addEventListener('change',drawResult);el('add').addEventListener('change',drawAdd);
+  el('span').addEventListener('change',drawSpan);
+  draw();
+})();
+</script>

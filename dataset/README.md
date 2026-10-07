@@ -2,24 +2,36 @@
 
 `dataset/` 是独立数据层，负责原始数据获取、结构分析、预处理、选择与切分。数据集无需与比赛或待测系统绑定，产物是中立的 dataset pack；Add/Search、分块、角色映射和评分属于 [`benchmark/`](../benchmark/README.md)。依赖方向为 `benchmark → dataset`。
 
-## 已取得的数据（2026-10-05）
+## 已取得的数据（2026-10-07）
 
 | 来源 | 本机实际取得 | 读取与使用 |
 | --- | --- | --- |
 | [LoCoMo 作者原版](https://github.com/snap-research/locomo) | 完整 JSON：10 对话、272 会话、5,882 turns、1,986 QA | 保留 speaker、turn ID、时间、caption、QA/evidence；按 conversation/session/category 选择。CC BY-NC 4.0。 |
 | [LoCoMo-Refined 社区版](https://github.com/mem-eval-suite/LoCoMo_refined) | 完整 raw JSON、questions JSONL；10 对话、1,382 QA；固定 commit `8870911…` | 同一读取结构，独立来源身份；不使用生成 summary 充当原文。CC BY-NC 4.0，参见 NOTICE。 |
 | [ScriptMem](https://github.com/memorax-ai/ScriptMem) | 4 个 raw QA 文件、questions JSONL、manifest；457 题 | 分析题型、选项和来源，生成任务 pack；作者未发布真实剧本/对话。CC BY-NC 4.0 仅覆盖作者的任务材料。 |
-| [CL-bench](https://huggingface.co/datasets/tencent/CL-bench) | 官方行 API 前 3 条完整记录；全量 1,899 题 | 已取得样本中 1 条可按多轮边界拆分，2 条上下文与任务混在单条消息中，原样保留待适配。 |
-| [CL-bench Life](https://huggingface.co/datasets/tencent/CL-bench-Life) | 官方行 API 5 条（offset 0–2、100–101）；全量 405 题 | 单轮用 TASK 分隔符；多轮用最后用户消息为任务，保留此前历史；rubrics 独立保存。 |
-| [PersonaMem-v2](https://huggingface.co/datasets/bowen-upenn/PersonaMem-v2) | `benchmark_text` 前 3 条，均属 persona 521；该 split 为 5,000 题 | 读取 CSV/JSONL，保留历史引用；对应 32K 历史下载仍为 502，pack 标记缺失。CC BY 4.0。 |
-| [BEAM](https://huggingface.co/datasets/Mohammadta/BEAM) | `100K` split 前 2 个完整对话，共 388 turns、40 probes；该 split 为 20 对话 | 仅 chat 作为历史；提取 10 类 probes，答案/rubric/source_chat_ids 独立保存。CC BY-SA 4.0。 |
+| [CL-bench](https://huggingface.co/datasets/tencent/CL-bench) | 完整 JSONL，1,899 题 | 原三条 smoke 中 1 条可按多轮边界拆分，2 条上下文与任务混在单条消息中，原样保留待适配；全量尚未转 pack。 |
+| [CL-bench Life](https://huggingface.co/datasets/tencent/CL-bench-Life) | 完整 JSONL，405 题 | 单轮用 TASK 分隔符；多轮用最后用户消息为任务，rubrics 独立保存；现有案例 pack 继续使用。 |
+| [PersonaMem-v2](https://huggingface.co/datasets/bowen-upenn/PersonaMem-v2) | 文本 benchmark 5,000 题、200 persona，400 份配套 32K/128K 历史 | 可显式连接 32K 历史；已生成 persona 521 的 188 turns / 3 tasks smoke。128K 完整取得但当前未适配。CC BY 4.0。 |
+| [BEAM](https://huggingface.co/datasets/Mohammadta/BEAM) | 常规三档 90 条、10M 两片 10 条；逐批解码通过 | 仅 chat 作为历史；现有小样本 reader 可用，全量 Parquet 尚未转 pack。CC BY-SA 4.0。 |
 | [PerLTQA 中文](https://github.com/Elvin-Yiming-Du/PerLTQA) | 完整中文 memory/QA：141 人物档案，32 人物有 8,593 题 | 新 reader 保存结构化来源文档、关系和原始时间；QA 引用可解析，字符 anchors 未认证。CC BY-NC 4.0。 |
 
 CL-bench 两版均为作者的 [evaluation-only 许可](https://huggingface.co/datasets/tencent/CL-bench/blob/main/LICENSE.txt)，仅用于评测/测试，禁止训练、微调、校准、蒸馏等参数更新。
 
-[LongMemEval S/M/Oracle](https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned) 已登记作者源（MIT）并实现共同读取器；S 完整文件此前下载失败，本轮 Oracle 完整文件返回 502，S/Oracle 行 API 返回 500，尚无本机真实数据。M、[BEAM-10M](https://huggingface.co/datasets/Mohammadta/BEAM-10M) 本轮未下载。没有找到可独立获取并核验来源的 LongMemEval-Refined 发布，故没有虚构文件或读取器。
+[LongMemEval S/M/Oracle](https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned) 已取得固定 revision `98d7416` 的完整文件，并实现共同读取器；S/Oracle 已生成 smoke pack，M 只做流式完整性核验。`_abs` 拒答题与可回答题分开统计。BEAM 常规三档、[BEAM-10M](https://huggingface.co/datasets/Mohammadta/BEAM-10M) 也已下载并逐批解码。MemoryAgentBench 四类 Parquet 已取得并核对字段，尚未实现中立 pack。PersonaMem-v2 的 benchmark 与 400 份配套历史已取得，已生成 persona 521 smoke pack；PersonaMem-v3 只取得 samples 三表。没有找到可独立获取并核验来源的 LongMemEval-Refined 发布，故没有虚构文件或读取器。
 
-[`catalog.json`](./catalog.json) 统一登记来源；`pack_adapter` 表示代码能力，`local_verification` 表示真实数据验证状态。来源可用、读取器支持和本机取得范围是不同事实。[基础记录](../docs/doing/2026-10-05-dataset-decoupling.md)、[最新扩充记录](../docs/doing/2026-10-05-case-study-expansion.md)和[样本案例库](../casestudies/README.md)列出材料、经验与限制。MemoryAgentBench CR/TTL 已登记来源但 row 下载超时；PersonaMem-v3 已调研，尚未取数。
+[`catalog.json`](./catalog.json) 统一登记来源；`pack_adapter` 表示代码能力，`local_verification` 表示真实数据验证状态，`local_acquisition` 记录本机取得范围。来源可用、读取器支持和本机取得范围是不同事实。[最新获取记录](../docs/doing/2026-10-07-huggingface-retry.md)与[样本案例库](../casestudies/README.md)列出核验结果和限制。
+
+## 新取得数据的小样本
+
+```powershell
+.\.venv\Scripts\python.exe -m dataset.prepare build --dataset longmemeval-s --question-limit 6 --output dataset/data/prepared/longmemeval-s-smoke.json
+.\.venv\Scripts\python.exe -m dataset.prepare build --dataset longmemeval-oracle --question-limit 6 --output dataset/data/prepared/longmemeval-oracle-smoke.json
+.\.venv\Scripts\python.exe -m dataset.prepare build --dataset personamem-v2 --history-root dataset/data/raw/personamem-v2 --persona-ids 521 --task-limit 3 --output dataset/data/prepared/personamem-v2-persona521-smoke.json
+```
+
+PersonaMem-v2 不传 `--history-root` 时仍只生成带历史引用的任务包；显式传入才加载对应 32K 文件，校验 persona、文件哈希与 receipt。当前排除历史内的 system 人物生成画像，保留 user/assistant 原文；此输入选择记入 preparation，不等同原版完整评测协议。128K、完整人物覆盖和原版 Answer/Eval 需后续适配。
+
+LongMemEval 依据作者评估代码的 `_abs` ID 规则区分拒答题；它们仍可能有 `answer_session_ids`，不能用“来源会话非空”判断可回答。重复上游 session ID 获得独立 pack ID，并保留 `source_id`。来源规则见[作者评估实现](https://github.com/xiaowu0162/LongMemEval/blob/main/src/evaluation/evaluate_qa.py)。
 
 ## 中文 PerLTQA
 
@@ -55,7 +67,7 @@ dataset/
 .\.venv\Scripts\python.exe -m dataset.fetch beam --sample-rows 1
 ```
 
-相同行快照不会覆盖；新范围用 `--offset`。完整文件下载为 `python -m dataset.fetch <id>`。当前普通 raw/HF resolve 入口不稳定，GitHub API 和部分 HF rows endpoint 已验证可用。命令从仓库根目录执行，只需标准库。
+相同行快照不会覆盖；新范围用 `--offset`。完整文件下载为 `python -m dataset.fetch <id>`。本轮网络恢复后已验证固定 revision 的 HF resolve 完整下载；大文件仍需保留 receipt 并按范围切片，避免把全量原文直接送入 Add/Search。命令从仓库根目录执行，只需标准库；Parquet 解码使用本地核验工具，不改变项目环境。
 
 ## 分析、预处理与切分
 

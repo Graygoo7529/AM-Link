@@ -1,6 +1,6 @@
 {
-  "catalog_version": 4,
-  "verified_on": "2026-10-05",
+  "catalog_version": 5,
+  "verified_on": "2026-10-07",
   "datasets": {
     "locomo": {
       "id": "locomo",
@@ -61,8 +61,14 @@
       "hf_split": "longmemeval_s_cleaned",
       "preprocessing": "Stream question records, preserve session timestamps, has_answer and answer_session_ids. Select question ID/type; exclude tasks when a session limit removes annotated evidence.",
       "reader": "dataset.prepare:inspect_dataset/iter_rows",
-      "local_verification": "reader_fixture_only",
-      "availability": "public_source"
+      "local_verification": "downloaded_data_verified",
+      "availability": "public_source",
+      "local_acquisition": {
+        "verified_on": "2026-10-07",
+        "raw_directory": "dataset/data/raw/longmemeval",
+        "scope": "S full; 500 questions; 6-question smoke pack",
+        "receipts": "per-file .receipt.json"
+      }
     },
     "locomo-refined-community": {
       "id": "locomo-refined-community",
@@ -145,8 +151,14 @@
       "hf_split": "longmemeval_m_cleaned",
       "preprocessing": "Same record schema as S, with larger histories. A single selected record can still require substantial memory.",
       "reader": "dataset.prepare:inspect_dataset/iter_rows",
-      "local_verification": "reader_fixture_only",
-      "availability": "public_source"
+      "local_verification": "downloaded_data_verified",
+      "availability": "public_source",
+      "local_acquisition": {
+        "verified_on": "2026-10-07",
+        "raw_directory": "dataset/data/raw/longmemeval",
+        "scope": "M full JSON file; pack not prepared",
+        "receipts": "per-file .receipt.json"
+      }
     },
     "longmemeval-oracle": {
       "id": "longmemeval-oracle",
@@ -174,8 +186,14 @@
       "hf_split": "longmemeval_oracle",
       "preprocessing": "Only annotated answer sessions are retained upstream. Preserve the independent Oracle source identity; this is not full S/M history.",
       "reader": "dataset.prepare:inspect_dataset/iter_rows",
-      "local_verification": "reader_fixture_only",
-      "availability": "public_source"
+      "local_verification": "downloaded_data_verified",
+      "availability": "public_source",
+      "local_acquisition": {
+        "verified_on": "2026-10-07",
+        "raw_directory": "dataset/data/raw/longmemeval",
+        "scope": "Oracle full; 500 questions; 6-question smoke pack",
+        "receipts": "per-file .receipt.json"
+      }
     },
     "scriptmem": {
       "id": "scriptmem",
@@ -273,7 +291,13 @@
       "reader": "dataset.prepare:inspect_dataset/iter_rows",
       "local_verification": "downloaded_data_verified",
       "availability": "public_source",
-      "revision": "66122c88771ac4f09f163415902828b933e78899"
+      "revision": "66122c88771ac4f09f163415902828b933e78899",
+      "local_acquisition": {
+        "verified_on": "2026-10-07",
+        "raw_directory": "dataset/data/raw/clbench",
+        "scope": "full JSONL; 1899 rows; existing smoke pack only",
+        "receipts": "per-file .receipt.json"
+      }
     },
     "clbench-life": {
       "id": "clbench-life",
@@ -303,7 +327,13 @@
       "reader": "dataset.prepare:inspect_dataset/iter_rows",
       "local_verification": "downloaded_data_verified",
       "availability": "public_source",
-      "revision": "cd2589f"
+      "revision": "cd2589f",
+      "local_acquisition": {
+        "verified_on": "2026-10-07",
+        "raw_directory": "dataset/data/raw/clbench-life",
+        "scope": "full JSONL; 405 rows; existing smoke pack only",
+        "receipts": "per-file .receipt.json"
+      }
     },
     "personamem-v2": {
       "id": "personamem-v2",
@@ -331,11 +361,17 @@
       "hf_config": "benchmark",
       "hf_split": "benchmark_text",
       "pack_adapter": "personamem-v2-v1",
-      "preprocessing": "Read CSV or JSONL, retain persona_id and source history references. user_query is input; preferences, answers and related snippets are annotations. Mark missing history.",
+      "preprocessing": "CSV tasks can be inspected alone. With explicit --history-root, join selected personas to 32K history; exclude system generation profiles, keep user/assistant messages, and preserve history hashes and receipts. Answers/preferences remain annotations.",
       "reader": "dataset.prepare:inspect_dataset/iter_rows",
       "local_verification": "downloaded_data_verified",
       "availability": "public_source",
-      "revision": "e3a5916"
+      "revision": "e3a5916",
+      "local_acquisition": {
+        "verified_on": "2026-10-07",
+        "raw_directory": "dataset/data/raw/personamem-v2",
+        "scope": "5000 text benchmark rows, 200 personas, 400 referenced 32K/128K histories; 32K smoke",
+        "receipts": "per-file .receipt.json"
+      }
     },
     "beam": {
       "id": "beam",
@@ -360,8 +396,14 @@
       "pack_adapter": "beam-v1",
       "preprocessing": "Only chat is history. Preserve session/turn positions; parse probing_questions using literal_eval. Separate questions from ideal answers and rubrics.",
       "reader": "dataset.prepare:inspect_dataset/iter_rows",
-      "local_verification": "downloaded_data_verified",
-      "availability": "public_source"
+      "local_verification": "downloaded_and_parquet_verified",
+      "availability": "public_source",
+      "local_acquisition": {
+        "verified_on": "2026-10-07",
+        "raw_directory": "dataset/data/raw/beam",
+        "scope": "100K/500K/1M Parquet: 20/35/35 rows; decoded",
+        "receipts": "per-file .receipt.json"
+      }
     },
     "beam-10m": {
       "id": "beam-10m",
@@ -378,10 +420,16 @@
         ]
       },
       "attribution": "benchmark author release",
-      "preprocessing": "Optional large-scale source; no local download or reader verification yet. Inspect storage schema and per-record memory before preparing.",
+      "preprocessing": "Downloaded and decoded; no pack adapter yet. Select records with bounded memory before preparing.",
       "reader": "dataset.prepare:inspect_dataset/iter_rows",
-      "local_verification": "source_registered_only",
-      "availability": "public_source"
+      "local_verification": "downloaded_and_parquet_verified",
+      "availability": "public_source",
+      "local_acquisition": {
+        "verified_on": "2026-10-07",
+        "raw_directory": "dataset/data/raw/beam-10m",
+        "scope": "two Parquet shards: 5+5 rows; decoded; no pack",
+        "receipts": "per-file .receipt.json"
+      }
     },
     "perltqa-zh": {
       "id": "perltqa-zh",
@@ -444,9 +492,15 @@
       "hf_config": "default",
       "hf_split": "Conflict_Resolution",
       "pack_adapter": null,
-      "local_verification": "source_registered_only_row_download_timed_out",
+      "local_verification": "downloaded_and_parquet_verified",
       "availability": "public_source",
-      "preprocessing": "Context is memory input; questions are tasks; answers and evaluation metadata remain annotations. Keep split and upstream sub-dataset identity."
+      "preprocessing": "Context is memory input; questions are tasks; answers and evaluation metadata remain annotations. Keep split and upstream sub-dataset identity.",
+      "local_acquisition": {
+        "verified_on": "2026-10-07",
+        "raw_directory": "dataset/data/raw/memoryagentbench",
+        "scope": "Conflict_Resolution Parquet: 8 rows; decoded; no pack",
+        "receipts": "per-file .receipt.json"
+      }
     },
     "memoryagentbench-ttl": {
       "id": "memoryagentbench-ttl",
@@ -460,9 +514,35 @@
       "hf_config": "default",
       "hf_split": "Test_Time_Learning",
       "pack_adapter": null,
-      "local_verification": "source_registered_only_row_download_timed_out",
+      "local_verification": "downloaded_and_parquet_verified",
       "availability": "public_source",
-      "preprocessing": "Context is memory input; questions are tasks; answers and evaluation metadata remain annotations. Keep split and upstream sub-dataset identity."
+      "preprocessing": "Context is memory input; questions are tasks; answers and evaluation metadata remain annotations. Keep split and upstream sub-dataset identity.",
+      "local_acquisition": {
+        "verified_on": "2026-10-07",
+        "raw_directory": "dataset/data/raw/memoryagentbench",
+        "scope": "Test_Time_Learning Parquet: 6 rows; decoded; no pack",
+        "receipts": "per-file .receipt.json"
+      }
+    },
+    "personamem-v3": {
+      "id": "personamem-v3",
+      "title": "PersonaMem-v3 (100-persona release)",
+      "upstream": "https://github.com/bowen-upenn/PersonaMem-v3",
+      "dataset_card": "https://huggingface.co/datasets/bowen-upenn/PersonaMem-v3",
+      "revision": "7b00a090b35b7293e6efeeb19494207f32b5a9ee",
+      "format": "CSV preview tables; source-specific backend JSON",
+      "license": "CC BY-NC 4.0 (pinned dataset card)",
+      "attribution": "PersonaMem-v3 author release, bowen-upenn",
+      "pack_adapter": null,
+      "availability": "public_source",
+      "local_verification": "downloaded_preview_tables_verified",
+      "local_acquisition": {
+        "verified_on": "2026-10-07",
+        "raw_directory": "dataset/data/raw/personamem-v3",
+        "scope": "samples: 100 profiles, 221817 events, 15791 queries; backend absent",
+        "receipts": "per-file .receipt.json"
+      },
+      "preprocessing": "Fields mix observable events and labels. Enforce event timestamp before each query; never expose groundtruth preferences, answers, supporting_history or rubric as history."
     }
   }
 }

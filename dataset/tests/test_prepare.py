@@ -205,6 +205,54 @@ class PrepareTests(unittest.TestCase):
 
         self.assertEqual([record["id"] for record in pack["records"]], ["q2"])
 
+    def test_longmemeval_abstention_with_source_sessions_is_not_answerable(self) -> None:
+        raw = {"question_id": "q_abs", "question": "Unsupported detail?", "answer": "unknown",
+            "haystack_session_ids": ["s1"], "answer_session_ids": ["s1"],
+            "haystack_sessions": [[{"role": "user", "content": "Related history.", "has_answer": True}]]}
+        record = prepare._longmemeval_record(raw, session_limit=None)
+        annotations = record["tasks"][0]["annotations"]
+        self.assertFalse(annotations["is_answerable"])
+        self.assertEqual(annotations["answer_session_ids"], ["s1"])
+        self.assertNotIn("retrieval_expect_empty", annotations)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/"source.json"
+            path.write_text(json.dumps([raw]), encoding="utf-8")
+            stats = prepare.inspect_dataset("longmemeval-s", path)
+            self.assertEqual(stats["answerable_questions"], 0)
+
+    def test_longmemeval_duplicate_session_ids_get_stable_pack_ids(self) -> None:
+        raw = {"question_id": "q1", "question": "Which day?", "answer_session_ids": [],
+            "haystack_session_ids": ["same", "same"], "haystack_dates": ["2024-01-01", "2024-01-02"],
+            "haystack_sessions": [[{"role": "user", "content": "First.", "has_answer": False}],
+                [{"role": "user", "content": "Second.", "has_answer": False}]]}
+        record = prepare._longmemeval_record(raw, session_limit=None)
+        self.assertEqual([s["id"] for s in record["sessions"]], ["same", "same#2"])
+        self.assertEqual([s["source_id"] for s in record["sessions"]], ["same", "same"])
+
+    def test_personamem_v2_joins_history_and_keeps_labels_out_of_turns(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "benchmark.csv"
+            source.write_text("persona_id,chat_history_32k_link,chat_history_128k_link,user_query,correct_answer,preference\n"
+                "1,data/chat_history_32k/p.json,data/chat_history_128k/q.json,What?,yes,tea\n", encoding="utf-8")
+            history = root / "data/chat_history_32k/p.json"
+            history.parent.mkdir(parents=True)
+            history.write_text(json.dumps({"chat_history": [
+                {"role": "system", "content": "persona prompt"},
+                {"role": "user", "content": "I like tea."},
+                {"role": "assistant", "content": "Noted."}]}), encoding="utf-8")
+            receipt = {"sha256": prepare.sha256_file(source), "source_revision": "test"}
+            source.with_suffix(source.suffix + ".receipt.json").write_text(json.dumps(receipt), encoding="utf-8")
+            pack = prepare.build_personamem_v2(path=source, history_root=root, persona_ids=["1"], task_limit=1)
+            self.assertEqual(pack["preparation"]["history_inputs"][0]["sha256"], prepare.sha256_file(history))
+            history.with_suffix(history.suffix + ".receipt.json").write_text(json.dumps({"sha256": "wrong"}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "differs from receipt"):
+                prepare.build_personamem_v2(path=source, history_root=root, persona_ids=["1"], task_limit=1)
+        self.assertEqual(len(pack["records"][0]["sessions"][0]["turns"]), 2)
+        self.assertEqual(pack["records"][0]["tasks"][0]["input"]["text"], "What?")
+        self.assertEqual(pack["records"][0]["tasks"][0]["annotations"]["preference"], "tea")
+        self.assertNotIn("persona prompt", json.dumps(pack["records"][0]["sessions"]))
+
 
 if __name__ == "__main__":
     unittest.main()

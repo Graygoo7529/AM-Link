@@ -6,5 +6,7 @@
 | 2026-10-05 | [数据层解耦、公开数据获取与核验](./2026-10-05-dataset-decoupling.md) | done：中立 pack、双向适配、7 种来源的完整文件或小样本、5 份环境计划和本地 HTTP 管线核验；缺失材料明确记录 |
 | 2026-10-05 | [案例库与数据扩充](./2026-10-05-case-study-expansion.md) | done：八个案例、PerLTQA 中文双文件与读取器、CL Life/BEAM 新样本及离线 plan；新增候选和下载限制已记录 |
 | 2026-10-05 | [案例库迁移与可复用展示](./2026-10-05-case-library-viewer.md) | done：根目录 casestudies、同源网页/会话视图、手动下载入口；不维护页面选择进度 |
+| 2026-10-05 | [统一可视化与观测接口](./2026-10-05-research-visualization.md) | done：四视角、来源样本与 API trace、版本化内部观测接口；实际二期埋点和方法实验待做 |
+| 2026-10-07 | [Hugging Face 数据重试与核验](./2026-10-07-huggingface-retry.md) | done：LongMemEval、CL-bench、BEAM、MemoryAgentBench、PersonaMem-v2/v3 缺口取得或核验；大包按范围暂不全量转 pack |
 
 各计划只使用允许获取的公开来源。实施产物、数据许可与限制以各计划和数据目录说明为准。

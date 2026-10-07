@@ -1,0 +1,213 @@
+<div id="aml-research">
+  <div class="viz-controls">
+    <label class="form-label">数据集<select class="form-select" id="ar-dataset"></select></label>
+    <label class="form-label">研究视角<select class="form-select" id="ar-lens">
+      <option value="composition">① 数据构成</option><option value="sample">② 样本与标注</option>
+      <option value="theory">③ 理论链路</option><option value="observed">④ 运行观测</option>
+    </select></label>
+  </div>
+  <div id="ar-status" class="text-small text-muted" aria-live="polite"></div>
+  <div class="viz-controls ar-secondary">
+    <label class="form-label" id="ar-case-label">案例<select class="form-select" id="ar-case"></select></label>
+    <label class="form-label" id="ar-run-label">运行记录<select class="form-select" id="ar-run"></select></label>
+    <label class="form-label" id="ar-query-label">实际问题<select class="form-select" id="ar-query"></select></label>
+  </div>
+  <section id="ar-composition" aria-label="数据构成">
+    <h3>原始数据的组成</h3>
+    <ol class="ar-chain" id="ar-layers"></ol>
+    <div id="ar-unit"></div>
+    <div class="ar-compare">
+      <div><h3>原始材料</h3><div id="ar-raw"></div></div>
+      <div><h3>当前处理</h3><div id="ar-prepared"></div></div>
+    </div>
+    <div class="text-small" id="ar-stats"></div>
+    <div class="viz-row ar-links" id="ar-links"></div>
+    <div class="text-small text-muted" id="ar-basis"></div>
+  </section>
+  <section id="ar-sample" hidden aria-label="样本与标注">
+    <label class="form-label">原始字段<select class="form-select" id="ar-field"></select></label>
+    <figure aria-label="字段流向" class="ar-route">
+      <div><div class="text-small text-muted">来源含义</div><div id="ar-field-meaning"></div></div>
+      <div aria-hidden="true">→</div><div><div class="text-small text-muted">处理后去向</div><div id="ar-destination"></div></div>
+      <div aria-hidden="true">→</div><div><div class="text-small text-muted">可见阶段</div><div id="ar-audience"></div></div>
+    </figure>
+    <div id="ar-field-note"></div>
+    <hr>
+    <div id="ar-sample-empty" class="text-muted"></div>
+    <div id="ar-sample-body">
+      <div id="ar-sample-id" class="text-small text-muted"></div>
+      <div class="viz-row ar-parts" id="ar-parts" aria-label="真实样本组成">
+        <button class="btn" type="button" data-part="history" aria-pressed="true">历史摘录</button>
+        <button class="btn" type="button" data-part="input" aria-pressed="false">任务输入</button>
+        <button class="btn" type="button" data-part="annotations" aria-pressed="false">额外标注</button>
+      </div>
+      <label class="form-label" id="ar-turn-label">来源单元<select class="form-select" id="ar-turn"></select></label>
+      <div id="ar-source-meta" class="text-small text-muted"></div>
+      <pre class="ar-text" id="ar-source-text"></pre>
+      <div class="text-small text-muted" id="ar-source-limit"></div>
+    </div>
+  </section>
+  <section id="ar-theory" hidden aria-label="理论链路">
+    <div class="text-small text-muted">理论分析 · 人工设计示意 · 未代表目标实际行为</div>
+    <h3 id="ar-question"></h3>
+    <figure class="ar-evidence" aria-label="案例证据关系">
+      <div class="ar-evidence-source"><div class="text-small text-muted" id="ar-left-id"></div><div id="ar-left"></div></div>
+      <div class="ar-relation"><span id="ar-relation-label"></span><div id="ar-mark" aria-hidden="true"></div></div>
+      <div class="ar-evidence-source"><div class="text-small text-muted" id="ar-right-id"></div><div id="ar-right"></div></div>
+    </figure>
+    <div class="viz-row ar-steps" aria-label="理论阶段">
+      <button class="btn" type="button" data-stage="add" aria-pressed="true">Add</button><span aria-hidden="true">→</span>
+      <button class="btn" type="button" data-stage="search" aria-pressed="false">Search</button><span aria-hidden="true">→</span>
+      <button class="btn" type="button" data-stage="answer" aria-pressed="false">Answer</button>
+    </div>
+    <div id="ar-stage-content" class="ar-detail" aria-live="polite"></div>
+    <div class="text-small" id="ar-trap"></div>
+    <div class="text-small text-muted" id="ar-theory-source"></div>
+  </section>
+  <section id="ar-observed" hidden aria-label="运行观测">
+    <div id="ar-run-empty" class="text-muted"></div>
+    <div id="ar-run-body">
+      <div id="ar-run-kind" class="ar-run-kind"></div>
+      <div id="ar-run-meta" class="text-small text-muted"></div>
+      <h3 id="ar-run-question"></h3>
+      <ol class="ar-chain" id="ar-run-chain"></ol>
+      <div class="viz-row ar-parts" aria-label="观测阶段">
+        <button class="btn" type="button" data-observed="add" aria-pressed="false">实际 Add</button>
+        <button class="btn" type="button" data-observed="search" aria-pressed="true">实际 Search</button>
+        <button class="btn" type="button" data-observed="answer" aria-pressed="false">Answer / Eval</button>
+        <button class="btn" type="button" data-observed="internal" aria-pressed="false">内部步骤</button>
+      </div>
+      <div id="ar-observed-add" hidden>
+        <label class="form-label">该问题之前的写入<select class="form-select" id="ar-add"></select></label>
+        <div id="ar-add-meta" class="ar-detail"></div><div id="ar-add-sources" class="text-small"></div>
+      </div>
+      <div id="ar-observed-search">
+        <div id="ar-search-meta" class="text-small"></div>
+        <div id="ar-matching" class="text-small text-muted"></div>
+        <label class="form-label">按实际返回顺序查看<select class="form-select" id="ar-result"></select></label>
+        <pre class="ar-text" id="ar-result-text"></pre><div id="ar-result-source" class="text-small text-muted"></div>
+        <details><summary>评估侧期望证据（未送入 Search）</summary><pre class="ar-text" id="ar-expected"></pre></details>
+      </div>
+      <div id="ar-observed-answer" hidden><div id="ar-answer-status"></div><pre class="ar-text" id="ar-answer-text"></pre><div id="ar-eval"></div></div>
+      <div id="ar-observed-internal" hidden>
+        <div id="ar-span-status"></div>
+        <div id="ar-span-body">
+          <label class="form-label">已记录步骤（按开始时间列出）<select class="form-select" id="ar-span"></select></label>
+          <div id="ar-span-meta" class="ar-detail"></div>
+          <ol id="ar-span-links" class="ar-chain" aria-label="产物来源关联"></ol>
+          <pre id="ar-span-data" class="ar-text"></pre>
+        </div>
+      </div>
+      <details class="ar-detail"><summary>来源、可见边界与公开步骤</summary><pre class="ar-text" id="ar-run-provenance"></pre></details>
+    </div>
+  </section>
+  <div class="text-small text-muted ar-footer" id="ar-footer"></div>
+</div>
+<style>
+  #aml-research {color:var(--foreground);overflow-wrap:anywhere;}
+  #aml-research [hidden] {display:none !important;}
+  #aml-research h3 {margin:14px 0 8px;}
+  #aml-research .ar-secondary {margin:12px 0;}
+  #aml-research .ar-chain {display:flex;flex-wrap:wrap;gap:12px;list-style:none;padding:0;margin:18px 0;}
+  #aml-research .ar-chain li {flex:1;min-width:110px;border-top:3px solid var(--viz-series-1);padding-top:8px;}
+  #aml-research .ar-compare {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin:16px 0;}
+  #aml-research .ar-route {display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr);gap:12px;align-items:center;margin:22px 0;}
+  #aml-research .ar-route>div:nth-child(odd) {border-left:3px solid var(--viz-series-1);padding-left:10px;}
+  #aml-research .ar-evidence {display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:16px;align-items:center;margin:22px 0;}
+  #aml-research .ar-evidence-source {border-left:3px solid var(--viz-series-1);padding-left:12px;}
+  #aml-research .ar-relation {text-align:center;color:var(--muted-foreground);}
+  #aml-research .ar-text {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-height:none;margin:12px 0;}
+  #aml-research .ar-parts,#aml-research .ar-steps,#aml-research .ar-links {margin:14px 0;}
+  #aml-research .ar-detail {margin:14px 0;}
+  #aml-research .ar-footer {margin-top:20px;}
+  @media(max-width:520px){
+    #aml-research .ar-compare,#aml-research .ar-route,#aml-research .ar-evidence {grid-template-columns:1fr;gap:10px;}
+    #aml-research .ar-route>div:nth-child(even) {justify-self:center;transform:rotate(90deg);}
+  }
+</style>
+<script>
+(() => {
+  const bundle=__AML_CATALOG_JSON__;
+  const root=document.getElementById('aml-research');
+  const el=id=>root.querySelector('#ar-'+id);
+  const {catalog,profiles}=bundle;
+  const roles={history:['历史','Add → Search','--viz-series-1'],task:['任务输入','Search → Answer','--viz-series-2'],annotations:['评估标注','仅 Eval / 研究复核','--viz-series-3'],auxiliary:['辅助材料','默认不进入 Add','--viz-series-4'],metadata:['身份与类别','分组 / 对齐来源','--viz-series-5']};
+  let selected={dataset:'locomo',lens:'composition',case:'l2',field:0,part:'history',stage:'add',observed:'search'};
+  const txt=(id,value)=>el(id).textContent=value==null?'未记录':String(value);
+  const hide=(id,value)=>el(id).hidden=value;
+  const options=(id,items,value)=>{const node=el(id);node.replaceChildren();for(const item of items)node.add(new Option(item.label,item.value));if(items.some(x=>String(x.value)===String(value)))node.value=value;return node.value;};
+  const chain=(id,items)=>{el(id).replaceChildren();items.forEach(label=>{const li=document.createElement('li');li.textContent=label;el(id).append(li);});};
+  const pressed=(attribute,value)=>root.querySelectorAll('button['+attribute+']').forEach(b=>b.setAttribute('aria-pressed',String(b.getAttribute(attribute)===value)));
+  const availableRuns=()=>bundle.runs.filter(r=>r.dataset_id===profiles.datasets[selected.dataset].dataset_id);
+  const currentRun=()=>availableRuns().find(r=>r.run_id===el('run').value);
+  const currentQuery=()=>currentRun()?.queries.find(q=>q.search_id===el('query').value);
+  function showExcerpt(textId,limitId,value){txt(textId,value?.text||'无记录');if(limitId)txt(limitId,value?`原长度 ${value.total_chars} 字符 · ${value.omitted?'仅展示首尾摘录；中间已省略':'完整展示该单元'} · 字符范围 ${JSON.stringify(value.ranges)}`:'');}
+  function drawField(){const field=profiles.datasets[selected.dataset].fields[Number(el('field').value)||0];const role=roles[field[1]];txt('field-meaning',field[2]);txt('destination',role[0]);txt('audience',role[1]);txt('field-note',field[3]);root.querySelectorAll('.ar-route>div:nth-child(odd)').forEach(n=>n.style.borderColor='var('+role[2]+')');}
+  function drawSample(){const sample=bundle.local.samples[selected.case];hide('sample-body',!sample);hide('sample-empty',!!sample);if(!sample){txt('sample-empty',bundle.scope==='local'?'此来源暂无绑定的真实案例摘录；字段说明不代表取得了原文。':'公共概览未嵌入原文；本地扩展版可查看真实 pack 摘录。');return;}
+    txt('sample-id',`${sample.record_id} / ${sample.task_id} · 展示 ${sample.shown_unit_count} / ${sample.history_unit_count} 个历史单元`);
+    pressed('data-part',selected.part);hide('turn-label',selected.part!=='history');
+    if(selected.part==='history'){if(!sample.units.some(x=>x.id===el('turn').value))options('turn',sample.units.map(u=>({value:u.id,label:u.id})));const unit=sample.units.find(x=>x.id===el('turn').value)||sample.units[0];txt('source-meta',`pack 来源投影 · session ${unit.session} · ${unit.speaker||'主体见正文'} · ${unit.timestamp||'独立时间字段未提供'}${unit.source_pointer?' · 原文指针 '+unit.source_pointer:''}`);showExcerpt('source-text','source-limit',unit.content);}
+    else {txt('source-meta',selected.part==='annotations'?'评估侧标注：'+sample.annotation_keys.join('、')+'；不进入 Add/Search 请求':'独立任务输入');showExcerpt('source-text','source-limit',sample[selected.part]);}
+  }
+  function drawTheory(){const c=catalog.cases[selected.case];hide('theory',selected.lens!=='theory');if(!c){txt('question','该数据源尚无人工分析案例');root.querySelector('.ar-evidence').hidden=true;root.querySelector('.ar-steps').hidden=true;['stage-content','trap','theory-source'].forEach(id=>txt(id,''));return;}
+    root.querySelector('.ar-evidence').hidden=false;root.querySelector('.ar-steps').hidden=false;
+    for(const [id,key] of Object.entries({'question':'q','left-id':'leftId','left':'left','right-id':'rightId','right':'right','relation-label':'link','mark':'mark','trap':'trap','theory-source':'source'}))txt(id,c[key]);
+    pressed('data-stage',selected.stage);txt('stage-content',c[selected.stage]);
+  }
+  function drawRun(){const r=currentRun(),q=currentQuery();hide('run-body',!q);hide('run-empty',!!q);if(!q){txt('run-empty','尚未导入此数据集的运行轨迹。没有记录不等于零分；理论示意不会填成实测。');return;}
+    txt('run-kind',r.kind==='fixture'?'测试服务的真实接口记录 · 仅验证管线':'目标系统运行记录 · 来源为导入报告');
+    txt('run-meta',`${r.system.name} / ${r.system.version} · ${r.run_id} · 展示 ${r.shown_queries}/${r.total_queries} 题`);
+    txt('run-question',q.query);
+    chain('run-chain',[`${q.adds.filter(a=>a.ok).length}/${q.adds.length} 次 Add 成功`,q.ok?`${q.results.length} 条 Search 结果`:'Search 失败',q.answer?'Answer 已导入':'Answer 未记录',q.evaluation?'评估已导入':'回答质量未评分']);
+    pressed('data-observed',selected.observed);for(const stage of ['add','search','answer','internal'])hide('observed-'+stage,selected.observed!==stage);
+    options('add',q.adds.map(a=>({value:a.id,label:`trace 行 ${a.line} · ${a.ok?'成功':'失败'} · ${a.message_count} 条消息`})),el('add').value);drawAdd();
+    txt('search-meta',`trace 行 ${q.line} · HTTP ${q.status_code??'无响应'} · ${q.latency_ms} ms · top_k=${q.top_k}${q.error?' · '+q.error:''}`);
+    txt('matching',q.grading==='ungraded'?'无 gold evidence，不计召回分数。':`字面证据匹配：${q.target_ranks.filter(v=>v!==null).length}/${q.target_ranks.length}；不等于语义支持或答案正确。`);
+    options('result',q.results.map(r=>({value:r.rank,label:`第 ${r.rank} 条 · ${r.matched_targets.length?'字面匹配 '+r.matched_targets.length+' 个来源目标':'无字面匹配'}`})),el('result').value);drawResult();
+    txt('expected',q.expected.length?q.expected.map(e=>JSON.stringify(e.source)+'\n'+e.content.text).join('\n\n'):'无来源标注');
+    txt('answer-status',q.answer?`导入记录 · ${q.answer.model} · prompt ${q.answer.prompt_version} · 上下文结果序号 ${q.answer.context_result_ranks.join(', ')||'空'}`:'未执行或未采集 Answer；不能展示“实际答对了”。');
+    hide('answer-text',!q.answer);txt('answer-text',q.answer?.text.text||'');txt('eval',q.evaluation?`${q.evaluation.label} · ${q.evaluation.metric} · ${q.evaluation.evaluator}`:'回答质量：未评分');
+    const obs=r.observability;
+    txt('span-status',obs.status==='missing'?'目标未采集内部步骤；不能推断抽取、索引或模型调用。':`${obs.status==='incomplete'?'存在缺少父步骤的记录':'已验证步骤关联'} · 本题相关 ${q.spans.length} 步 · 全运行模型调用 ${obs.model_calls??'总数未知'} · USD ${obs.cost_usd??'费用未知'}${obs.capture_declared_complete?' · 采集方声明已完整记录模型调用':' · 未声明完整采集'}`);
+    hide('span-body',!q.spans.length);
+    options('span',q.spans.map(s=>({value:s.span_id,label:`${s.operation} · ${s.name} · ${s.status} · ${s.duration_ms} ms`})),el('span').value);drawSpan();
+    txt('run-provenance',`pack SHA-256: ${r.dataset_pack_sha256}\n源文件 SHA-256: ${r.source_sha256}\n数据选择: ${JSON.stringify(r.selection)}\ntrace SHA-256: ${r.artifacts['trace.jsonl']}\nAPI 调用: ${JSON.stringify(r.api_calls)}\nAPI 报告的模型使用/费用: ${r.provider_usage===null?'未记录':JSON.stringify(r.provider_usage)}\n补充导入步骤: ${q.steps.length?JSON.stringify(q.steps,null,2):'未提供'}${q.answer?'\nAnswer 来源: '+q.answer.source_artifact:''}${q.evaluation?'\nEval 来源: '+q.evaluation.source_artifact:''}${obs.status!=='missing'?'\n内部观测 SHA-256: '+r.artifacts['observability.jsonl']:''}`);
+  }
+  function drawSpan(){const q=currentQuery();if(!q)return;const s=q.spans.find(s=>s.span_id===el('span').value);if(!s)return;
+    const parent=q.spans.find(p=>p.span_id===s.parent_span_id);
+    txt('span-meta',`${s.status} · 第 ${s.attempt} 次尝试 · replay=${s.replay} · 父步骤：${parent?parent.name:(s.parent_span_id?'未采集':'请求根步骤')} · ${s.started_at}`);
+    const relation={derived_from:'派生自',retrieved_from:'检索自',selected_from:'选自',supports:'支持',contradicts:'冲突于',supersedes:'替代'};
+    chain('span-links',s.links.map(l=>`${l.from_id} → ${relation[l.relation]} → ${l.to_id}`));
+    txt('span-data',JSON.stringify({inputs:s.inputs,outputs:s.outputs,candidates:s.candidates,model:s.model,error:s.error},null,2));
+  }
+  function drawAdd(){const q=currentQuery();if(!q)return;const a=q.adds.find(a=>a.id===el('add').value);txt('add-meta',a?`${a.ok?'成功':'失败'} · HTTP ${a.status_code??'无响应'} · ${a.latency_ms} ms · ${a.message_count} 条消息`:'该问题前没有写入记录');txt('add-sources',a?`${a.id}\n来源：`+a.sources.map(s=>`${s.turn_id}[${s.char_start}:${s.char_end}]`).join('、'):'');}
+  function drawResult(){const q=currentQuery();if(!q)return;const result=q.results.find(r=>String(r.rank)===el('result').value);showExcerpt('result-text',null,result?.content);txt('result-source',result?`${result.id} · ${result.content.omitted?'正文仅展示首尾摘录':'正文完整展示'} · 无匹配不证明检索失败`:(q.ok?'实际返回空集':'请求失败；不能等同无结果'));}
+  function draw(){const d=catalog.datasets[selected.dataset],p=profiles.datasets[selected.dataset];el('dataset').value=selected.dataset;el('lens').value=selected.lens;
+    selected.case=options('case',d.cases.map(k=>({value:k,label:catalog.cases[k].name})),selected.case);
+    hide('case-label',!['sample','theory'].includes(selected.lens)||d.cases.length===0);
+    hide('run-label',selected.lens!=='observed');hide('query-label',selected.lens!=='observed');
+    for(const lens of ['composition','sample','theory','observed'])hide(lens,selected.lens!==lens);
+    txt('status',d.status);chain('layers',p.layers);txt('unit',p.unit);txt('raw',d.raw);txt('prepared',d.prepared);txt('basis',p.basis);
+    const stats=bundle.local.stats[selected.dataset];txt('stats',stats?`当前 pack：${stats.records} 记录 / ${stats.sessions} 分区或会话 / ${stats.units} 来源单元 / ${stats.tasks} 任务；范围以 ${stats.pack_path} 为准。`:'统计范围来自已核对的案例目录；本视图未重新扫描完整原始文件。');
+    el('links').replaceChildren();for(const link of d.links||[]){const a=document.createElement('a');a.textContent=link.label;a.href=link.url;a.target='_blank';a.rel='noopener noreferrer';el('links').append(a);}
+    options('field',p.fields.map((f,i)=>({value:i,label:f[0]})),selected.field);drawField();
+    options('turn',(bundle.local.samples[selected.case]?.units||[]).map(u=>({value:u.id,label:u.id})));drawSample();drawTheory();
+    const rs=availableRuns();const runId=options('run',rs.map(r=>({value:r.run_id,label:r.system.name+' · '+(r.kind==='fixture'?'测试服务':'目标实验')})),el('run').value);
+    options('query',(rs.find(r=>r.run_id===runId)?.queries||[]).map(q=>({value:q.search_id,label:q.record_id+' / '+q.task_id})),el('query').value);drawRun();
+    txt('footer',`${bundle.updated} 内容快照 · ${bundle.scope==='local'?'本机来源摘录与可选运行记录':'公共结构与理论案例'} · 当前视图不执行模型`);
+  }
+  options('dataset',Object.entries(catalog.datasets).map(([key,d])=>({value:key,label:d.name})),selected.dataset);
+  el('dataset').addEventListener('change',()=>{selected.dataset=el('dataset').value;selected.case='';selected.field=0;draw();});
+  el('lens').addEventListener('change',()=>{selected.lens=el('lens').value;draw();});
+  el('case').addEventListener('change',()=>{selected.case=el('case').value;draw();});
+  el('field').addEventListener('change',()=>{selected.field=Number(el('field').value);drawField();});
+  el('turn').addEventListener('change',drawSample);
+  root.querySelectorAll('[data-part]').forEach(b=>b.addEventListener('click',()=>{selected.part=b.dataset.part;drawSample();}));
+  root.querySelectorAll('[data-stage]').forEach(b=>b.addEventListener('click',()=>{selected.stage=b.dataset.stage;drawTheory();}));
+  root.querySelectorAll('[data-observed]').forEach(b=>b.addEventListener('click',()=>{selected.observed=b.dataset.observed;drawRun();}));
+  el('run').addEventListener('change',()=>{const r=currentRun();options('query',r.queries.map(q=>({value:q.search_id,label:q.record_id+' / '+q.task_id})));drawRun();});
+  el('query').addEventListener('change',drawRun);el('result').addEventListener('change',drawResult);el('add').addEventListener('change',drawAdd);
+  el('span').addEventListener('change',drawSpan);
+  draw();
+})();
+</script>
