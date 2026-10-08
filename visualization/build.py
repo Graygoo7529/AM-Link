@@ -48,6 +48,81 @@ def presentation_bundle(bundle):
     return compact
 
 
+def case_observations(case_id, *, catalog, profiles, runs):
+    """Return only run queries aligned to the catalog's source binding."""
+    case = catalog["cases"].get(case_id)
+    if not case:
+        return []
+    binding = case.get("data")
+    dataset_key = next(
+        (key for key, dataset in catalog["datasets"].items() if case_id in dataset["cases"]),
+        None,
+    )
+    if dataset_key is None:
+        return []
+    matches = []
+    for run in runs:
+        if binding:
+            if run["dataset_id"] != profiles["datasets"][dataset_key]["dataset_id"]:
+                continue
+            for query in run["queries"]:
+                if query["record_id"] == binding["record"] and query["task_id"] == binding["task"]:
+                    matches.append({"run_id": run["run_id"], "search_id": query["search_id"],
+                        "system": run["system"], "loaded": True})
+        else:
+            for query in run["queries"]:
+                if query.get("research_case", {}).get("case_id") == case_id:
+                    matches.append({"run_id": run["run_id"], "search_id": query["search_id"],
+                        "system": run["system"], "loaded": True})
+    return matches
+
+
+def case_observation_index(registrations, *, catalog, profiles, runs, repo_root):
+    """Index registered queries without embedding unloaded traces in the page."""
+    index = {case_id: case_observations(case_id, catalog=catalog, profiles=profiles, runs=runs)
+        for case_id in catalog["cases"]}
+    loaded_ids = {run["run_id"] for run in runs}
+    for row in registrations:
+        if row["run_id"] in loaded_ids:
+            continue
+        directory = (repo_root / row["directory"]).resolve()
+        if not directory.is_relative_to(repo_root / "benchmark/data"):
+            raise ValueError("registered run escaped benchmark/data")
+        report = json.loads((directory / "report.json").read_text(encoding="utf-8"))
+        plan = json.loads((directory / "plan.json").read_text(encoding="utf-8"))
+        run = report.get("run", {})
+        if (report.get("schema_version") != 1 or plan.get("schema_version") != 1
+            or run.get("run_id") != row["run_id"]
+            or run.get("dataset_pack_sha256") != row["dataset_pack_sha256"]
+            or plan.get("dataset_pack_sha256") != row["dataset_pack_sha256"]):
+            raise ValueError(f"registered run identity mismatch: {row['run_id']}")
+        dataset_id = run.get("dataset", {}).get("id")
+        for case_id, case in catalog["cases"].items():
+            binding = case.get("data")
+            if not binding:
+                continue
+            dataset_key = binding["dataset"]
+            if dataset_id != profiles["datasets"][dataset_key]["dataset_id"]:
+                continue
+            selection = run.get("dataset_selection") or {}
+            if (binding["record"] not in selection.get("record_ids", [])
+                or binding["task"] not in selection.get("task_ids", [])):
+                continue
+            for planned_case in plan.get("cases", []):
+                for search in planned_case.get("searches", []):
+                    source = search.get("dataset_task", {})
+                    if (source.get("record_id"), source.get("task_id")) != (binding["record"], binding["task"]):
+                        continue
+                    search_id = search.get("id")
+                    if not any(q.get("case_id") == binding["record"] and q.get("search_id") == search_id
+                        for q in report.get("queries", [])):
+                        continue
+                    index[case_id].append({"run_id": row["run_id"], "search_id": search_id,
+                        "system": {k: run.get("system", {}).get(k) for k in ("name", "version", "target")},
+                        "loaded": False})
+    return index
+
+
 def build_bundle(local: bool = False, run_specs: list[tuple[Path, str]] | None = None,
     observations: Path | None = None, workspace: bool = False, workspace_runs: list[str] | None = None) -> dict:
     catalog = load_catalog()
@@ -80,6 +155,8 @@ def build_bundle(local: bool = False, run_specs: list[tuple[Path, str]] | None =
         "profiles": profiles, "scope": "local" if local else "curated",
         "local": local_sources(profiles) if local else {"samples": {}, "stats": {}, "missing": []},
         "runs": [read_run(path, kind) for path, kind in specs]}
+    bundle["case_observations"] = case_observation_index(all_registrations, catalog=catalog,
+        profiles=profiles, runs=bundle["runs"], repo_root=ROOT.parent)
     from benchmark.workspace import read_notes
     for run, (path, _) in zip(bundle["runs"], specs):
         # Validate every note even when the view limits the query projection.
@@ -125,6 +202,10 @@ def main() -> None:
     while len(fragment.encode("utf-8")) >= 1_000_000 and args.workspace and not args.workspace_run and not args.run and len(bundle["runs"]) > 1:
         omitted = bundle["runs"].pop(0)
         bundle["workspace"]["shown"].remove(omitted["run_id"])
+        for matches in bundle["case_observations"].values():
+            for match in matches:
+                if match["run_id"] == omitted["run_id"]:
+                    match["loaded"] = False
         fragment = render_fragment(presentation_bundle(bundle), (ROOT / "view.template.html").read_text(encoding="utf-8"))
     if len(fragment.encode("utf-8")) >= 1_000_000:
         raise ValueError("view exceeds 1 MB; select fewer runs or reduce projection size")

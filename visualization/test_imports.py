@@ -9,7 +9,7 @@ from benchmark.core import run_replay
 from benchmark.datasets import build_retrieval_manifest
 from benchmark.observability import ObservationRecorder, VERSION
 from benchmark.tests.test_replay import FakeTarget
-from visualization.build import build_bundle
+from visualization.build import build_bundle, case_observations, case_observation_index
 from visualization.sources import excerpt
 from visualization.traces import read_run, attach_observations
 from visualization.spans import read_memory_snapshot
@@ -47,6 +47,36 @@ def span_fixture(path, pack_hash):
 
 
 class ImportTests(unittest.TestCase):
+    def test_case_observation_index_requires_catalog_source_identity(self):
+        catalog={"cases":{"lm4":{"data":{"dataset":"locomo","record":"conv-42","task":"qa-1"}}},
+            "datasets":{"locomo":{"cases":["lm4"]}}}
+        profiles={"datasets":{"locomo":{"dataset_id":"locomo-v1"}}}
+        runs=[{"run_id":"right","dataset_id":"locomo-v1","system":{"name":"phase1","target":"phase1","version":"0.3.0"},"queries":[
+                {"search_id":"q1","record_id":"conv-42","task_id":"qa-1"},
+                {"search_id":"q2","record_id":"conv-42","task_id":"other"}]},
+            {"run_id":"wrong-dataset","dataset_id":"beam-v1","queries":[
+                {"search_id":"q3","record_id":"conv-42","task_id":"qa-1"}]}]
+        self.assertEqual(case_observations("lm4",catalog=catalog,profiles=profiles,runs=runs),
+            [{"run_id":"right","search_id":"q1","system":{"name":"phase1","target":"phase1","version":"0.3.0"},"loaded":True}])
+
+    def test_case_observation_index_finds_registered_archived_runs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); directory=root/'benchmark/data/runs/archived';directory.mkdir(parents=True)
+            write(directory/'report.json',{"schema_version":1,"run":{"run_id":"archived",
+                "dataset_pack_sha256":"a"*64,"dataset":{"id":"locomo-v1"},
+                "dataset_selection":{"record_ids":["conv-42"],"task_ids":["qa-1"]},
+                "system":{"name":"phase1","version":"0.3.0","target":"phase1"}},
+                "queries":[{"case_id":"conv-42","search_id":"q1"}]})
+            write(directory/'plan.json',{"schema_version":1,"dataset_pack_sha256":"a"*64,
+                "cases":[{"id":"conv-42","searches":[{"id":"q1","dataset_task":
+                    {"record_id":"conv-42","task_id":"qa-1"}}]}]})
+            rows=case_observation_index([{"run_id":"archived","directory":"benchmark/data/runs/archived",
+                "dataset_pack_sha256":"a"*64}],catalog={"cases":{"lm4":{"data":{"dataset":"locomo",
+                    "record":"conv-42","task":"qa-1"}}},"datasets":{"locomo":{"cases":["lm4"]}}},
+                profiles={"datasets":{"locomo":{"dataset_id":"locomo-v1"}}},runs=[],repo_root=root)
+            self.assertEqual(rows["lm4"],[{"run_id":"archived","search_id":"q1",
+                "system":{"name":"phase1","version":"0.3.0","target":"phase1"},"loaded":False}])
+
     def test_memory_snapshot_is_bounded_and_checks_artifact_hash(self):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)

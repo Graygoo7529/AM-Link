@@ -6,6 +6,10 @@
       <option value="theory">③ 理论链路与设计检查</option><option value="observed">④ 运行观测与评注</option>
     </select></label>
   </div>
+  <div class="viz-controls ar-secondary" role="search">
+    <label class="form-label">按案例编号查找<input class="form-control" id="ar-case-search" type="search" placeholder="例如 LM04、B02、PV04" autocomplete="off"></label>
+    <div id="ar-case-search-results" class="ar-search-results" aria-live="polite"></div>
+  </div>
   <div id="ar-status" class="text-small text-muted" aria-live="polite"></div>
   <div class="viz-controls ar-secondary">
     <label class="form-label" id="ar-case-label">案例<select class="form-select" id="ar-case"></select></label>
@@ -191,6 +195,10 @@
   #aml-research .ar-readable dt {font-weight:500;margin-top:16px;}
   #aml-research .ar-readable dd {margin:6px 0 14px;white-space:pre-wrap;}
   #aml-research .ar-bar-row {display:grid;grid-template-columns:minmax(130px,1fr) minmax(70px,2fr) auto;align-items:center;gap:12px;margin:10px 0;}
+  #aml-research .ar-search-results {display:grid;gap:8px;width:100%;}
+  #aml-research .ar-search-result {display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:8px 0;border-bottom:1px solid var(--border);}
+  #aml-research .ar-search-result-title {flex:1 1 240px;}
+  #aml-research .ar-search-result-actions {display:flex;flex-wrap:wrap;gap:8px;}
   #aml-research #ar-distribution {margin:18px 0;}
   #aml-research #ar-census {gap:18px;margin:12px 0;}
   @media(max-width:520px){
@@ -222,6 +230,43 @@
   const currentRun=()=>availableRuns().find(r=>r.run_id===el('run').value);
   const currentQuery=()=>currentRun()?.queries.find(q=>q.search_id===el('query').value);
   const matchingRuns=()=>availableRuns().flatMap(r=>r.queries.filter(q=>q.research_case?.case_id===selected.case||(q.record_id===catalog.cases[selected.case]?.data?.record&&q.task_id===catalog.cases[selected.case]?.data?.task)).map(q=>({r,q})));
+  const datasetForCase=id=>Object.keys(catalog.datasets).find(key=>catalog.datasets[key].cases.includes(id));
+  const observedForCase=id=>(bundle.case_observations?.[id]||[]);
+  function searchCases(){
+    const query=el('case-search').value.trim().toLowerCase(),host=el('case-search-results');host.replaceChildren();
+    if(!query){const hint=document.createElement('div');hint.className='text-small text-muted';hint.textContent='输入案例编号，查看对应的理论 Add/Search/Answer 链路和已登记运行观测。';host.append(hint);return;}
+    const normalize=value=>value.toLowerCase().replace(/^([a-z]+)0+(\d+)$/,'$1$2');
+    const needle=normalize(query),matches=Object.keys(catalog.cases).filter(id=>normalize(id).includes(needle)).slice(0,12);
+    if(!matches.length){const empty=document.createElement('div');empty.className='text-small text-muted';empty.textContent='没有匹配的案例编号。';host.append(empty);return;}
+    for(const id of matches){
+      const row=document.createElement('div');row.className='ar-search-result';
+      const observed=observedForCase(id),title=document.createElement('div');title.className='ar-search-result-title';
+      title.textContent=`${id} · ${catalog.cases[id].name} · ${observed.length} 条运行观测`;
+      const actions=document.createElement('div');actions.className='ar-search-result-actions';
+      const theory=document.createElement('button');theory.type='button';theory.className='btn';theory.textContent='理论链路';
+      theory.addEventListener('click',()=>{selected.dataset=datasetForCase(id);selected.case=id;selected.lens='theory';draw();});actions.append(theory);
+      for(const match of observed){
+        const button=document.createElement('button');button.type='button';button.className='btn';
+        button.textContent=`${match.system?.name||match.system?.target||'运行'} · ${match.loaded?'运行观测':'载入归档'}`;
+        button.title=`${match.run_id} · ${match.search_id}`;
+        button.addEventListener('click',()=>{
+          if(!match.loaded){
+            const msg=document.createElement('div');msg.className='text-small text-muted';
+            msg.textContent=`已登记 ${match.run_id}。重建本地视图以查看完整轨迹：`;
+            const command=document.createElement('code');
+            command.textContent=`.\\.venv\\Scripts\\python.exe -m visualization.build --local --workspace --workspace-run ${match.run_id} --web`;
+            msg.append(command);host.append(msg);return;
+          }
+          const run=bundle.runs.find(item=>item.run_id===match.run_id),selectedQuery=run?.queries.find(item=>item.search_id===match.search_id);
+          if(!run||!selectedQuery)return;
+          selected.dataset=datasetForCase(id);selected.case=id;selected.lens='observed';draw();el('run').value=match.run_id;
+          options('query',run.queries.map(item=>({value:item.search_id,label:queryLabel(item)})),match.search_id);drawRun();
+        });
+        actions.append(button);
+      }
+      row.append(title,actions);host.append(row);
+    }
+  }
   function cells(parent,values,header=false){const row=document.createElement('tr');for(const value of values){const cell=document.createElement(header?'th':'td');cell.textContent=value;row.append(cell);}parent.append(row);}
   function readable(rows){el('readable').replaceChildren();for(const row of rows||[]){const term=document.createElement('dt');term.textContent=row.label;const raw=document.createElement('span');raw.className='text-small text-muted';raw.textContent=' · '+row.field;term.append(raw);const value=document.createElement('dd');value.textContent=row.value;el('readable').append(term,value);}}
   function drawResearch(){const r=bundle.research.datasets[selected.dataset];hide('distribution',!r);hide('census',!r);txt('purpose',r?.purpose||'从来源、样本和证据出发理解记忆任务');txt('census-note',r?.note||'');el('census').replaceChildren();
@@ -344,9 +389,11 @@
   el('span').addEventListener('change',drawSpan);
   el('span-preview-select').addEventListener('change',drawSpanPreview);
   el('note-export').addEventListener('click',exportNote);
+  el('case-search').addEventListener('input',searchCases);
   el('to-sample').addEventListener('click',()=>{selected.lens='sample';draw();});
   el('to-run').addEventListener('click',()=>{const match=matchingRuns()[0];if(!match)return;selected.lens='observed';draw();el('run').value=match.r.run_id;options('query',match.r.queries.map(q=>({value:q.search_id,label:queryLabel(q)})),match.q.search_id);drawRun();});
   el('to-theory').addEventListener('click',()=>{const id=currentQuery()?.research_case?.case_id;if(!catalog.cases[id])return;selected.case=id;selected.lens='theory';draw();});
   draw();
+  searchCases();
 })();
 </script>

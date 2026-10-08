@@ -30,14 +30,16 @@ def main(argv=None):
     parser.add_argument("--allow-partial", action="store_true")
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--chunk-size", type=int, default=20)
-    parser.add_argument("--target", choices=("lexical", "aml-api", "native"), default="lexical")
+    parser.add_argument("--target", choices=("lexical", "phase1", "aml-api", "native"), default="lexical")
     parser.add_argument("--factory", help="native local method module:factory(recorder, artifacts)")
+    parser.add_argument("--phase1-models", action="store_true",
+        help="enable archived phase-1 LLM/embedding settings from the current process environment")
     parser.add_argument("--base-url")
     parser.add_argument("--auth-scheme", choices=("none", "token", "bearer", "x-api-key"), default="none")
     parser.add_argument("--api-key-env")
     parser.add_argument("--timeout", type=float, default=90)
     parser.add_argument("--system-name")
-    parser.add_argument("--system-version", default="v1")
+    parser.add_argument("--system-version")
     parser.add_argument("--run-id", default=None)
     parser.add_argument("--plan-only", action="store_true")
     parser.add_argument("--no-view", action="store_true")
@@ -67,6 +69,10 @@ def main(argv=None):
         parser.error("HTTP options apply only to aml-api")
     if (args.target == "native") != bool(args.factory):
         parser.error("native requires --factory; other targets do not accept it")
+    if args.phase1_models and args.target != "phase1":
+        parser.error("--phase1-models applies only to --target phase1")
+    system_name = args.system_name or {"phase1": "AM-Link 一期"}.get(args.target, args.target)
+    system_version = args.system_version or {"phase1": "0.3.0", "native": "0.1.0"}.get(args.target, "v1")
     output = ROOT / "benchmark/data" / ("plans" if args.plan_only else "runs") / run_id
     output.mkdir(parents=True, exist_ok=False)
     write_json(output / "dataset-pack.json", pack)
@@ -80,6 +86,9 @@ def main(argv=None):
         artifacts = Artifacts(output)
         if args.target == "lexical":
             method = LexicalMemory(recorder, artifacts)
+        elif args.target == "phase1":
+            from benchmark.phase1 import Phase1Target
+            method = Phase1Target(db_path=output / "phase1.sqlite3", use_environment=args.phase1_models)
         elif args.target == "native":
             module, name = args.factory.split(":", 1)
             method = getattr(importlib.import_module(module), name)(recorder=recorder, artifacts=artifacts)
@@ -88,19 +97,27 @@ def main(argv=None):
         target = ObservedTarget(method, recorder, artifacts, args.target)
         try:
             report = run_replay(manifest=manifest, cases=manifest["cases"], target=target, run_id=run_id,
-                system={"name": args.system_name or args.target, "version": args.system_version, "target": args.target},
+                system={"name": system_name, "version": system_version, "target": args.target},
                 trace_path=output / "trace.jsonl")
         finally:
             if callable(getattr(method, "close", None)):
                 method.close()
     write_json(output / "report.json", report)
     write_json(output / "observability.meta.json", {"schema_version": VERSION, "run_id": run_id,
-        "dataset_pack_sha256": manifest["dataset_pack_sha256"], "model_capture_complete": args.target == "lexical" or (args.target == "native" and getattr(method, "model_capture_complete", False) is True),
+        "dataset_pack_sha256": manifest["dataset_pack_sha256"], "model_capture_complete": args.target == "lexical" or (args.target in {"native", "phase1"} and getattr(method, "model_capture_complete", False) is True),
         "producer": "benchmark.study.v1"})
+    retry_policy = (
+        "phase-1 provider retry settings; internal attempts are not fully observable"
+        if args.target == "phase1" and args.phase1_models
+        else "none in arena; native method must declare its own policy"
+    )
     write_json(output / "method.json", {"target": args.target, "factory": args.factory,
-        "name": args.system_name or args.target, "version": args.system_version,
+        "name": system_name, "version": system_version,
         "ranking": "English regex BM25 k1=1.2 b=0.75; raw message bodies only; no semantic rewrite" if args.target == "lexical" else "method-defined",
-        "answer": "not executed by this runner", "retries": "none in arena; native method must declare its own policy",
+        "adapter_notes": getattr(method, "adapter_notes", []),
+        "models": getattr(method, "model_configuration", None),
+        "models_enabled": args.phase1_models if args.target == "phase1" else None,
+        "answer": "not executed by this runner", "retries": retry_policy,
         "metric_cutoffs": "only queries requested at least k results are eligible for @k"})
     register(output)
     if not args.no_view:

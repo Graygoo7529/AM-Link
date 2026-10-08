@@ -64,6 +64,7 @@
 ## 方法接入与埋点
 
 - `lexical`：本地内存原文存储，按 user 隔离和 request 幂等；英文词项 BM25，正文打分，没有改写、摘要、向量模型、重排或 Answer。语料、候选、分数、返回选择和写入产物均有实测事件。中文材料可加载，但当前分词不适合中文召回，不能当作中文能力结论。
+- `phase1`：调用 `archive/phase-1/` 中冻结的一期 0.3.0 `MemoryService`，每次运行使用独立 SQLite，保存在被忽略的运行目录中供复核，关闭 Markdown 投影。该版本没有接入 observation 子步骤，因此只能看到统一靶场记录的 Add/Search API 边界，不从结果推断内部抽取/索引过程。与二期做效果对照时，显式加 `--phase1-models` 并把一期环境配置到相同的 `gpt-4o-mini`、`embedding-3` / 512 维；仅模型关闭的运行作为离线消融，不代表一期模型增强效果。需确保 `AML_ENRICHMENT_MODE=sync`，模型用量/内部事件在一期实现中不可完整观测，调用次数和费用按未知处理。启用模型会发送本次切片到配置的模型服务；产物只记录模型名、维度和开关，不记录凭据。
 - `aml-api`：复用现有 HTTP 对象适配器，配合 `--base-url` 和认证环境变量。只自动采集 API 边界，服务内部要自行接入 [观测接口](./OBSERVABILITY.md)；网络失败和正常空结果分开。
 - `native`：`--factory <可导入模块>:<工厂>` 创建本地方法，工厂只收到 `recorder` 和 `artifacts`，返回提供 `add(request)` / `search(request)` 的对象，响应类型为 `TargetResponse`。方法不会收到 pack、答案、gold evidence 或评分计划。需设置 `--system-name` / `--system-version`，工厂实现位置属于二期新目录，不能改写一期归档。
 
@@ -122,3 +123,19 @@ with recorder.span("store", name="保存本次有效事实", parent=parent,
 0.1.0 使用 `--target native --factory amlink.native:factory`；启动、AML2 配置、预算与观测说明见 [amlink/README.md](../amlink/README.md)。原文基线显式设置 `AML2_MODE=raw`。真实调用前按既有授权范围使用公开切片。
 
 2026-10-08 的适配器 v2 会在有明确 speaker 的消息正文前保留原始姓名，避免 user/assistant 映射丢失人物身份；前缀计入分块预算，来源 offset 和证据匹配仍指向原文。旧运行使用旧适配器，不能视作完全相同输入的对照。
+
+一期可在同一个案例、pack、chunk 和 top-k 条件下直接对照：
+
+```powershell
+# 一期冻结实现；单次运行的 SQLite 数据库自动隔离并保存在忽略的运行档案
+.\.venv\Scripts\python.exe -m benchmark study --case lm4 --scope full --target phase1 --run-id lm4-phase1
+
+# 显式启用当前进程环境配置的一期 LLM / embedding
+.\.venv\Scripts\python.exe -m benchmark study --case lm4 --scope anchors --target phase1 --phase1-models --run-id lm4-phase1-models
+```
+
+不要把模型关闭的一期运行解释为一期原有模型增强配置的成绩。`--phase1-models` 保留一期 provider 自身的重试行为；如果需要核对这些调用的精确轨迹，必须增加一期内部埋点，当前网页会标为未采集。
+
+2026-10-08 的 LM04 anchors 同 pack 对照：一期真实模型运行 `lm4-phase1-models-20261008` 使用 `gpt-4o-mini` 和 `embedding-3` / 512 维，Add 4/4、Search 1/1，`evidence_recall@5=0.75`、`chain_coverage@5=0.0`；同 pack 的二期 `amlink-v2-lm4-20261008-g` 为 1.0 / 1.0。一期模型关闭的历史消融 `lm4-phase1-anchors-20261008` 也是 1.0 / 1.0，但不能代替模型开启结果。每项只有一个查询，没有运行 Answer；一期无模型子步骤埋点，具体模型调用数、费用和失败内部路径均未知。此切片只说明两个实现的这一次检索差异，不足以估计总体表现。
+
+本地研究页的“按案例编号查找”可输入 `LM04`、`B02`、`PV04` 等编号；结果分别提供理论链路和已有运行观测入口。运行观测覆盖由 catalog 的数据绑定及运行 pack 身份对齐，不会把相似但未绑定的题目误算作同一案例。检索只改变当前页面，不保存筛选状态。

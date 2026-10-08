@@ -1,4 +1,5 @@
 import copy
+import gc
 import json
 import tempfile
 import unittest
@@ -136,6 +137,28 @@ class StudyTests(unittest.TestCase):
             self.assertEqual(run['queries'][0]['target_ranks'],[1,2])
             report=json.loads((output/'report.json').read_text(encoding='utf-8'))
             self.assertIsNone(report['summary']['retrieval']['overall']['evidence_recall@10'])
+
+    def test_phase1_target_runs_archived_service_in_isolated_database(self):
+        from benchmark.phase1 import Phase1Target
+        with tempfile.TemporaryDirectory() as tmp:
+            target=Phase1Target(db_path=Path(tmp)/'isolated.sqlite3')
+            try:
+                request={'request_id':'add-one','user_id':'sample','session_id':'session',
+                    'messages':[{'role':'user','content':'The bike chain costs 25 dollars.'}]}
+                added=target.add(request)
+                self.assertEqual(added.status_code,200)
+                self.assertTrue(added.body['success'])
+                result=target.search({'user_id':'sample','query':'How much was the bike chain?', 'top_k':5})
+                self.assertEqual(result.status_code,200)
+                self.assertIn('25 dollars',result.body['data'][0]['content'])
+                self.assertTrue(target.model_capture_complete)
+                self.assertEqual(target.model_configuration['llm'],{'enabled':False,'name':None})
+                self.assertEqual(target.model_configuration['embedding'],
+                    {'enabled':False,'name':None,'dimensions':None})
+            finally:
+                target.close()
+                del target
+                gc.collect()
 
     def test_native_display_artifacts_and_compaction_preserve_steps(self):
         with tempfile.TemporaryDirectory() as tmp:

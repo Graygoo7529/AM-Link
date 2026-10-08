@@ -2,7 +2,7 @@
 
 靶场让我们在消耗正式比赛评测机会之前，使用可选择、可追踪的数据反复检查 AM-Link、Mem0 等实现。它承担两个方向的适配：将中立数据包构建为评测环境，再通过 Add/Search 协议访问待测对象。
 
-**案例研究入口**：[案例实验与研究工作区](./STUDIES.md)。`python -m benchmark study --case lm4 --scope full --target lexical` 可固定案例输入、运行本地方法、收集真实步骤并自动更新本地网页。支持片段/窗口/时间切片、native 方法接入、持久运行登记与评注。此基线无需模型；AM-Link 二期实现仍待设计。
+**案例研究入口**：[案例实验与研究工作区](./STUDIES.md)。`python -m benchmark study --case lm4 --scope full --target lexical` 可固定案例输入、运行本地方法、收集真实步骤并自动更新本地网页。支持片段/窗口/时间切片、一期归档版、二期 native 方法接入、持久运行登记与评注。
 
 ```mermaid
 flowchart LR
