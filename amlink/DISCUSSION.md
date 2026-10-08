@@ -2,6 +2,8 @@
 
 本文是设计讨论的工作台。它不替代 [DESIGN.md](./DESIGN.md) 的完整方案，而是用更直观的语言记录已经形成的共识、仍待选择的开关和每轮修订原因。
 
+最新修订见 **3C** 和 [MVP.md](./MVP.md)：建议采用统一 MemoryItem、轻量 kind、正反向引用和有界多跳。3A/3B 保留上一轮收敛过程，已被本轮取代的“无类型/三种关系/仅一跳”不再是当前第一版的限制。新增结构仍是设计提议，尚未实现或测得收益。
+
 ## 1. 先把系统想成一间记忆仓库
 
 可以把 AM-Link 想成一家只负责“收货”和“配货”的仓库：
@@ -9,9 +11,9 @@
 1. **收货台就是 Add**。每条消息先原样贴上用户、会话、时间和 request_id 标签，放进不可篡改的收货记录。只要收货记录和最基本的目录落盘，仓库就能立刻找到这件货。
 2. **门口的周转箱就是 WorkingMemory**。同一段连续对话先放在一起，避免每来一句话就重新整理整座仓库。周转箱里可以有“还没确认的事实”“可能是同一件事”“前后说法不一致”等线索。
 3. **整理员就是 Reflection**。周转箱达到一定大小，或出现更新、冲突、撤回等信号时，整理员把消息整理成事实、人物、主题和来源关系。整理员只能引用收货记录，不能凭空造货单。
-4. **货架标签就是 ref**。`event` 是原始货物，`fact` 是可以单独引用的事实，`entity` 是人物/地点/物品，`concept` 是主题，`evidence_group` 是必须一起交付的一组证据。
+4. **货架标签就是 ref**。raw 指原始消息；MemoryItem 的 event 表示一次事件，fact 表示陈述，person/entity 表示人物或其他实体，concept 表示主题，episode 保存情景。类型不同，共用笔记格式和稳定地址。
 5. **Search 是找货**。它先根据问题找到可能的货架，再检查标签、反向关系、时间和冲突，把足够完整的证据装进出货箱。
-6. **Inspect 是开箱查看**。当 Search 已经知道某个 ref 时，Inspect 才打开正文、来源、direct refs 和 backlinks。它不是重新从全仓库盲搜。
+6. **Inspect 是开箱查看**。已知 ref 后读取正文、来源和 direct refs；Search 另外通过 backlinks 查询引用者，再决定继续打开哪些箱子。
 7. **官方 Answer 是收货人最后的使用者**。AM-Link 只把证据箱交出去，不替收货人编答案。
 
 这套比喻解释了为什么“找到一句相似的话”不够：仓库可能找到了一张标签，却没有找到同一计算需要的分母、另一位人物、上一版本或冲突证据。
@@ -44,7 +46,7 @@
 | --- | --- | --- |
 | D-001 | 原始事件是真源，ref/索引/可读投影都是派生物 | 保证可追溯、可重建和隐私删除后的残留检查 |
 | D-002 | WorkingMemory 只做热缓存，不阻塞 raw immediate Search | 延续 TinySoul 思想，同时满足 Add 成功后立即可检索 |
-| D-003 | Inspect 作为 Search 内部的有界展开，不新增比赛 API | 保留渐进披露语义，避免改变官方 contract |
+| D-003 | Inspect 精确读正文/正向引用，backlinks 独立查真实入边，由 Search 组合有界多跳 | 保留 TinySoul 原语边界，不新增比赛 API |
 | D-004 | 内部生成模型固定 `gpt-4o-mini`，不引入 Jev | 符合比赛约束，减少不可复现的模型分支 |
 | D-005 | Search 只交付证据，不生成 Answer | 遵守 AM-Link 与官方 Answer/Eval 的职责边界 |
 | D-006 | AM-Link 不做内部错误重试、不做后台补偿 | 比赛调用方会按官方规则重试；内部重试会放大费用、延迟和重复副作用 |
@@ -52,7 +54,10 @@
 | D-008 | 确定性降级不是重试 | embedding/planner 失败时可以走既定 lexical 路径，但不能再次调用同一依赖或偷偷换 provider |
 | D-009 | 把 user/session/role 当作适配层和作用域标签，不假设它们都是数据集自然事实 | 公开数据的字段完整度不同；缺失字段必须可追溯，不能伪造时间或人物身份 |
 | D-010 | 模型输入采用“叙事正文 + 结构侧栏”双视图 | 机器需要结构化校验，模型仍需要自然语言、speaker、否定和顺序 |
-| D-011 | 理论链路由 evidence group、required slots 和状态过滤落实 | 只返回相似句子无法保证 LM04、LM05、B02 等案例的答案条件完整 |
+| D-011 | 理论链路以来源、关系、状态和证据覆盖验收；持久 evidence group 暂不必需 | 只返回相似句子无法保证 LM04、LM05、B02 等案例的答案条件完整 |
+| D-012 | MemoryItem 是统一内容节点，WorkingMemory 是活动视图，MemoryRef 是地址 | 避免三者形成重复事实库；待整理原文同样可检索 |
+| D-013 | 建议用一个 kind 字段支持情景、人物、实体、概念、事件、事实 | 简化字段不等于取消记忆组织和导航能力；所有类型共用存储 |
+| D-014 | 在三种状态/去重关系外加入 about/contains，backlinks 由边索引派生 | 支持人物和事件导航；图可达仍需原文核验，不能自动推出答案 |
 
 ### D-006 / D-007 的具体含义
 
@@ -66,6 +71,97 @@
 
 因此“调用方重试”不是“服务端循环重试”。这也是一期后台补偿队列和二期请求内有界工作的分界线。
 
+## 3A. 上一轮：和两个参考实现相比的增删改
+
+先区分“外部协议”和“内部方法”。比赛对外仍然只有 Add/Search，主办方负责 Answer/Eval；二期没有新增公开 endpoint，也没有要求调用方传入 ref、证据槽位或内部计划。新增的主要是内部 schema、观测事件和数据集适配约定。
+
+### 与 TinySoul-Agent 的关系
+
+| TinySoul-Agent 的设计 | AM-Link 二期保留 | AM-Link 二期去除或改变 |
+| --- | --- | --- |
+| 连续会话热缓存 | `WorkingMemory` 作为周转箱，先收原文、后整理 | 不让缓存取代 RawEvent，也不等日切后才可检索 |
+| daily、entity、concept、fact、note 文档 | 作为 ref/视图的设计启发 | 第一版不建立五类持久化文档，先统一为 `MemoryItem` |
+| Reflection | 在阈值或更新/冲突信号出现时做一次有界整理 | 不运行长期 Agent turn、无限 continuation 或后台反思循环 |
+| `memory.inspect` | 作为 Search 内部的一跳展开语义 | 不新增比赛 Inspect API，不开放交互式工具循环 |
+| `memory.search` 的 query/directory/backlinks/select/rerank/filter | 保留“先发现，再渐进披露”的思想 | 第一版只做候选、状态过滤和一跳来源/关系，复杂步骤按收益逐项加入 |
+| Markdown 是业务真源、索引可重建 | 保留“原文可追溯、索引可重建”原则 | 比赛服务先以数据库 RawEvent 为真源，不要求外部暴露 Markdown 路径 |
+| embedding、Jev、插件权限和完整 Agent 上下文 | 只保留 embedding 可替换接口和有限模型规划 | 不带入 Jev、插件协议、内部思维链或 TinySoul 的完整运行时 |
+
+所以二期不是把 TinySoul 的对象名全部搬进来，而是把它的两个核心思想收敛成比赛可用的边界：**热缓存延迟整理，Inspect/Search 分离发现和展开**。
+
+### 与一期 AM-Link 的关系
+
+| 一期已验证或已有的设计 | 二期保留 | 二期变更 |
+| --- | --- | --- |
+| RawEvent 是真源、`user_id` 隔离、`request_id` 幂等 | 原样保留，作为不可退让的基础 | 数据集字段不足时增加显式 adapter，不从缺失字段猜测事实 |
+| Add 先持久化，成功后立即可 Search | 原样保留 raw/lexical immediate path | Reflection 不再成为每条消息都必须构建完整图谱的理由 |
+| gpt-4o-mini 结构化 mutation、时间/状态/来源 | 保留受约束 mutation 和来源校验 | 第一版只保存 `MemoryItem` 和三种关系，暂不要求完整 typed ref 图 |
+| lexical + embedding + 时间/图信号 | 保留为可比较的候选信号 | 第一轮先用 lexical 验证，embedding 和 query plan 以切片收益决定是否默认开启 |
+| persistent enrichment、后台队列和内部 provider retry | 作为一期历史经验保留在 archive | 二期明确删除：单次请求有界、依赖失败显式交给官方调用方重试 |
+| Search 只返回证据，不能代答 | 原样保留 | EvidenceCard、证据闭包和复杂 SearchPlan 从必需协议降为可观测/逐步启用的内部能力 |
+
+### 当前方案新增的协议和内部约定
+
+以下区分二期新增约定和从一期收敛后的约定，都属于内部或研究协议；引用、更新和冲突等思想并非二期首次提出：
+
+1. **数据集适配协议**：将公开数据映射为 `user_id/session_id/role/content`，记录哪些字段是原始存在、适配生成或缺失，防止把适配器行为误认为记忆能力；
+2. **双视图输入约定**：模型看“自然语言正文 + 小型结构侧栏”，输出严格 mutation；不把完整数据库 JSON 直接塞给模型；
+3. **关系最小集（收敛）**：用 `supersedes`、`contradicts`、`same_event_as` 覆盖更新、冲突和去重三个高价值案例形状；本轮 3C 补入导航边；
+4. **证据覆盖观测**：required slots、来源、状态和缺失原因记录在 benchmark/运行轨迹，不先污染业务记忆 schema；
+5. **标准可观测性**：Add/Search 各阶段产生统一 span 和 evidence 事件，可把“候选没召回”“状态过滤错”“证据没补齐”“Answer 没采用”分开；
+6. **失败与重放约定**：一次请求每阶段只尝试一次；成功幂等重放不重新调用模型，失败重放只补未完成阶段。
+
+## 3B. 上一轮：字段收敛到无类型条目和一跳的提议
+
+当前完整设计中的六类 ref、十余种 link、`canonical_key`、多套时间字段、`confidence`、EvidenceCard、required slots 和八步 Search 流水线，作为研究坐标系是有价值的；如果全部同时实现，第一版会有三个实际风险：
+
+- 失败时无法知道是模型抽取、关系图、候选排序还是证据装箱出了问题；
+- 模型会看到过多互相重复的字段，叙事中的否定、顺序和人物归属可能被结构模板淹没；
+- 还没有证据证明每一种 ref/link 都能提升官方 Answer，却已经承担了迁移、校验和维护成本。
+
+因此已把可实施的第一版收敛为：
+
+```text
+RawEvent
+  + MemoryItem(text, source_event_ids, time_expression, optional time range, status)
+  + MemoryRelation(supersedes | contradicts | same_event_as)
+  + WorkingMemory(pending ids, short summary, watermark)
+```
+
+第一版暂不把 `kind`、`canonical_key`、`confidence`、`version`、`evidence_group_id`、独立 entity/concept/daily 表做成必选字段。`user_id/session_id/role` 仍然必须出现在输入和隔离边界中，但它们是作用域与来源元数据，不是要求模型推断的语义事实。更完整的字段理由和 JSON 示例见 [MVP.md](./MVP.md)。
+
+这不是放弃理论链路，而是把链路放在正确的位置：
+
+```text
+原文和顺序 → MemoryItem 的来源
+更新/冲突/去重 → 三种关系
+分子/分母和人物交集 → 多条 MemoryItem 的证据覆盖观测
+撤回/隐私 → status 过滤和不回流检查
+```
+
+如果四个切片证明三种关系仍不足，再增加一类关系；如果 required slots 需要稳定持久化，再引入 evidence group。每个新增字段都应该对应一个可复现的失败和一个可度量的修复收益。
+
+## 3C. 本轮：少字段也可以保留类型、引用图和多跳
+
+用户追问 MemoryItem/WorkingMemory 的关系，并提出 daily/concept/people/entity/event/fact 和正反向引用。重新审查后，上一轮把“少字段”过度收敛成了“少表达能力”：更新、冲突、去重三条边无法表达一条事实涉及哪个人物，也无法从人物反查相关事件。为研究跨会话关联，建议第一版就支持轻量引用图。
+
+**WorkingMemory 是桌面，MemoryItem 是笔记页，ref 是页码。** 桌面上可以同时摆新消息和以前的笔记页；整理员阅读两者，新增或更新笔记并链接回原文。完成整理只清理已处理的桌面内容，笔记和原文继续保留。Search 同时查看未整理原文和持久记忆，不依赖是否恰好触发了下一次整理。
+
+三项精简仍然有效：统一存储模型、正文以叙事为主、引用和状态由程序校验。调整的是：
+
+- 给 MemoryItem 加 `kind`，支持 episode/person/entity/concept/event/fact；不为每类另建数据库或必选字段清单；
+- daily 是有来源日期的 episode 视图，缺日期时呈现会话片段；people 是 person 集合，人物不重复建为普通 entity；
+- `MemoryRef` 是稳定地址；原始消息 RawEvent 和“拜访/购买”等语义 event 分开；
+- 增加 `about/contains` 两种导航边，保留三种状态/事件关系；来源沿用 source_event_ids；
+- backlinks 由已保存边的入边查询获得，不生成第二份反向事实；
+- 取消永久一跳限制，比较无展开、一跳、三跳的有界 Search，记录实际路径和预算截断。
+
+TinySoul 的当前实现里，Inspect 只返回正文和 direct refs，backlinks 属于 Search 的候选来源。AM-Link 也采用这一分工：Search 发掘入口，Inspect 打开，backlinks 发现引用者，有限轮次后交付证据。以一个构造例说明：拜访事件 → 陈老师 → 反链找到任教事实 → 两端原文，能够补出与原始 query 不够相似的远端证据。
+
+多跳不意味着每跳都调用模型，更不意味着对失败重试；它是同一次成功 Search 内按预算执行的读取步骤。图路径不能替代语义核验：甲、乙都链接摄影概念时，仍要确认双方分别是喜欢还是不喜欢。运行观测记录访问路径和证据，不记录或伪造模型隐藏思维链。
+
+第一轮追加 LoCoMo L04 作为跨人物与概念关联检查。先固定同一份 Add 产物比较展开深度，再比较不同整理结构，避免同时改 Add 和 Search 后无法归因。人物身份复用、Reflection 窗口、撤回作用域和展开预算是下一步实施细节；这些尚未定为已验证的参数。
+
 ## 4. 当前设计能不能支撑理论链路
 
 答案是：**从设计结构上可以，但还没有通过 AM-Link 二期实现验证。**
@@ -76,11 +172,11 @@
 案例需要的事实
   → RawEvent 保留原文
   → WorkingMemory 暂存连续线索
-  → Reflection 建立 fact / entity / evidence_group
-  → SearchPlan 声明 required evidence slots
-  → Inspect 展开 source refs、direct refs、backlinks
-  → filter / evidence_close 补齐时间、人物、冲突和版本
-  → Search 返回 EvidenceCard 或拆分证据
+  → Reflection 建立带 kind、来源和关系的 MemoryItem
+  → Search 找 seed refs，复杂问题可声明所需证据
+  → Inspect 精确读取，backlinks 找引用者，有界多跳
+  → 过滤并检查时间、人物、冲突和证据覆盖
+  → Search 返回带来源的可读证据（可选组合视图）
   → 官方 Answer 使用这些证据
 ```
 

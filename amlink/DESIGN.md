@@ -15,6 +15,8 @@ AM-Link 二期要解决的不是“把更多文本塞进向量库”，而是把
 
 > **记忆方法的最小交付物不是一条“看起来相关”的摘要，而是带来源、状态和关系的证据集合。**
 
+这份文档是目标架构；第一轮采用 [MVP.md](./MVP.md) 的统一 MemoryItem、轻量 kind/ref 和有界多跳。WorkingMemory 是活动视图，MemoryRef 是地址，MemoryItem 是内容；多种类型共用存储。每类型专有字段、持久证据组、证据卡和复杂模型流水线仍按案例收益决定，不能把设计写成已经验证的方法。
+
 ## 2. 三个参考点如何合并
 
 ### 2.1 从一期 AM-Link 保留什么
@@ -37,11 +39,11 @@ TinySoul 的长期 Agent 记忆不能原样搬进只有一次 Add/一次 Search 
 
 | TinySoul 机制 | AM-Link 二期取法 | 不直接照搬的部分 |
 | --- | --- | --- |
-| 连续会话活动 Memory | 每个 user 的 `WorkingMemory` 热缓存，先接收原文和待整理线索 | 不把缓存当唯一真源；不等待日切才让 raw 可检索 |
-| daily 日志 | 按事件日期或 `undated` 的 evidence group，保存来源顺序和原文 | 比赛没有完整 Agent 日历，不把接收日期冒充事件日期 |
+| 连续会话活动 Memory | user 内按 session 管理 WorkingMemory，引用新原文与相关旧记忆 | 不把缓存当唯一真源；不等待日切才让 raw 可检索 |
+| daily 日志 | episode 保存情景和来源；日期明确时显示 daily，否则按会话片段呈现 | 不把接收日期冒充事件日期，不额外复制一份日历真源 |
 | entity/concept/fact/note/ref | 采用稳定 `MemoryRef` 和 typed links，供 Inspect 和 Search 内部使用 | 不要求官方响应暴露内部 Markdown 路径 |
 | Reflection | Add 达到阈值或出现高风险信号时，执行一次有界结构整理 | 不运行无限后台队列、独立长时间 Agent Turn 或 Jev |
-| Inspect | 已知 ref 的有界正文、direct refs、backlinks 和证据邻接 | 不做公开的交互式工具循环；由 Search 内部确定性展开 |
+| Inspect | 已知 ref 的有界正文、来源和 direct refs；backlinks 单独查入边 | 沿用 TinySoul 的原语分工，由 Search 编排有界多跳，不新增公开交互接口 |
 | Search | 从 query 发现 seed refs，再做 filter/select/rerank 和证据闭包 | 不让 Search 直接回答问题 |
 | 渐进披露/continuation | 内部候选页和运行观测保存完整快照，避免一次展开过多 | 官方 top_k 响应仍是一次有限结果，不引入额外 API |
 
@@ -83,7 +85,7 @@ fact/entity/concept/daily]
     Q[Search API] --> P[Deterministic Preplan]
     P --> D[Lexical + Embedding + Temporal Discovery]
     D --> I[Inspect
-direct refs/backlinks]
+正文/来源/正向 refs]
     I --> F[Filter / Evidence Closure]
     F --> S[Optional Select/Rerank
 gpt-4o-mini]
@@ -102,8 +104,8 @@ gpt-4o-mini]
 每个 user 的数据空间包含四层：
 
 1. **原始层**：`RawEvent`，保留 role、content、source timestamp、session、request 和稳定事件 ID；
-2. **活动层**：`WorkingMemory`，保存最近连续会话、未整理事实、待解决冲突和已发现 ref；
-3. **知识层**：`MemoryRef` 及其 typed links，表达事实、实体、概念、daily 和证据组；
+2. **活动层**：WorkingMemory，保存会话处理位置，按需加载待整理原文与相关旧记忆；
+3. **知识层**：MemoryItem 内容节点与关系，由 MemoryRef 定位，表达人物、事件、概念、事实和情景；
 4. **检索层**：全文、embedding、时间和图邻接索引，全部可由原始层与知识层重建。
 
 数据库或文件布局可以沿用一期 SQLite/WAL 思路，但二期实现必须把“真源、派生索引、可读投影”分成明确 owner。Markdown/JSON 视图用于诊断和恢复，不作为唯一事务真源。
@@ -134,36 +136,35 @@ gpt-4o-mini]
 
 ### 4.1 Ref 类型
 
-建议第一版只实现以下 ref 类型，避免过早引入 TinySoul 的全部文档种类：
+RawEvent 是原始消息；MemoryItem 是统一持久节点，kind 仅作类型标签。MemoryRef 是稳定地址，不与显示名或 kind 绑定。第一版建议如下：
 
 | `kind` | 含义 | 典型内容 |
 | --- | --- | --- |
-| `event` | 原始 Add 消息 | role、原文、来源时间、session |
-| `daily` | 日期或 undated 的证据容器 | 同一事件时间范围内的原文指针 |
-| `entity` | 人、物、地点、组织 | 规范名、别名、类型、相关事实 |
+| `episode` | 情景日志 | 已知日期时显示 daily，否则按会话片段呈现；保存语境和原文入口 |
+| `person` | 人物节点，people 集合视图 | 可辨认人物及相关事实入口，不重复创建普通 entity |
+| `entity` | 物、地点、组织 | 辨认说明和相关事实入口 |
 | `concept` | 主题或长期兴趣 | 跨场景语义连接 |
-| `fact` | 可独立引用的原子事实 | 陈述、主体、时间、版本、证据组 |
-| `evidence_group` | 需要共同交付的证据集合 | 分子/分母、人物两侧、事件链 |
+| `event` | 一次被陈述的语义事件 | 购买、拜访、搬家等，不等同于一条原始消息 |
+| `fact` | 可独立引用的陈述 | 正文、来源、状态、可选时间 |
+
+evidence_group 暂作查询组装或研究视图，不作为必建节点。节点按导航和证据需要生成，不把每句话自动展开成全部类型。
 
 稳定 ID 必须由服务生成并在 user 命名空间内唯一。名称、摘要或模型输出不能直接成为主键。跨用户同名实体不能合并。
 
 ### 4.2 Fact 状态
 
-每个 fact 至少包含：
+第一版每个节点共用的字段为：
 
 ```text
 memory_id
 user_id
-canonical_key
-statement
-kind / status / version
-event_time / time_expression
-valid_from / valid_to
-confidence
+kind
+text
 source_event_ids
-evidence_group_id
-created_at / updated_at
+status
 ```
+
+time_expression/time_start/time_end 可选。canonical_key、confidence、业务 version、多套有效期和 evidence_group_id 是后续研究字段，不是第一版必需；数据库审计/并发元数据不等于模型事实字段。
 
 `status` 建议使用：
 
@@ -176,11 +177,11 @@ created_at / updated_at
 
 ### 4.3 Typed links
 
-第一版 links 控制在可解释集合：
+第一版将导航与状态关系分开：
 
-`derived_from`、`supports`、`contradicts`、`supersedes`、`mentions`、`about`、`participant`、`occurred_on`、`same_event_as`、`related_to`。
+导航关系为 `about` 和 `contains`，更新/冲突/去重关系为 `supersedes`、`contradicts`、`same_event_as`。derived_from 从 source_event_ids 渲染，不重复持久化。about 表示正文涉及某节点，不替代喜欢、拥有、因果等具体语义。
 
-每条 link 带 `from_ref`、`to_ref`、relation、source refs、created_at 和可选 confidence。反链由索引派生，不在两端重复维护。
+每条 link 带 from_ref、to_ref、relation 和 source_event_ids。反链由同一份边的入边索引派生，不在两端重复维护。更多谓词按实测需要增加，当前不要求 confidence。WorkingMemory 的生命周期、实例、引用校验和边的方向约定以 MVP 为准。
 
 ## 5. Add：热缓存驱动的有界反思
 
@@ -194,7 +195,7 @@ created_at / updated_at
 2. 用稳定规则生成 RawEvent ID；
 3. 在一次事务中写入幂等记录、原始事件、WorkingMemory 追加片段和原文 lexical 索引；
 4. 提交后立即可以通过 Search 找到原始证据；
-5. 记录 `add.raw_commit=ok`，然后返回官方成功响应。
+5. 记录 `add.raw_commit=ok`；未触发必要增强时可返回成功，触发时还需完成下述必要增强才能返回成功。
 
 **增强路径按阈值触发：**
 
@@ -225,7 +226,7 @@ created_at / updated_at
 
 ```text
 叙事正文：保留原始顺序、speaker、角色、日期表达和自然语言上下文
-结构侧栏：ref_id、kind、status、version、source refs、event_time、evidence_group
+结构侧栏：ref_id、kind、status、source refs、已知时间；版本和 evidence_group 仅在未来实际启用时附加
 ```
 
 模型先读短而自然的叙事片段，再用结构侧栏确认身份、时间、来源和状态。结构字段用于约束和引用，叙事正文用于理解语义；两者不互相替代。
@@ -240,7 +241,7 @@ created_at / updated_at
 
 ### 5.3 Mutation 输出
 
-模型只输出结构化 mutation，不编辑 Markdown，不返回自然语言总结：
+模型输出受校验 mutation，节点正文仍使用自然叙事。第一版采用统一节点/关系/状态变更，见 MVP。下列是后续目标架构的扩展示例，不要求第一版实现 canonical_key、实体专用批次或证据组：
 
 ```json
 {
@@ -268,7 +269,7 @@ created_at / updated_at
 
 - schema、用户作用域和 source refs 是否存在；
 - 新事实是否有 source event；
-- revise/supersede 是否指向同一 canonical key；
+- revise/supersede 是否有同一主体、属性与适用条件的来源依据；后续启用 canonical key 时再增加对应校验；
 - tombstone 是否覆盖原始来源、派生 fact 和索引过滤；
 - mutation 是否试图写入 query、答案、rubric 或未来事件；
 - 同一批 mutation 的版本和 link 是否自洽。
@@ -277,7 +278,7 @@ created_at / updated_at
 
 ### 5.4 缓存何时清空与失败重放
 
-只有在本批 mutation 和相关派生索引完成后，WorkingMemory 才把对应事件推进 watermark。失败或超时则保留未整理事件，并把 request 标记为 incomplete；本次请求不在服务内部再次调用模型或 embedding。
+只有在本批 mutation 和相关派生索引完成后，WorkingMemory 才把会话 processed_through 推进到已整理位置。失败或超时则保留未整理事件，并把 request 标记为 incomplete；本次请求不在服务内部再次调用模型或 embedding。
 
 如果比赛调用方重放相同 request_id，服务根据持久化阶段状态只补做未完成部分：raw event 已提交就不再写入，成功的 mutation 不再应用，失败的 reflection 才有一次新的外部请求机会。相同 payload 的完整成功重放只返回缓存响应，不调用模型；不同 payload 永久返回幂等冲突。这个“失败重放”属于官方调用方触发的下一次 HTTP 请求，不是 AM-Link 的内部重试。
 
@@ -289,9 +290,9 @@ created_at / updated_at
 
 **Search** 是从无到有：给定 query，在用户空间中发现与问题相关的 seed refs。
 
-**Inspect** 是从已知 ref 出发：读取该 ref 的有界正文、direct refs、证据组和反链，返回可继续探查的 refs 和内容预览。
+**Inspect** 是从已知 ref 出发：精确读取有界正文、来源和 direct refs；**backlinks** 单独查询真实入边候选。Search 组合两者重复有限轮次，形成有界多跳。这样与 TinySoul 当前原语定义保持一致。
 
-比赛接口只公开 Search，但 Search 内部可以调用 Inspect。这样保留 TinySoul 的语义分工，又不引入第二个公开 endpoint。
+比赛接口只公开 Search。第一轮比较不展开、一跳和最多三跳，具体节点/正文预算见 MVP；不是每次都走满，也不是每跳都调用模型。图路径用于寻找证据，不自动证明路径上的逻辑推断成立。
 
 ### 6.2 Search 管道
 
@@ -312,11 +313,11 @@ Search 由以下有限操作组成，既可以由确定性代码执行，也可�
 
 候选不是只有 ref ID。每个候选预览至少包含：
 
-- ref id、kind、status、version；
+- ref id、kind、status；version 仅在实际启用时附加；
 - 可读标题和正文片段；
 - source event / daily 来源；
 - 事件时间、source timestamp 和时间精度；
-- direct refs、反链数量和 evidence group；
+- direct refs 和可查询的反链入口；evidence group 暂作按问题组装的视图；
 - lexical/semantic/temporal/graph 的内部分数（只进观测和模型输入，不直接暴露为答案）。
 
 这解决 TinySoul 设计中“模型不能只看一串 links”的问题，也避免 Search 误把相关的摘要当成完整事实。
@@ -334,7 +335,7 @@ Search 由以下有限操作组成，既可以由确定性代码执行，也可�
     {"slot": "numerator", "kind": "fact"},
     {"slot": "denominator", "kind": "fact"}
   ],
-  "expansion": {"max_hops": 1, "include_backlinks": true}
+  "expansion": {"max_hops": 3, "include_backlinks": true}
 }
 ```
 

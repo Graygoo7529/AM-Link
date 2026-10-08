@@ -17,6 +17,7 @@
 1. [DESIGN.md](./DESIGN.md)：总体架构、Add/Search 链路、ref/Inspect/Search 语义和失败边界；
 2. [PROTOCOL.md](./PROTOCOL.md)：比赛 API 与内部设计对象的对应关系；
 3. [DISCUSSION.md](./DISCUSSION.md)：直观解释、决策记录和每轮讨论的待定问题；
-4. [PLAN.md](./PLAN.md)：分阶段实施、验收门槛和待讨论取舍。
+4. [MVP.md](./MVP.md)：当前第一版建议；WorkingMemory/MemoryItem 分工、统一类型与引用、正反向检索和有界多跳；
+5. [PLAN.md](./PLAN.md)：分阶段实施、验收门槛和待讨论取舍。
 
 设计稿中的“应当”是待实施方案；只有标为“已验证”的内容才代表当前代码或实验事实。

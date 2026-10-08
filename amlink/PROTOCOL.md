@@ -2,6 +2,8 @@
 
 状态：设计初稿。本文把比赛外部协议和内部方法对象分开，避免内部结构泄露为未获官方批准的 API 扩展。
 
+第一轮内部边界见 [MVP.md](./MVP.md)：RawEvent、WorkingMemory 活动视图、统一 MemoryItem/kind/ref，以及 about/contains 和三种状态/事件关系。Inspect 与 backlinks 由 Search 内部组合成有界多跳。持久 EvidenceCard/evidence_group 和完整 SearchPlan 并非第一版必需。
+
 ## 外部 API
 
 ### Add
@@ -68,11 +70,13 @@ Search 也不做内部错误重试。模型规划、embedding 或索引服务失
 | 对象 | 作用 | 是否直接出现在比赛响应 |
 | --- | --- | --- |
 | `RawEvent` | 不可变原始消息和来源 | 通过证据正文间接出现 |
-| `WorkingMemory` | 连续会话中的热缓存和待整理线索 | 否 |
-| `MemoryRef` | daily/entity/concept/fact/evidence 的稳定引用 | 以 result id 或正文来源出现 |
+| `WorkingMemory` | 本段待整理原文、相关旧 refs 的工作视图和处理位置 | 否 |
+| `MemoryItem` | 共用结构的 episode/person/entity/concept/event/fact 内容节点 | 通过证据正文间接出现 |
+| `MemoryRef` | 指向 raw 或 memory 节点的稳定地址，与类型和显示名分离 | 以 result id 或正文来源出现 |
 | `Mutation` | `gpt-4o-mini` 提出的受约束结构变更 | 否 |
 | `SearchPlan` | 查询意图、候选来源、过滤和证据槽位 | 否 |
-| `InspectView` | 从已知 ref 展开正文、直接链接和反链 | 否 |
+| `InspectView` | 从已知 ref 精确读取正文、来源和正向引用 | 否 |
+| `Backlinks` | 查真实入边及候选预览，由 Search 编排后续读取 | 否 |
 | `EvidenceCard` | fact 与必要 source 的可读组合 | 可以序列化为 result content |
 | `NarrativeView` | 给模型看的自然语言片段和 speaker/时间上下文 | 否 |
 | `StructuredSidecar` | 给校验器和模型作边界提示的 ref、状态、来源字段 | 否 |
