@@ -38,21 +38,29 @@ def _history_requests(record: dict[str, Any], user_id: str, chunk_size: int):
             if role not in {"user", "assistant"}:
                 raise ValueError(f"turn {turn['id']} requires a role or a declared speaker")
             content = turn["content"]
+            # API role is a transport mapping, not a real person's identity.
+            # Preserve an explicit source speaker without changing source offsets
+            # or injecting any task annotation into the method's input.
+            prefix = f"Speaker: {turn['speaker']}\n" if turn.get("speaker") else ""
+            prefix_words = len(prefix.split())
+            fragment_words = MAX_ADD_WORDS - prefix_words
+            if fragment_words < 1:
+                raise ValueError("speaker metadata exceeds message word budget")
             words = list(re.finditer(r"\S+", content))
             fragments = []
-            for word_start in range(0, len(words), MAX_ADD_WORDS):
-                word_end = min(word_start + MAX_ADD_WORDS, len(words))
+            for word_start in range(0, len(words), fragment_words):
+                word_end = min(word_start + fragment_words, len(words))
                 start = words[word_start].start()
                 end = words[word_end - 1].end()
-                word_count = word_end - word_start
+                word_count = word_end - word_start + prefix_words
                 if len(pending) >= chunk_size or words_in_batch + word_count > MAX_ADD_WORDS:
                     flush()
-                message = {"role": role, "content": content[start:end]}
+                message = {"role": role, "content": prefix + content[start:end]}
                 if turn.get("timestamp") is not None:
                     message["timestamp"] = turn["timestamp"]
                 pending.append(message)
                 words_in_batch += word_count
-                fragments.append({"content": message["content"], "session_id": session_id,
+                fragments.append({"content": content[start:end], "session_id": session_id,
                     "char_start": start, "char_end": end,
                     "add_request_id": f"{user_id}:session:{session_id}:chunk:{chunk_index}"})
             turn_map[turn["id"]] = fragments
@@ -142,10 +150,11 @@ def build_retrieval_manifest(
         "schema_version": 1,
         "dataset": dataset,
         "adapter": {
-            "id": "evidence-retrieval-v1",
+            "id": "evidence-retrieval-v2",
             "options": {"chunk_size": chunk_size, "top_k": top_k, "max_add_words": MAX_ADD_WORDS},
             "word_counter": "whitespace-delimited Unicode words; local approximation",
             "speaker_role_mapping": "first declared participant -> user; other participant -> assistant",
+            "speaker_identity": "explicit source speaker is prefixed to each message fragment; API role is not identity",
             "evidence_unit": "source turn fragment bounded by max_add_words",
         },
         "selection": pack["preparation"]["selection"],

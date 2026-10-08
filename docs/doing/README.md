@@ -11,6 +11,6 @@
 | 2026-10-07 | [全量数据研究与记忆案例](./2026-10-07-dataset-research.md) | done：全量结构、6 个研究包、26 个案例、BM25 与 Mem0 六条件实测、五视角展示 |
 | 2026-10-07 | [研究基础设施闭环](./2026-10-07-research-infrastructure.md) | done：26 个案例、切片运行、标准产物、持久评注、四视角联动与设计检查合并 |
 | 2026-10-08 | [Add/Search 记忆研究调研综述](./2026-10-08-memory-research-survey.md) | done：跨数据集难点归纳、6 个 Mem0 切片、BEAM 冲突重跑与 AM-Link 设计建议 |
-| 2026-10-08 | [AM-Link 二期方法设计](../../amlink/README.md) | in_progress：结合数据集、一期源码与 TinySoul-Agent 建立独立方法目录；等待小样本实现和取舍讨论 |
+| 2026-10-08 | [AM-Link 二期方法实现](./2026-10-08-amlink-implementation.md) | done：本地 0.1.0、严格 Add/Search、引用图、native 观测、91 项测试与有限真实切片；效果校准继续，未部署 |
 
 各计划只使用允许获取的公开来源。实施产物、数据许可与限制以各计划和数据目录说明为准。

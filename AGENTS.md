@@ -1,13 +1,14 @@
 # 项目记忆
 
 - AM-Link 是 Graygoo7529 参加 Agent Memory Leaderboard 的原创记忆系统。我们只提供 Add/Search，主办方负责 Answer/Eval。TinySoul-Agent 也是同一作者的个人原创项目，是设计灵感来源。
-- 截至 2026-09-23：一期 Smoke 通过、Full completed，在 [AM-Link 排行榜开源榜文本赛道](https://agentmemories.ai/leaderboard/academic/textual)排名第 21 名；一期公网 API、部署代码、数据库数据和专用证书均已清理。服务器现保留与项目无关的通用 Nginx、Certbot renewal 基础和 `/hello` 示例。二期处于调研阶段，还没有新实现。具体收尾状态见 `docs/phase-1/closeout.md`。
+- 截至 2026-09-23：一期 Smoke 通过、Full completed，在 [AM-Link 排行榜开源榜文本赛道](https://agentmemories.ai/leaderboard/academic/textual)排名第 21 名；一期公网 API、部署代码、数据库数据和专用证书均已清理。服务器现保留与项目无关的通用 Nginx、Certbot renewal 基础和 `/hello` 示例。二期已在 `amlink/` 实现 0.1.0 本地 Add/Search、引用图和 native 观测，尚未部署或参加官方 Smoke。具体收尾状态见 `docs/phase-1/closeout.md`。
 - 一期代码在 `archive/phase-1/`，版本 0.3.0；代码基线 `1881abe`，归档前 HEAD `447608a`。保持归档作为历史参考，二期代码应另建目录。
 - 每次开始先读根 README、`docs/README.md`、`docs/phase-2/integration-research.md`；只按任务需要读历史长文，不把旧文档的当前状态当成今天的事实。
 - 统一研究展示入口是 `visualization/README.md`，覆盖数据构成、样本标注、理论链路与运行观测；`casestudies/` 留在根目录保存案例文档与唯一案例 catalog，两个视图共用它。网页 `index.html` 与会话片段 `view.html` 同源生成，原文/轨迹只进入忽略的 `visualization/data/`。用户不需要保存页面选择状态。
-- AM-Link 二期埋点遵循 `benchmark/OBSERVABILITY.md`；`observability.py` 提供标准事件校验与 recorder。未采集是未知，理论方案与实测分开；目前尚未在真实二期方法中埋点。
+- AM-Link 二期埋点遵循 `benchmark/OBSERVABILITY.md`；`observability.py` 提供标准事件校验与 recorder。未采集是未知，理论方案与实测分开；已接入 `amlink.native:factory` 并记录真实模型切片；HTTP 服务默认不采集内部轨迹。
 - 2026-10-07 研究已扩至 26 个案例、四视角（设计检查并入理论）。`benchmark/STUDIES.md` 是案例/数据切片运行、native 埋点、自动展示与持久评注入口；案例数据绑定仅存于 catalog，运行档案在忽略的 `benchmark/data/research/workspace.json`，重载用 `visualization.build --local --workspace --web`。实施见 `docs/doing/2026-10-07-research-infrastructure.md`。
 - 全量结构、BM25 与 Mem0 六条件实测见 `docs/doing/2026-10-07-dataset-research.md`。`casestudies/mem0-microstudy.md` 记录真实短例结果与局限；已有轨迹可以直接加载，不必重跑模型，不把短例结果当成全量准确率。2026-10-08 又完成 6 个跨数据集切片和 1 个 BEAM 冲突重跑，归纳见 `docs/doing/2026-10-08-memory-research-survey.md`。
+- 2026-10-08 二期本地实现与验证见 `amlink/README.md` 和 `docs/doing/2026-10-08-amlink-implementation.md`。91 项离线测试通过；LM04/LM05/L04 切片能返回完整来源，但不能当成 Answer 准确率或图收益。B02 未稳定建冲突边，遗忘仍可能保留相关建议。靶场适配器 v2 会把真实 speaker 加入消息正文，旧运行不自动改变。
 - reference\TinySoul-Agent 是我进行的另一个项目，可以探索和参考它使用的记忆设计理念和 Inspect、Search 原型方法
 
 ## 环境

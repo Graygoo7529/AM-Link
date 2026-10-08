@@ -86,9 +86,13 @@ def main(argv=None):
         else:
             method = _build_target(args)
         target = ObservedTarget(method, recorder, artifacts, args.target)
-        report = run_replay(manifest=manifest, cases=manifest["cases"], target=target, run_id=run_id,
-            system={"name": args.system_name or args.target, "version": args.system_version, "target": args.target},
-            trace_path=output / "trace.jsonl")
+        try:
+            report = run_replay(manifest=manifest, cases=manifest["cases"], target=target, run_id=run_id,
+                system={"name": args.system_name or args.target, "version": args.system_version, "target": args.target},
+                trace_path=output / "trace.jsonl")
+        finally:
+            if callable(getattr(method, "close", None)):
+                method.close()
     write_json(output / "report.json", report)
     write_json(output / "observability.meta.json", {"schema_version": VERSION, "run_id": run_id,
         "dataset_pack_sha256": manifest["dataset_pack_sha256"], "model_capture_complete": args.target == "lexical" or (args.target == "native" and getattr(method, "model_capture_complete", False) is True),

@@ -113,3 +113,21 @@ class DatasetAdapterTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_speaker_identity_survives_role_mapping_and_chunk_budget():
+    pack = pack_fixture()
+    record = pack['records'][0]
+    record['participants'] = ['Joanna', 'Nate']
+    turn = record['sessions'][0]['turns'][0]
+    turn.pop('role')
+    turn['speaker'] = 'Joanna'
+    turn['content'] = ' '.join(f'word{i}' for i in range(2100))
+    manifest = build_retrieval_manifest(pack, chunk_size=20, top_k=5)
+    case = manifest['cases'][0]
+    assert case['adds'][0]['messages'][0]['role'] == 'user'
+    assert case['adds'][0]['messages'][0]['content'].startswith('Speaker: Joanna\n')
+    assert all(sum(len(m['content'].split()) for m in a['messages']) <= 2000 for a in case['adds'])
+    for fragment in manifest['source_map']['record-1']['turn-1']:
+        assert fragment['content'] == turn['content'][fragment['char_start']:fragment['char_end']]
+    assert 'gold only' not in str(case['adds'])

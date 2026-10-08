@@ -2,7 +2,7 @@
 
 面向 Agent Memory Leaderboard 的智能体记忆研究项目：实现 Add 写入和 Search 证据检索，由主办方统一回答与评分。
 
-**当前阶段：一期归档，二期调研。** 一期 `0.3.0` 已通过官方 Smoke 并完成 Full，在 [AM-Link 排行榜开源榜文本赛道](https://agentmemories.ai/leaderboard/academic/textual)排名第 21 名。2026-09-23 已关闭一期公网 API，并删除服务器上的一期程序、数据库数据和专用证书。
+**当前阶段：一期归档，二期本地实现与小样本验证。** 一期 `0.3.0` 已通过官方 Smoke 并完成 Full，在 [AM-Link 排行榜开源榜文本赛道](https://agentmemories.ai/leaderboard/academic/textual)排名第 21 名。2026-09-23 已关闭一期公网 API，并删除服务器上的一期程序、数据库数据和专用证书。
 
 AM-Link 和设计灵感来源 **TinySoul-Agent** 都是 Graygoo7529 的个人原创项目。一期借鉴自己的记忆设计思想，独立实现比赛接口，未直接移植 TinySoul-Agent 代码。
 
@@ -13,12 +13,12 @@ AM-Link 和设计灵感来源 **TinySoul-Agent** 都是 Graygoo7529 的个人原
 | [docs/doing](./docs/doing/README.md) | 数据集调研、目录建设和 Add/Search 靶场的执行记录 |
 | [dataset](./dataset/README.md) | 独立公开数据层：来源、获取、分析、预处理、切分与中立 pack |
 | [benchmark](./benchmark/README.md) | 数据环境构建、Add/Search 对象适配、Mem0 接入与可观测报告 |
-| [amlink](./amlink/README.md) | 二期 AM-Link 方法设计、协议边界与实施计划 |
+| [amlink](./amlink/README.md) | 二期 AM-Link 实现、启动方式、协议与实施记录 |
 | [研究可视化](./visualization/README.md) | [统一网页](./visualization/index.html)：数据构成、样本标注、理论与设计检查、运行与评注；[案例实验入口](./benchmark/STUDIES.md)、[埋点约定](./benchmark/OBSERVABILITY.md) |
 | [样本与案例分析](./casestudies/README.md) | [持续更新的网页](./casestudies/index.html)、会话内复用、真实案例与[手动下载清单](./casestudies/downloads.md) |
 | [archive/phase-1](./archive/phase-1/) | 一期代码、原始设计、历史文档及测试，作为冻结参考 |
 
-一期运行代码基线为 `1881abe`，归档前仓库 HEAD 为 `447608a`。旧文档中的“当前部署”“待 Smoke”等描述是当时记录；当前状态以根目录文档为准。二期记忆服务实现尚未开始；`dataset/` 和 `benchmark/` 是公开数据研究与本地诊断工具。
+一期运行代码基线为 `1881abe`，归档前仓库 HEAD 为 `447608a`。旧文档中的“当前部署”“待 Smoke”等描述是当时记录；当前状态以根目录文档为准。二期已在 `amlink/` 实现 0.1.0 本地 Add/Search，尚未部署或参加官方 Smoke；`dataset/` 和 `benchmark/` 是公开数据研究与本地诊断工具。
 
 ## 本地复核一期
 

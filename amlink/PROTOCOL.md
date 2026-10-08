@@ -1,6 +1,6 @@
 # AM-Link 二期协议边界草案
 
-状态：设计初稿。本文把比赛外部协议和内部方法对象分开，避免内部结构泄露为未获官方批准的 API 扩展。
+状态：0.1.0 本地协议已实现；具体默认值见 [README](./README.md)。本文把比赛外部协议和内部方法对象分开，避免内部结构泄露为未获官方批准的 API 扩展。
 
 第一轮内部边界见 [MVP.md](./MVP.md)：RawEvent、WorkingMemory 活动视图、统一 MemoryItem/kind/ref，以及 about/contains 和三种状态/事件关系。Inspect 与 backlinks 由 Search 内部组合成有界多跳。持久 EvidenceCard/evidence_group 和完整 SearchPlan 并非第一版必需。
 
@@ -31,7 +31,7 @@ Add 的成功条件是：
 
 AM-Link 对一次 Add 的每个阶段只尝试一次，不在服务内部退避、重复请求模型、重复请求 embedding 或启动后台补偿。暂时失败直接返回明确的依赖错误，由比赛调用方按官方规则重试。外部重放同一 request_id 时，服务只补做之前未完成的阶段；已经成功提交的 raw event、索引和 mutation 不重复写入，也不重复计费。
 
-成功响应只返回官方允许的三个 ID 和 `success=true`。参评增强模式下，若配置为必需的 reflection 或派生索引失败，Add 返回官方允许范围内的明确错误，并在内部状态和观测中标记 `incomplete`，等待调用方重放；本地 lexical 基线可以在 raw/FTS 已提交时返回降级成功，但必须在观测中标记 `degraded`，不能声称结构化增强完成。
+成功响应只返回官方允许的三个 ID 和 `success=true`。参评增强模式下，若配置为必需的 reflection 或派生索引失败，Add 返回官方允许范围内的明确错误，并在内部状态和观测中标记 `incomplete`，等待调用方重放；显式 `raw` 实验模式只承诺原文和 FTS，不是 graph 故障后的降级，观测将 Reflection 记为 skipped。
 
 ### Search
 
@@ -63,7 +63,7 @@ AM-Link 对一次 Add 的每个阶段只尝试一次，不在服务内部退避�
 
 Search 不生成最终答案、不使用 gold/rubric、不跨 user_id，也不返回模型的选择理由或隐藏思维链。`content` 可以是可读的证据卡片，但必须来自已保存的 raw/ref 内容；不能把 query 重新写成答案。
 
-Search 也不做内部错误重试。模型规划、embedding 或索引服务失败时，只能使用本次请求中已经准备好的确定性候选和预先定义的降级路径；如果没有合法降级结果，就返回明确的暂时失败，由官方调用方重试。
+Search 也不做内部错误重试。模型规划、embedding 或索引失败时返回明确错误，由官方调用方重试；0.1.0 不采用运行时故障降级。
 
 ## 内部对象不对外暴露
 

@@ -1,6 +1,6 @@
 # 项目文档
 
-更新日期：2026-10-07。目标是让新会话快速恢复项目背景和决策依据；旧过程记录留在一期归档中。
+更新日期：2026-10-08。目标是让新会话快速恢复项目背景和决策依据；旧过程记录留在一期归档中。
 
 | 阅读顺序 | 文档 | 用途 |
 | --- | --- | --- |
@@ -16,7 +16,7 @@
 | 10 | [从样本开始设计记忆](./phase-2/memory-design-workbench.md) | 用证据链、时间、归属和遗忘案例决定机制与观测点 |
 | 11 | [案例实验与研究工作区](../benchmark/STUDIES.md) | 数据切片、真实运行、自动展示、持久评注与 native 方法接入 |
 | 12 | [Add/Search 记忆研究调研综述](./doing/2026-10-08-memory-research-survey.md) | 数据难点分类、Mem0 实例和二期设计建议 |
-| 13 | [AM-Link 二期方法设计](../amlink/README.md) | 热缓存、ref/Inspect/Search、受约束 reflection 和实施计划 |
+| 13 | [AM-Link 二期方法实现](../amlink/README.md) | 本地服务、引用图、native 观测与[实施验证](./doing/2026-10-08-amlink-implementation.md) |
 
 `private/` 仅本机存在：包含已授权保存的 SSH 账号、服务器环境快照和模型 Key。公开文档只记录接入方法。
 

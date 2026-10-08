@@ -52,7 +52,10 @@ class ObservedTarget:
             root["outputs"] = [self.artifacts.write("memory" if operation == "add" else "result", response.body)]
             error = _add_error(response, request, self.target_name) if operation == "add" else _search_results(response, self.target_name, request["top_k"])[0]
             if error:
-                root["status"], root["error"] = "error", {"code": error, "retryable": False}
+                retryable = response.status_code in {408, 425, 429, 500, 502, 503, 504}
+                if operation == "add" and response.status_code in {409, 524}:
+                    retryable = True
+                root["status"], root["error"] = "error", {"code": error, "retryable": retryable}
             return response
 
     def add(self, request):
