@@ -74,6 +74,8 @@ Search 也不做内部错误重试。模型规划、embedding 或索引服务失
 | `SearchPlan` | 查询意图、候选来源、过滤和证据槽位 | 否 |
 | `InspectView` | 从已知 ref 展开正文、直接链接和反链 | 否 |
 | `EvidenceCard` | fact 与必要 source 的可读组合 | 可以序列化为 result content |
+| `NarrativeView` | 给模型看的自然语言片段和 speaker/时间上下文 | 否 |
+| `StructuredSidecar` | 给校验器和模型作边界提示的 ref、状态、来源字段 | 否 |
 | `Observation` | Add/Search 内部运行轨迹 | 只进入本地观测产物 |
 
 内部 schema 变化不应破坏官方 Add/Search contract；需要新增对外字段时先以靶场适配器验证，不能把内部实验字段直接放入正式接口。

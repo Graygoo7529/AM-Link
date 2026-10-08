@@ -50,6 +50,9 @@
 | D-006 | AM-Link 不做内部错误重试、不做后台补偿 | 比赛调用方会按官方规则重试；内部重试会放大费用、延迟和重复副作用 |
 | D-007 | 失败重放只补做未完成阶段，成功幂等重放不调用模型 | 兼顾 request_id 幂等与官方重投语义 |
 | D-008 | 确定性降级不是重试 | embedding/planner 失败时可以走既定 lexical 路径，但不能再次调用同一依赖或偷偷换 provider |
+| D-009 | 把 user/session/role 当作适配层和作用域标签，不假设它们都是数据集自然事实 | 公开数据的字段完整度不同；缺失字段必须可追溯，不能伪造时间或人物身份 |
+| D-010 | 模型输入采用“叙事正文 + 结构侧栏”双视图 | 机器需要结构化校验，模型仍需要自然语言、speaker、否定和顺序 |
+| D-011 | 理论链路由 evidence group、required slots 和状态过滤落实 | 只返回相似句子无法保证 LM04、LM05、B02 等案例的答案条件完整 |
 
 ### D-006 / D-007 的具体含义
 
@@ -63,7 +66,59 @@
 
 因此“调用方重试”不是“服务端循环重试”。这也是一期后台补偿队列和二期请求内有界工作的分界线。
 
-## 4. 仍待和你决定的开关
+## 4. 当前设计能不能支撑理论链路
+
+答案是：**从设计结构上可以，但还没有通过 AM-Link 二期实现验证。**
+
+它能支撑理论链路，是因为每个关键环节都有对应位置：
+
+```text
+案例需要的事实
+  → RawEvent 保留原文
+  → WorkingMemory 暂存连续线索
+  → Reflection 建立 fact / entity / evidence_group
+  → SearchPlan 声明 required evidence slots
+  → Inspect 展开 source refs、direct refs、backlinks
+  → filter / evidence_close 补齐时间、人物、冲突和版本
+  → Search 返回 EvidenceCard 或拆分证据
+  → 官方 Answer 使用这些证据
+```
+
+以 LM04 为例，链路可以表达“三笔独立支出 + 车灯重复关系”；以 LM05 为例，可以表达“分子槽位 + 分母槽位”；以 BEAM B02 为例，可以表达“两条冲突 fact 都要返回”。这比单纯的 embedding top-k 更接近案例研究中的理论方案。
+
+但仍有三个必须用真实实现验证的地方：
+
+1. `gpt-4o-mini` 是否能从“叙事正文 + 结构侧栏”稳定地产出正确 mutation，而不是过度合并或漏掉人物/否定；
+2. evidence closure 是否能在 top-k 和上下文预算内补齐多条证据，而不是只找到第一跳；
+3. 复杂 EvidenceCard 是否真的帮助官方 Answer，而不是把来源关系压缩得过于抽象。
+
+因此第一批实现不应直接追求全量成绩，而应观察“理论槽位是否进入结果”：LM04 检查去重事件，LM05 检查分子/分母，B02 检查冲突双方，PV04 检查撤回过滤。
+
+## 5. 仍待和你决定的开关
+
+### 输入适配：比赛数据是否天然带齐字段
+
+比赛 Add contract 会要求 `user_id`、`session_id`、`role` 和 `content`，但它们不一定都来自公开数据原文：
+
+- `user_id` 通常由评测运行或适配器生成，主要用于隔离；
+- `session_id` 可以来自真实会话，也可以是稳定的 chunk/session 编号；
+- `role` 是 API 的 user/assistant 角色，不一定等于数据集中的 speaker；多人物名称要保留在 content 或 source metadata；
+- `timestamp` 可能缺失，缺失时保留顺序和原始相对日期，不补当前时间。
+
+所以需要独立的 dataset adapter，把“数据集原本没有”与“记忆系统丢失了”分开记录。这个适配层是 P0 的必要工作。
+
+### 模型输入：叙事和结构化信息如何平衡
+
+结构化信息适合校验和过滤，叙事信息适合理解。模型看到的内容应类似：
+
+```text
+[speaker=Joanna][source=conv-42/D10:9]
+Joanna 说她最近开始喜欢……
+
+结构侧栏：ref=fact:17；entity=Joanna；event_time=2024-05；status=active
+```
+
+而不是只看到一串 JSON 字段。模型输出仍然必须是结构化 mutation 或 SearchPlan，便于服务校验。这是“输入自然、输出严格”的设计。
 
 ### 开关 A：Reflection 什么时候整理
 
@@ -95,7 +150,7 @@
 
 建议采用自适应方案：LM05、BEAM B02、LoCoMo L04 等复杂案例优先保证证据闭包；简单人物关系可以拆分返回。
 
-## 5. 下一次实现讨论的顺序
+## 6. 下一次实现讨论的顺序
 
 1. 先确定 A/B/C 三个开关；
 2. 用 LM04、LM05、BEAM B02、PV04 做 raw 基线和 ref 基线；

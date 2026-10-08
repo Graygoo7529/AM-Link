@@ -6,9 +6,9 @@
 
 | 阶段 | 内容 | 验收门槛 |
 | --- | --- | --- |
-| P0 | 固定 contract、内部 schema、26 个案例的输入/输出边界 | 不把答案、rubric 或未来事件写入 Add；所有案例都能说明必要证据 |
+| P0 | 固定 contract、数据集输入适配、内部 schema、26 个案例的输入/输出边界 | 明确 user/session/role/timestamp 的来源和缺失；不把答案、rubric 或未来事件写入 Add；所有案例都能说明必要证据 |
 | P1 | 原始事件、幂等、user_id 隔离、热缓存、原文检索 | Add 原子提交；重放不重复；Add 后立即 Search 能找到原文 |
-| P2 | ref 图、版本/冲突/撤回状态、受约束 reflection mutation | 每个派生事实可追溯 source；非法 mutation 不污染真源 |
+| P2 | ref 图、版本/冲突/撤回状态、叙事/结构双视图和受约束 reflection mutation | 每个派生事实可追溯 source；模型输入保留自然叙事；非法 mutation 不污染真源 |
 | P3 | 确定性 Inspect、混合候选、反链/时间/证据闭包 | Search 先得到候选，再补齐必要证据；无模型时仍有合法降级结果 |
 | P4 | `gpt-4o-mini` query plan、候选 select/rerank、embedding 对照 | 只输出 ref/rank/filter；调用次数、tokens、延迟和失败可观测 |
 | P5 | benchmark 适配、可视化运行轨迹、案例回放和 holdout | 26 个案例可切片运行；理论链路与实际轨迹可逐项对照 |

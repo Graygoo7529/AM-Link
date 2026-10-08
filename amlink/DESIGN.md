@@ -24,7 +24,7 @@ AM-Link 二期要解决的不是“把更多文本塞进向量库”，而是把
 - 原始消息是事实真源；结构化事实、索引和 Markdown 都是可重建派生物；
 - `user_id` 是唯一检索隔离边界，所有节点、向量、链接和路径都必须带用户作用域；
 - `request_id` 幂等，重复 Add 不重新调用模型，payload 冲突明确失败；
-- Add 先把 raw/working/FTS 事务提交，再谈可选增强；Search 失败或模型不可用时保留确定性证据；
+- Add 先把 raw/working/FTS 事务提交，再谈可选增强；模型依赖的错误边界保持显式，但质量设计的重点是正常可用路径，而不是围绕模型不可用构建另一套方法；
 - 结构化 mutation 必须声明 source event，版本、有效时间、状态和 evidence group 不能只存在于模型提示词里；
 - lexical、embedding、时间和图关系是互补信号，任何一路失败都不能假装整个记忆成功；
 - Search 内的模型只能规划 query、选择候选或排序，不能生成最终答案。
@@ -107,6 +107,28 @@ gpt-4o-mini]
 4. **检索层**：全文、embedding、时间和图邻接索引，全部可由原始层与知识层重建。
 
 数据库或文件布局可以沿用一期 SQLite/WAL 思路，但二期实现必须把“真源、派生索引、可读投影”分成明确 owner。Markdown/JSON 视图用于诊断和恢复，不作为唯一事务真源。
+
+### 3.1 比赛 Add 的输入适配
+
+比赛请求可以提供 `user_id`、`session_id`、`role`、`content` 和可选 `timestamp`，但这些字段的来源不完全相同：
+
+| 字段 | 通常由谁提供 | 记忆含义 |
+| --- | --- | --- |
+| `user_id` | 评测编排器或我们的适配层 | 检索隔离范围，不是用户在对话中说出的事实 |
+| `session_id` | 编排器、自然会话 ID 或稳定 chunk ID | 来源边界和顺序，不等于事件发生日期 |
+| `role` | API contract 或适配器 | 消息在交互中的角色；不能替代原文里的真实 speaker |
+| `content` | 数据集原文 | 事实、叙事、人物和关系的主要来源 |
+| `timestamp` | 数据集若提供则传入 | source time；缺失时不能用接收时间冒充 |
+
+因此不能假定每个公开数据集都天然带有完整的 user/session/time 信息。适配层必须为每个数据集建立稳定映射：
+
+- 没有自然 `user_id` 时，为每个评测样本生成隔离的稳定作用域；不能从内容猜用户身份；
+- 没有自然 `session_id` 时，使用 conversation/session/chunk 的稳定编号；chunk 只表达输入边界，不制造新的事实；
+- 数据集的 speaker 可能多于 `user/assistant` 两类。API role 只能表达交互角色，原始 speaker 名称必须保留在 `content` 或内部 source metadata 中，例如 `[speaker=Joanna]`；
+- 没有 timestamp 时保留消息顺序和原文中的相对时间表达，时间字段写 `unknown`，不能填当前日期；
+- system、tool、旁白等超出外部 role contract 的内容，必须在适配层记录来源类型并转换为可接受的消息形态，不能静默丢弃。
+
+`user_id`、`session_id` 和 `role` 是检索边界与来源标签，不应被 Reflection 当成用户偏好或事实本身。适配器的映射、丢失字段和转换理由要进入 dataset pack 与观测，便于区分“数据本来没有”与“Add 丢失了”。
 
 ## 4. 稳定 ref 和事实状态
 
@@ -194,6 +216,27 @@ created_at / updated_at
 - 已知的 evidence group、版本、状态和待解决冲突。
 
 模型看见的每条候选都带稳定 ID，便于输出引用。模型不能凭空创建没有 source_event_ids 的事实，也不能读取或写入其他 user 的 ref。
+
+### 5.2.1 模型可见的叙事层与结构层
+
+内部可以高度结构化，模型输入却不应只是一堆 JSON 字段。过度结构化会把人物、语气、否定、事件顺序和上下文关系拆散，反而降低 `gpt-4o-mini` 的理解能力。
+
+因此每条候选使用“双视图”：
+
+```text
+叙事正文：保留原始顺序、speaker、角色、日期表达和自然语言上下文
+结构侧栏：ref_id、kind、status、version、source refs、event_time、evidence_group
+```
+
+模型先读短而自然的叙事片段，再用结构侧栏确认身份、时间、来源和状态。结构字段用于约束和引用，叙事正文用于理解语义；两者不互相替代。
+
+这个原则同时适用于三个位置：
+
+- Reflection 输入：新消息和相关历史以叙事片段为主，结构字段作为边栏；
+- Search 的 select/rerank 输入：候选必须带实际内容预览，不能只给 ref ID；
+- 官方 Search result `content`：优先返回可读证据句，再附轻量的时间、角色、来源和冲突标记，不返回数据库转储。
+
+模型输出仍然必须是结构化 mutation/plan，原因是机器需要校验；“输入可读、输出可校验”比“输入输出都完全结构化”更适合本项目。
 
 ### 5.3 Mutation 输出
 
