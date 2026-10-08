@@ -103,12 +103,29 @@ def validate_event(event: dict) -> None:
 class ObservationRecorder:
     """One recorder per run; callers supply stable record/task/request identities."""
 
-    def __init__(self, path: Path, *, run_id: str, dataset_pack_sha256: str):
+    def __init__(self, path: Path, *, run_id: str, dataset_pack_sha256: str, append: bool = False):
         if not _string(run_id) or not _sha(dataset_pack_sha256):
             raise ValueError("recorder requires run ID and pack digest")
         path.parent.mkdir(parents=True, exist_ok=True)
         self.path, self.run_id, self.pack_hash = path, run_id, dataset_pack_sha256
-        self._file = path.open("x", encoding="utf-8", newline="\n")
+        if append:
+            if not path.is_file():
+                raise FileNotFoundError("append requires an existing observation stream")
+            seen = set()
+            with path.open("r", encoding="utf-8") as existing:
+                for line in existing:
+                    if not line.strip():
+                        continue
+                    event = json.loads(line)
+                    validate_event(event)
+                    if event["run_id"] != run_id or event["dataset_pack_sha256"] != dataset_pack_sha256:
+                        raise ValueError("cannot append to a different run/pack")
+                    if event["span_id"] in seen:
+                        raise ValueError("existing observation stream has duplicate span IDs")
+                    seen.add(event["span_id"])
+            self._file = path.open("a", encoding="utf-8", newline="\n")
+        else:
+            self._file = path.open("x", encoding="utf-8", newline="\n")
         self._lock = threading.Lock()
 
     @contextmanager

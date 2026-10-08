@@ -60,3 +60,17 @@ class ObservabilityTests(unittest.TestCase):
             events = [json.loads(line) for line in path.read_text().splitlines()]
             self.assertEqual(len(events), 1)
             self.assertEqual(events[0]["replay"], "cached")
+
+    def test_append_preserves_stream_and_rejects_other_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "events.jsonl"
+            with ObservationRecorder(path, run_id="r", dataset_pack_sha256="a"*64) as recorder:
+                with recorder.span("search", name="search", record_id="u", task_id="q", request_id="req"):
+                    pass
+            with ObservationRecorder(path, run_id="r", dataset_pack_sha256="a"*64, append=True) as recorder:
+                with recorder.span("answer", name="answer", record_id="u", task_id="q", request_id="req"):
+                    pass
+            events = [json.loads(line) for line in path.read_text().splitlines()]
+            self.assertEqual([event["operation"] for event in events], ["search", "answer"])
+            with self.assertRaisesRegex(ValueError, "different run/pack"):
+                ObservationRecorder(path, run_id="other", dataset_pack_sha256="b"*64, append=True)

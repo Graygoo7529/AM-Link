@@ -1,6 +1,6 @@
 # 案例实验与研究工作区
 
-2026-10-07，done。入口是 `python -m benchmark study`。将“来源选择 → 真实 Add/Search → 内部观测 → 评注 → 本地网页”串为一次可复核实验。正式比赛仍由主办方执行 Answer/Eval；这里不增加 AM-Link Answer API。
+2026-10-07，done。入口是 `python -m benchmark study`。将“来源选择 → 真实 Add/Search → 内部观测 → 评注 → 本地网页”串为一次可复核实验。正式比赛仍由主办方执行 Answer/Eval；这里不增加 AM-Link Answer API。研究靶场可在独立阶段对 Search 的真实返回运行诊断 Answer，不能替代官方 Answer/Eval。
 
 ## 选择数据与运行
 
@@ -84,6 +84,19 @@ with recorder.span("store", name="保存本次有效事实", parent=parent,
 方法应在模型实际调用处记录 model span，使用 tokens/费用未知时保留 null。只有真正完整捕获调用的 native 方法才设置 `model_capture_complete = True`；默认未知，不能从 HTTP 成功推断增强成功。此次本地基线完整声明为零模型调用。每个实际内部阶段用标准 operation；未使用的模块不能编造事件，未采集的步骤也不能填成“已成功”。
 
 如需本地 Answer/Eval，继续使用独立 observations/标准 answer、eval span 接入；回答模型只看到 Search 实际交出的上下文，评分器才读取 gold。当前 study runner 不自动执行通用 Answer，已有 Mem0 六条件结果展示这条下游接入路径。
+
+## 独立诊断 Answer
+
+对已有运行执行 `answer`，不重复 Add/Search；Answer 只读取 `trace.jsonl` 中成功 Search 的问题和实际返回内容。任务标注、标准答案、证据标签和评分计划不会进入模型输入。每个答案使用 `gpt-5.6-luna`、固定提示版本 `amlink-answer-diagnostic-v1`，单次 HTTP 请求不重试，并把输入、输出、usage、耗时及失败阶段接入同一运行的 `answer` / `model` span。原运行目录追加的只有观测事件；回答产物放在独立的 `answers/<answer-id>/` 子目录。
+
+```powershell
+.\.venv\Scripts\python.exe -m benchmark answer `
+  --run benchmark/data/runs/<run-id> `
+  --env-file docs/private/phase1-server.env `
+  --answer-id answer-gpt56luna-<日期>
+```
+
+回答会登记到持久研究工作区并更新本地可视化；批量实验可附加 `--no-view`，完成后统一运行 `python -m benchmark workspace publish`。研究者应在调用结束后再对照任务标注，单独记录正确、部分、错误、证据不足或不可评分。这里的提示、模型与人工核对均是诊断，不是比赛官方 Answer/Eval，也不代表总体准确率。费用在 provider 不返回可核验单价时保持未知。
 
 ## 持久评注
 

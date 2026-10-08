@@ -12,5 +12,6 @@
 | 2026-10-07 | [研究基础设施闭环](./2026-10-07-research-infrastructure.md) | done：26 个案例、切片运行、标准产物、持久评注、四视角联动与设计检查合并 |
 | 2026-10-08 | [Add/Search 记忆研究调研综述](./2026-10-08-memory-research-survey.md) | done：跨数据集难点归纳、6 个 Mem0 切片、BEAM 冲突重跑与 AM-Link 设计建议 |
 | 2026-10-08 | [AM-Link 二期方法实现](./2026-10-08-amlink-implementation.md) | done：本地 0.1.0、严格 Add/Search、引用图、native 观测、91 项测试与有限真实切片；效果校准继续，未部署 |
+| 2026-10-08 | [AM-Link Answer 靶场与真实案例复核](./2026-10-08-amlink-answer-research.md) | done：诊断 Answer 接入标准观测，7 个新增 Add/Search 切片、8 个真实 Answer、人工后验核对；reflection 结构错误仍阻断四类案例 |
 
 各计划只使用允许获取的公开来源。实施产物、数据许可与限制以各计划和数据目录说明为准。

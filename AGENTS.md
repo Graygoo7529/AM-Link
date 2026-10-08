@@ -6,9 +6,10 @@
 - 每次开始先读根 README、`docs/README.md`、`docs/phase-2/integration-research.md`；只按任务需要读历史长文，不把旧文档的当前状态当成今天的事实。
 - 统一研究展示入口是 `visualization/README.md`，覆盖数据构成、样本标注、理论链路与运行观测；`casestudies/` 留在根目录保存案例文档与唯一案例 catalog，两个视图共用它。网页 `index.html` 与会话片段 `view.html` 同源生成，原文/轨迹只进入忽略的 `visualization/data/`。用户不需要保存页面选择状态。
 - AM-Link 二期埋点遵循 `benchmark/OBSERVABILITY.md`；`observability.py` 提供标准事件校验与 recorder。未采集是未知，理论方案与实测分开；已接入 `amlink.native:factory` 并记录真实模型切片；HTTP 服务默认不采集内部轨迹。
+- 2026-10-08 靶场增加 `python -m benchmark answer`：只读取真实 Search 问题与返回内容，运行 `gpt-5.6-luna` 诊断回答，并将 Answer、模型调用和后验人工 eval span 持久接入可视化。它不是 AM-Link API；正式比赛仍由主办方执行 Answer/Eval。案例与限制见 `docs/doing/2026-10-08-amlink-answer-research.md`。
 - 2026-10-07 研究已扩至 26 个案例、四视角（设计检查并入理论）。`benchmark/STUDIES.md` 是案例/数据切片运行、native 埋点、自动展示与持久评注入口；案例数据绑定仅存于 catalog，运行档案在忽略的 `benchmark/data/research/workspace.json`，重载用 `visualization.build --local --workspace --web`。实施见 `docs/doing/2026-10-07-research-infrastructure.md`。
 - 全量结构、BM25 与 Mem0 六条件实测见 `docs/doing/2026-10-07-dataset-research.md`。`casestudies/mem0-microstudy.md` 记录真实短例结果与局限；已有轨迹可以直接加载，不必重跑模型，不把短例结果当成全量准确率。2026-10-08 又完成 6 个跨数据集切片和 1 个 BEAM 冲突重跑，归纳见 `docs/doing/2026-10-08-memory-research-survey.md`。
-- 2026-10-08 二期本地实现与验证见 `amlink/README.md` 和 `docs/doing/2026-10-08-amlink-implementation.md`。91 项离线测试通过；LM04/LM05/L04 切片能返回完整来源，但不能当成 Answer 准确率或图收益。B02 未稳定建冲突边，遗忘仍可能保留相关建议。靶场适配器 v2 会把真实 speaker 加入消息正文，旧运行不自动改变。
+- 2026-10-08 二期本地实现与验证见 `amlink/README.md` 和 `docs/doing/2026-10-08-amlink-implementation.md`。此前 91 项二期方法测试通过；本轮靶场/方法/可视化联合测试 71 项通过。新增 7 个真实 AM-Link 切片、8 个 `gpt-5.6-luna` 回答及后验核对见 `docs/doing/2026-10-08-amlink-answer-research.md`：金额、比例、拒答案例正确；时间计量、复合答案完整性和冲突表达仍有缺口。L01/LM01/P02/PV04 在 reflection schema/关系校验阶段阻断 Add/Search，不能评价其 Answer 或遗忘效果。B02 已检索到互相冲突的来源，但回答仍先肯定再保留。靶场适配器 v2 会把真实 speaker 加入消息正文，旧运行不自动改变。
 - reference\TinySoul-Agent 是我进行的另一个项目，可以探索和参考它使用的记忆设计理念和 Inspect、Search 原型方法
 
 ## 环境
