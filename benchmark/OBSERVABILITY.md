@@ -1,6 +1,6 @@
 # AM-Link 可观测性标准接口 v1
 
-状态：接口约定、Python recorder、校验器与研究视图接入已实现；已有 Mem0 研究实验与本地 BM25 实际步骤，AM-Link 二期服务尚未实现。此接口是诊断侧接口，不改变比赛 Add/Search API。
+状态：接口约定、Python recorder、校验器与研究视图接入已实现；Mem0 研究实验和 AM-Link 二期 0.1.0 均已接入 native 内部步骤观测，并保留真实模型切片档案。AM-Link 尚未部署或参加官方 Smoke。此接口是诊断侧接口，不改变比赛 Add/Search API。
 
 靶场的 `ObservedTarget` 自动提供 API 根 span；native 工厂可通过 `set_observation_parent` 连接内部步骤。`Artifacts.text` 提供 `amlink.artifact.v1` 可显示正文，`amlink.note.v1` 将研究评注绑定到真实查询/步骤/哈希，详见 [接入与评注指南](./STUDIES.md)。两者是独立附属格式，不修改 observation v1 事件字段。
 
