@@ -4,6 +4,8 @@
 
 `amlink/` 是二期实现的独立边界。只提供 Add/Search，主办方负责 Answer/Eval；`archive/phase-1/` 保持冻结。TinySoul-Agent 的缓存、引用、Reflection、Inspect/Search 思路用于设计参考，没有移植其完整 Agent 循环或 Jev。
 
+面向讨论和后续更新的当前方法总览见仓库根目录 [`DESIGN.md`](../DESIGN.md)；本文件记录运行方式、当前参数和实现边界。
+
 ## 已实现的链路
 
 ```text

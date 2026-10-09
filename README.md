@@ -13,6 +13,7 @@ AM-Link 和设计灵感来源 **TinySoul-Agent** 都是 Graygoo7529 的个人原
 | [docs/doing](./docs/doing/README.md) | 数据集调研、目录建设和 Add/Search 靶场的执行记录 |
 | [dataset](./dataset/README.md) | 独立公开数据层：来源、获取、分析、预处理、切分与中立 pack |
 | [benchmark](./benchmark/README.md) | 数据环境构建、Add/Search 对象适配、Mem0 接入与可观测报告 |
+| [AM-Link 设计总览](./DESIGN.md) | 当前 Add/Search 对象、链路、案例证据与待验证边界；随实现持续更新 |
 | [amlink](./amlink/README.md) | 二期 AM-Link 实现、启动方式、协议与实施记录 |
 | [研究可视化](./visualization/README.md) | [统一网页](./visualization/index.html)：数据构成、样本标注、理论与设计检查、运行与评注；[案例实验入口](./benchmark/STUDIES.md)、[埋点约定](./benchmark/OBSERVABILITY.md) |
 | [样本与案例分析](./casestudies/README.md) | [持续更新的网页](./casestudies/index.html)、会话内复用、真实案例与[手动下载清单](./casestudies/downloads.md) |
