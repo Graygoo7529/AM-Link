@@ -54,3 +54,11 @@
 （5.3）在结构化记忆 MemoryItem Mutation 阶段，更新、删除、新增 MemoryItem 并维护关联等等，（可以作为微型 loop 迭代）由 llm 决策重新进入维护或者停止。
 
 请进一步据此分析、设计理想的 AM-Link 架构和方法，重新梳理方案、设计理念和执行计划，然后向我阐述设计和流程编排（以形象可视、详实易懂的方式），并继续和我讨论确认。
+
+
+你的分析和设计合理，请持续修订计划和设计理念，下面是我的分析：
+（1)官方作为评测，一般是先批量完成全部 add，再统一 search；因此，尽量把 add 持续时间拉长更好，例如，在内部处于停止状态时再返回 add 200（即在 Reflection 尚未完成时不返回）；
+（2）避免并发 Add 造成同一用户的 Reflection 相互覆盖合理，add 可以并发加入，但我们内部应当稳定、顺序（即同用户采用串行 Reflection 和处理水位）；此外，你提到 user_id，当前 add 接口有这个字段吗（及其含义），我觉得使用场景很可能是多次连续同 id 的 add 再换 user id，因此根据 user_id 设计并行可能过于复杂、没有必要；
+（3）你的新理解“Query 的分支先合并再 Select；BFS 每层的 Backlink 候选先合并，过多时再 Select；Inspect 本身不做 Select 合理，你可以把这个 Search mermaid 画到设计理念；一个注意点是 BFS 这里是继续 Inspect、还是 Backlink、或者是停止应该使用 llm 来决策和生成参数（通过工具调用和轻度 loop）；以及 loop 的含义是，Inspect->item content、backlink->select->refs->item content 会立即加入 context 并影响后续 BFS，例如，可以出现 Inspect（ref1 of item1)->context 获得 item1 content，包含 ref2 of item2-> Inspect（ref2 of item2)，从而实现这样的多跳路径；
+我还可以举出另一个路径示例（这些路径应该由 llm 在 loop 中根据 memory context 灵活决策）： Backlink（ref1 of item1)(->结果多，默认Select）-> context 获得 refs（包含解释或片段）->Inspect(ref2 in refs) 
+请继续分析、设计，然后修订文档和计划。在此基础上，请全面分析设计理念是否清晰明确、执行计划是否合理可行；你可以继续向我阐述设计和流程编排，若有不明确的设计语义/决策点继续讨论确认。
