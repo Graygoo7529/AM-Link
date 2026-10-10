@@ -1,6 +1,6 @@
 # AM-Link Add/Search 设计总览
 
-更新日期：2026-10-09。本文是当前方法的持续更新入口，说明已经实现的二期本地链路、已有实验能支持的结论，以及仍待验证的设计目标。接口与默认值以 [`amlink/README.md`](./amlink/README.md)、[`amlink/PROTOCOL.md`](./amlink/PROTOCOL.md) 和源码为准；本文不替代它们。
+更新日期：2026-10-10。本文是当前方法的持续更新入口，说明已经实现的二期本地链路、已有实验能支持的结论，以及仍待验证的设计目标。接口与默认值以 [`amlink/README.md`](./amlink/README.md)、[`amlink/PROTOCOL.md`](./amlink/PROTOCOL.md) 和源码为准；本文不替代它们。
 
 ## 范围与原则
 
@@ -62,24 +62,40 @@ flowchart TD
   C --> E[每条 query 做 BM25 + embedding]
   D --> E
   E --> F[按 ref 合并分支候选账本]
-  F --> G[选择 seeds]
-  G --> H{还有 frontier 且预算允许？}
-  H -->|是| I[Inspect 出边 + backlinks 入边]
-  I --> J[按关系、相关度、hop 去重]
-  J --> F
-  H -->|否| K[select：筛选并排序 refs]
-  K --> L[检查状态、冲突、来源并装箱]
-  L --> M[返回证据，不代答]
+  F --> G{有显式 seed_refs？}
+  G -->|是| H[使用模型选择的 refs]
+  G -->|否| I[从 query 候选建立 seeds]
+  H --> J{还有 frontier 且预算允许？}
+  I --> J
+  J -->|是| K[Inspect 出边 + backlinks 入边]
+  K --> L[按关系、相关度、hop 去重]
+  L --> F
+  J -->|否| M[select：筛选并排序 refs]
+  M --> N[检查状态、冲突、来源并装箱]
+  N --> O[返回证据，不代答]
 ```
 
-1. Search 先确认用户没有未完成 Add；之后在六类结构化 MemoryItem 上做 lexical 与 embedding 发现，按 `episode/person/entity/concept/event/fact` 分组准入。`raw` 默认不作为平行候选池，必要时由 selected nodes 的 `source_refs` 展开，或在尚无结构化节点时 fallback。
-2. Search 是完整复合原语：query 分支先按 ref 合并，再选 seeds；Inspect 沿出边读取已知节点，backlinks 查询真实入边；它们在内部组成多轮 BFS，随后加载必要来源并执行一次 select。Reflection 的 `memory.search` 和官方 Search 共用这条链，不把每个分支或每一跳单独 select。
+1. Search 先确认用户没有未完成 Add；之后在六类结构化 MemoryItem 上做 lexical 与 embedding 发现，候选携带 `episode/person/entity/concept/event/fact` kind、正文和关系语义。Search 不设置固定 kind 准入闸门；`raw` 默认不作为平行候选池，必要时由 selected nodes 的 `source_refs` 展开，或在尚无结构化节点时 fallback。
+2. Search 是完整复合原语：query 分支先按 ref 合并；默认从 query 候选建立 seeds，也可以接收模型从当前上下文选择的 `seed_refs`。Inspect 沿出边读取已知节点，backlinks 查询真实入边；它们在内部组成多轮 BFS，随后加载必要来源并执行一次 select。Reflection 的 `memory.search` 和官方 Search 共用这条链，不把每个分支或每一跳单独 select。
 3. 图扩展是一个有界 BFS：从 seeds 逐层读取出边和入边，再把新节点放进下一层 frontier；默认最多 3 跳、最多新增 32 个节点、每个入口最多 8 个邻居。它不会在每一跳自动重新跑 lexical 或 embedding；超限、截断和来源路径进入本地观测。当前复杂/长查询最多执行一次 query plan，select 仍只在有候选且模型开关启用时执行。
 4. 输出前处理 superseded、contradicts、same-event、来源和撤回状态，返回可读证据内容。最终分数用于结果排序，不应解读为事实置信度。
 
 embedding 默认关闭；显式开启后是必需阶段。目标版本默认在结构化节点上启用 lexical + embedding；raw 仍保留 FTS 用于来源回溯和未整理 fallback，不与节点类型争夺默认配额。日期目前保留原话和可选日期字段，没有完整的区间/有效期过滤器。遗忘采用保守的整条来源屏蔽，不等于物理擦除或全局语义遗忘。SQLite 当前只支持单进程写入，向量检索线性扫描；规模与并发尚未校准。
 
-### Search 的多跳事实
+### Search 的统一语义与多跳事实
+
+Search 可以近似表示为：
+
+```text
+可选 Query 发现（BM25 / embedding）
+  → 候选按 ref 合并
+  → BFS 多跳扩展（Inspect / backlinks）
+  → source_refs 展开
+  → select 引用精炼
+  → 返回证据
+```
+
+Query expansion 只扩大文本发现表达；`seed_refs` 则指定 BFS 从哪些已有引用开始。模型可以根据候选的 kind、正文、关系和来源选择 `seed_refs`，但不逐跳编排 Inspect/backlinks。BFS 完成后，select 才在完整候选闭包上同时筛选和排序。
 
 上图中的回边对应当前 `amlink.engine._expand`：它维护 `frontier` 和 `visited`，对每层节点分别调用 `inspect` 与 `backlinks`，按照关系和问题词面排序邻居，再进入下一层。测试已覆盖两跳 forward/backlinks。这里的“多跳”是已知 refs 上的邻接读取；它不是 Reflection 需要补上的“多轮 query”。Reflection 当前仍是一次 `_discover` 加一跳直接边，目标改进见方法计划。
 
@@ -87,14 +103,16 @@ embedding 默认关闭；显式开启后是必需阶段。目标版本默认在�
 
 官方仍只调用 Add/Search；工作区是 Add 内部的连续状态，不是新增外部 API。原文先落库，之后每次 Add 都加载用户的 `WorkingMemory` 和上一次的 Reflection 工作区。工作区保留已召回的 MemoryItem/raw refs、来源、query 分支、Inspect/backlinks 路径以及尚未解决的身份或冲突线索；它可以 compact，但不删除 RawEvent、MemoryItem 或边。
 
-当前代码只有在待处理消息达到 8 条、约 6000 字符，或出现遗忘/更新/跨会话信号时规划 Reflection。目标方案保留这些条件作为硬信号，但不再把“本批新消息一次性检索后丢弃旧上下文”当作唯一流程：每次 Add 先做有界 orientation 并更新工作区；硬信号或上下文压力出现时进入 tool-driven Reflection。Add 没有外部 Search 问题，orientation 的 query 由当前新增叙事、工作区未决线索和已知实体/时间锚点派生；官方后续 Search 的用户问题仍是独立输入。模型可以继续调用完整 `memory.search`、定向 Inspect 或 backlinks；工作区 compact 由编排器按字符预算可选执行，不暴露成模型的 defer 工具。`reflection.finish` 提交结构化节点和关系后，已处理的 WorkingMemory 缓存视图清空，工作区继续保留新旧 canonical refs，供下一次 Add 延续。
+当前代码只有在待处理消息达到 8 条、约 6000 字符，或出现遗忘/更新/跨会话信号时规划 Reflection。目标方案保留这些条件作为硬信号，但不再把“本批新消息一次性检索后丢弃旧上下文”当作唯一流程：每次 Add 先以当前新增叙事调用一次有界 orientation Search，并更新工作区；硬信号或上下文压力出现时进入简化的 Reflection Search loop。Add 没有外部 Search 问题，orientation 只是把 Add 文本当作 query，仍复用“query → BFS → select”的完整 Search 语义；官方后续 Search 的用户问题仍是独立输入。模型读取 Search 结果后，只需判断是否需要下一次 Search，并可从已有 refs 选择 `seed_refs`；BFS、Inspect/backlinks 和 select 都在该 Search 调用内部完成。工作区 compact 由编排器按字符预算可选执行，不暴露成模型的 defer 工具。`reflection.finish` 提交结构化节点和关系后，已处理的 WorkingMemory 缓存视图清空，工作区继续保留新旧 canonical refs，供下一次 Add 延续。
+
+orientation 不创建第二套检索器：它就是一次以 Add 叙事为 query 的内部 Search，输入还可以包含 Workspace 未决线索和已有 anchors；输出是 selected refs、未选 refs、BFS 路径和来源，先写入 Workspace，不直接提交 mutation。硬信号和上下文压力只决定是否继续 Reflection Search，不改变 Search 的语义。Reflection 模型若认为证据不足，可以再次调用 `memory.search(query, seed_refs?)`；它不逐跳调用 Inspect/backlinks。
 
 ### 候选融合与 Refs 精炼
 
 - 当前实现是 FTS5/BM25 搜索 raw 和 MemoryItem，embedding 只覆盖已整理的 MemoryItem；两路按倒数排名融合后共用候选窗口。
-- 目标版本把 lexical + embedding 视为结构化节点发现方式：每个 query 在六类 MemoryItem 上发现候选，按 kind 分组、动态借用预算，再做图 BFS 和 source_refs 展开。raw 不再作为默认平行候选池，只承担来源回溯和无结构化节点 fallback。
+- 目标版本把 lexical + embedding 视为结构化节点发现方式：每个 query 在六类 MemoryItem 上发现候选，候选携带 kind、正文、关系和来源语义；Search 默认或根据模型提供的 `seed_refs` 做图 BFS，再做 source_refs 展开。raw 不再作为默认平行候选池，只承担来源回溯和无结构化节点 fallback。
 - Search 的完整链路在分支合并、BFS 和来源展开之后调用一次 `select`。它决定哪些 refs 保留及其顺序；不新增名为 rerank 的操作或第二种排序阶段。
-- `episode` 是默认情景入口，`fact/event` 偏向精确事实和状态，`person/entity/concept` 偏向身份与导航；是否纳入某类由 query 意图和实际候选决定，不设每类固定最低比例。空 kind 不占死配额，剩余容量可以借给其它 kind。
+- `episode` 是默认情景入口，`fact/event` 偏向精确事实和状态，`person/entity/concept` 偏向身份与导航；这些是交给模型判断 BFS 起点和 select 的语义标签，不是固定最低比例或预过滤条件。
 - 当前 observation v1 受控类别仍使用 `operation="rerank"`，具体 span 名为 `select evidence refs`；目标 observation v2 应统一改成 select，旧轨迹不可改写。
 
 ## Reflection 如何复用旧记忆

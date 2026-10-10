@@ -1,12 +1,26 @@
 # AM-Link 二期记忆方法改进计划
 
 状态：讨论稿；向量/select 默认启用和 select 兼具筛选、排序已确认，尚未实施。
-更新日期：2026-10-09。
+更新日期：2026-10-10。
 目的：把当前实现、TinySoul 的可复用设计原则、案例研究中暴露的断点，收敛成一套可验证的 Add/Search 改进方案。最终接口和默认值仍以代码及 amlink 文档为准。
 
 ## 设计目标
 
 让 Search 主要在结构化 MemoryItem 上工作，并按 `episode/person/entity/concept/event/fact` 的问题需要分配候选预算；让 Reflection 在写入前主动寻找可能相关的旧记忆；让每次 Add 都能把新原文、旧结构化记忆和已召回证据放进一个有界的 Reflection 工作区；让 `raw` 保持来源真源但不与六类节点争夺默认候选名额；让类型、关系和原文证据分工清楚；让运行轨迹能说明一条证据在哪个阶段进入或离开链路。AM-Link 继续只实现 Add/Search，最终答案仍由比赛方生成。
+
+## Search 的统一语义
+
+Search 是 AM-Link 唯一的完整记忆检索抽象，可以近似写成：
+
+```text
+Search = 可选多通道 Query（BM25 / embedding）
+       + 候选合并
+       + BFS 多跳扩展（Inspect / backlinks）
+       + select 引用精炼
+       + 来源装箱
+```
+
+这里的“多通道”只指同一结构化节点集合上的 lexical 与向量发现，以及可选的 query 变体；不再把 raw lexical、node lexical、node embedding 设计成三套平行候选池。Inspect/backlinks 是 Search 的内部图算子：先由 query 或显式 `seed_refs` 确定起点，再逐层读取出边和入边，直到没有新的相关 frontier 或达到预算。BFS 完成后，`select` 才看到合并后的节点、路径和来源内容，负责同时筛选和排序。`raw` 通过 `source_refs` 作为来源证据进入，只有没有结构化节点或明确需要原话时才作为 fallback。
 
 “火力全开”在这里意味着默认启用已选定的检索能力，并对真实调用和成本留痕；它不意味着无界候选、无限模型调用或吞掉依赖错误。Embedding 和 select 出错时显式失败，不静默退回较弱链路；比赛调用方负责约定内的重试，AM-Link 内部不重试。
 
@@ -16,9 +30,9 @@
 | --- | --- | --- |
 | 向量召回 | 已被真实切片调用，但配置默认关闭；只覆盖已整理的 MemoryItem，不覆盖 raw | 默认开启；BM25 与向量独立召回后融合，向量故障明确暴露 |
 | 模型候选精炼 | 代码步骤名为 select，但只在复杂/长查询启用；观测类别和网页标签写成 rerank /“重新排序” | 每个有候选的 Search 默认执行一次 select；由同一次 LLM select 完成筛选和排序，不新增 rerank 操作 |
-| Search 语义 | BM25/向量候选后做 Inspect、backlinks、图扩展，再由模型选择 | 固定理解为“发现候选 → 展开正反向证据 → select → 返回证据” |
+| Search 语义 | BM25/向量候选后做 Inspect、backlinks、图扩展，再由模型选择 | 固定理解为“可选 query 发现 → 合并 → BFS 多跳扩展 → select → 返回证据” |
 | Reflection 旧记忆 | 已用新批次文本检索最多 24 个旧候选，并补一跳邻接；精确重复检查有限；每批上下文不跨 Add 保留 | 每次 Add 载入持久化 Reflection 工作区；工作区保留旧 refs、来源、查询分支和图路径；模型工具循环可多 query、多轮完整 Search 和多跳 Inspect/backlinks，再提交结构化 mutation |
-| 节点类型平衡 | MemoryItem 可优先成为图遍历 seed，但所有类型共用候选窗口，容易被单一类型挤占 | 在同一个结构化节点检索中按 episode/person/entity/concept/event/fact 分组和按需借用预算；不把 raw 作为默认平行通道 |
+| 节点类型平衡 | MemoryItem 可优先成为图遍历 seed，但所有类型共用候选窗口，容易被单一类型挤占 | 用 kind、正文和关系语义交给模型判断；Search 不设置固定 kind 准入阶段，显式 refs 作为可选 BFS 起点；不把 raw 作为默认平行通道 |
 | 可观测 | native 轨迹能看到多数步骤，但两路融合贡献、部分截断原因和 select 语义存在缺口 | 记录每个方法步骤的输入、候选、输出、预算及排除原因，并接入专属可视化 |
 | 模型协议 | OpenAI 兼容 Chat Completions 使用 response_format=json_object，没有发送 API tools/function tools | Reflection 和 select 使用 API tools 传递结构化调用；工具只由 AM-Link 执行，provider 能力需先做真实 smoke |
 
@@ -30,13 +44,13 @@
 flowchart TD
   A[Add 原文提交 RawEvent + FTS] --> B[载入 Reflection Workspace]
   B --> C[合并新消息、WorkingMemory、旧 refs、来源和已知图路径]
-  C --> D[有界 orientation：以当前 Add 为 query，搜索结构化节点]
-  D --> E[候选按六类节点分组，BFS Inspect/backlinks 后更新工作区]
+  C --> D[有界 orientation：复用一次 Search，以当前 Add 为 query]
+  D --> E[Search：Query 合并后 BFS Inspect/backlinks，再 select]
   E --> F{硬信号或工作区压力？}
   F -->|否| G[保留工作区；程序可选 compact]
   F -->|是| H[Reflection 模型读取工作区和工具说明]
   H --> I{模型发起哪种工具调用？}
-  I -->|memory.search(query)| J[完整 Search：query + 类型准入 + BFS + select]
+  I -->|memory.search(query, seed_refs?)| J[完整 Search：Query + BFS + select]
   J --> K[返回选择后的 refs、来源和关系路径]
   K --> H
   I -->|memory.inspect(ref)| L[精确读取节点正文、来源和出边]
@@ -50,11 +64,11 @@ flowchart TD
 
 这张图把“每次 Add 的工作区”和“触发后的模型决策循环”放在一条链上。`WorkingMemory` 仍然只是尚未推进处理位置的 RawEvent 视图；`Reflection Workspace` 是可持久化的派生工作状态，保存旧 MemoryItem refs、来源 raw refs、query 分支、Inspect/backlinks 路径、已知冲突和未决线索。它不是第三份事实库，也不能替代 RawEvent 或已提交 MemoryItem。
 
-目标 Search 不再把 raw lexical、node lexical、node embedding 当作三个平行候选池。它先在结构化 MemoryItem 上做词法和向量发现，再按六类节点分组和动态准入；`raw` 主要通过已选节点的 `source_refs` 读取，作为原话证据和来源核对。只有还没有 episode/其它结构化节点、WorkingMemory 尚未整理，或问题明确要求原话时，raw 才作为有限 fallback。这样 raw 仍然不会丢，但不会因为原始消息数量大而挤掉节点类型之间的结构化平衡。
+目标 Search 不再把 raw lexical、node lexical、node embedding 当作三个平行候选池。它先在结构化 MemoryItem 上做词法和向量发现，再把节点 kind、正文和关系语义连同候选 refs 交给后续的 BFS 起点判断；不设置固定 kind 准入闸门。`raw` 主要通过已选节点的 `source_refs` 读取，作为原话证据和来源核对。只有还没有 episode/其它结构化节点、WorkingMemory 尚未整理，或问题明确要求原话时，raw 才作为有限 fallback。这样 raw 仍然不会丢，也不会因为原始消息数量大而挤掉结构化节点。
 
 每条 query 分支仍会按 `ref` 写入同一个候选账本，账本保留 query、节点 kind、词法/向量来源的 rank/score、路径和来源。工作区下一次 Add 继续使用候选的 refs 和关系路径，但新消息、节点状态变化和撤回会使旧条目标记为待刷新，而不是无条件相信缓存。
 
-一次 `memory.search` 是完整的复合检索原语：它接收一个 query（或同一轮的 query 变体），在结构化节点上发现候选，按 kind 做准入，沿 frontier 多轮 Inspect/backlinks 做 BFS，把新邻居回写候选账本，加载必要 source refs，最后调用一次 `select` 返回有序 refs。Reflection 模型可以再次调用 `memory.search` 提出更窄的 query；也可以调用 `memory.inspect` 或 `memory.backlinks` 做针对单个 ref 的精确读取。`inspect/backlinks` 工具是外层模型的手术刀，Search 内部的同名步骤是自动 BFS，两者不重复计算同一层关系。
+一次 `memory.search` 是完整的复合检索原语：它接收一个 query（或同一轮的 query 变体），在结构化节点上发现候选，合并候选 refs，并可接受模型从当前上下文挑出的 `seed_refs`/扩展 refs；随后沿 frontier 多轮 Inspect/backlinks 做 BFS，把新邻居回写候选账本，加载必要 source refs，最后调用一次 `select` 返回有序 refs。Reflection 模型可以再次调用 `memory.search` 提出更窄的 query，或指定上一轮结果中的 refs 作为 BFS 参数。Inspect/backlinks 是 Search 内部的图算子，不必再作为 Reflection 的独立模型工具；这样模型只判断“是否需要继续 Search，以及下一轮要围绕哪些 refs 展开”，而不是手工编排每一跳。
 
 **当前实现**不是这个循环：_reflection_context 将一批新消息拼成一个 query，调用一次 _discover，截取最多 24 个候选；之后从命中的旧 MemoryItem 取一跳出边和入边邻居。它没有多 query，也没有跨轮模型追加 Search。模型收到一次构造好的 JSON 上下文后产出 JSON mutation。这个基础方向能提供相关旧记忆，但检索粒度和图深度目前有限。
 
@@ -62,7 +76,25 @@ flowchart TD
 
 **建议目标**不额外增加一个只负责说“要不要 Reflection”的模型门卫。每次 Add 先加载工作区，并用当前 Add 文本对已有结构化节点执行一次有界 orientation；硬信号或工作区达到上下文压力时进入 Reflection tool loop。没有硬信号和上下文压力时，保存工作区即可；若本地字符预算接近上限，程序可以选择性 compact，去掉重复预览和已经失效的候选记录，但不删除来源、节点和边。compact 是本地预算动作，不暴露成模型工具，也不让模型决定暂缓。
 
-触发后，模型看到的不只是本批 NEW，还包括工作区里之前 Add 和 Reflection 留下的旧 refs、来源、关系和检索路径。Add 协议本身没有外部 Search 问题，因此 orientation 的 query 来自当前新增叙事、工作区未决线索和已知实体/时间锚点；真正的用户问题仍由后续官方 Search 单独提供。模型可以再次调用完整 `memory.search`，也可以直接 Inspect 已知 ref。完成 mutation 提交后，已处理的 WorkingMemory 通过 `processed_through` 推进并从待处理视图清空；RawEvent 仍然保留，Reflection Workspace 则保留新旧结构化 refs、关系路径和未决线索，供下一次 Add 继续使用。
+### Orientation 是一次内部 Search
+
+orientation 不是一套新的“轻量 query + 轻量 BFS”实现，而是 Search 的一次内部调用，区别只在调用者和目的：
+
+```text
+orientation Search
+  输入：本次 Add 的新叙事 + Workspace 未决线索/已知 anchors
+  query：原叙事（复杂时按 Search 规则生成变体）
+  seeds：默认来自 query 候选；也可使用 Workspace 中已有的 seed_refs
+  扩展：Search 内部有界 BFS（Inspect / backlinks）
+  select：保留与当前 Add 相关的 refs 及顺序
+  输出：更新 Workspace，不直接提交 MemoryItem mutation
+```
+
+因此，“Add 后的 orientation + BFS 是否就是一次 Search”的答案是：**是**。orientation 会使用和官方 Search 相同的 lexical/embedding 发现、query 合并、BFS、source_refs 展开和 select；它只把当前 Add 当作 query，把结果写入 Reflection Workspace。它的有界性来自 Search 的请求预算：query 变体数、候选数、`max_hops`、每入口邻居数、返回字符数、embedding 调用量和 deadline，而不是另设一个不同的检索器。
+
+orientation 的结果不是最终答案，也不是结构化记忆提交。没有硬触发且 Workspace 未超过上下文压力时，保存这次 Search 的 selected refs、未选但可追溯的 refs、BFS 路径和未决线索即可；触发 Reflection 时，模型以这份 orientation 结果为初始上下文，决定是否需要下一次 `memory.search(query, seed_refs?)`。
+
+触发后，模型看到的不只是本批 NEW，还包括 orientation 和工作区里之前 Add/Reflection 留下的旧 refs、来源、关系和检索路径。Add 协议本身没有外部 Search 问题，因此 orientation 的 query 来自当前新增叙事、工作区未决线索和已知实体/时间锚点；真正的用户问题仍由后续官方 Search 单独提供。模型只需判断上下文是否足够，若不足就再次调用完整 `memory.search`，并可从当前 refs 中选择 `seed_refs`；它不需要自己调用或逐跳编排 Inspect/backlinks。完成 mutation 提交后，已处理的 WorkingMemory 通过 `processed_through` 推进并从待处理视图清空；RawEvent 仍然保留，Reflection Workspace 则保留新旧结构化 refs、关系路径和未决线索，供下一次 Add 继续使用。
 
 工具调用协议提供有结构的函数名、调用 ID 和参数；AM-Link 执行 allowlist 中的只读检索工具，并把真实结果作为 tool-result message 回放给模型。`finish` 只产生提案，来源、用户隔离、关系矩阵和数据库提交仍由 AM-Link 本地校验与提交。
 
@@ -77,23 +109,25 @@ flowchart TD
   B -->|否| D[仅原问题]
   C --> E[对每个 query 在 MemoryItem 上做 lexical + embedding]
   D --> E
-  E --> F[按 ref 合并分支账本]
-  F --> G[按 episode/person/entity/concept/event/fact 分组准入]
-  G --> H[选择 seeds]
-  H --> I[Inspect 出边 + backlinks 入边]
-  I --> J{有新的相关邻居且预算允许？}
-  J -->|是| I
-  J -->|否| K[加载必要 source_refs / episode 原文]
-  K --> L[select_memory_refs：一次筛选并排序]
-  L --> M[按 select 顺序装箱并记录裁剪]
-  M --> N[返回证据，不代答]
+  E --> F[按 ref 合并候选账本]
+  F --> G{有显式 seed_refs？}
+  G -->|是| H[使用模型选出的 refs 作为 BFS 起点]
+  G -->|否| I[从 query 候选建立默认 seeds]
+  H --> J[Inspect 出边 + backlinks 入边]
+  I --> J
+  J --> K{有新的相关邻居且预算允许？}
+  K -->|是| J
+  K -->|否| L[加载必要 source_refs / episode 原文]
+  L --> M[select_memory_refs：一次筛选并排序]
+  M --> N[按 select 顺序装箱并记录裁剪]
+  N --> O[返回证据，不代答]
 ```
 
 ### Query expansion 是什么
 
-Query expansion（查询扩展/查询改写）是先把一个复杂问题变成若干条更容易检索的搜索表达，再对每条表达做独立召回并合并结果。它只改变“拿什么文字去找候选”，不决定哪些候选最终保留，也不生成答案。
+Query expansion（查询扩展/查询改写）是先把一个复杂问题变成若干条更容易检索的搜索表达，再对每条表达做独立召回并合并结果。它只改变“拿什么文字去找候选”，不决定哪些候选最终保留，也不生成答案。它与 `seed_refs` 不同：query expansion 扩大文本发现范围，`seed_refs` 指定图扩展从哪些已知引用开始。
 
-例如“之前和现在的每日配额分别是多少、发生了什么变化？”可扩成“每日配额”“之前的每日配额”“更新后的每日配额”“配额变更”。原问题仍保留；每条 query 都在六类 MemoryItem 上执行 lexical 与 embedding 发现，跨 query 合并时保留来源 query、节点 kind 和各路 rank，避免把候选为何出现抹掉。然后按类型选择 seeds，Inspect/backlinks 做 BFS，多跳结果回写候选账本，最后只调用一次 select 决定最终 refs 及顺序。
+例如“之前和现在的每日配额分别是多少、发生了什么变化？”可扩成“每日配额”“之前的每日配额”“更新后的每日配额”“配额变更”。原问题仍保留；每条 query 都在六类 MemoryItem 上执行 lexical 与 embedding 发现，跨 query 合并时保留来源 query、节点 kind 和各路 rank，避免把候选为何出现抹掉。随后从 query 候选或模型明确给出的 `seed_refs` 开始，Inspect/backlinks 做 BFS，多跳结果回写候选账本，最后只调用一次 select 决定最终 refs 及顺序。
 
 当前 Search 已有一段有限的 query expansion：仅当 COMPLEX 规则命中或问题超过 100 字符，且 graph 模式启用 search_model 时，先用 JSON mode 调用 query plan。它最多返回 3 条变体和一个 history 标记，原问题也始终检索，因此最多是“原问题 + 3 条变体”；每条分别执行一次 BM25 和（启用时）embedding。简单查询不做扩展。这里的“保留复杂查询触发规则”是指先不为了所有短问题额外调用一次模型规划查询；它不影响已确认的默认 embedding 和 select。当前 search_model 同时门控 query plan 与 select，实施时必须拆开语义：select 默认开启；query expansion 仍按复杂/长查询触发。工具化后，扩展阶段仅暴露 plan_search_queries function tool，不能调用任意检索或返回答案。未来可通过固定切片验证规则是否漏掉了短但需要拆解的问题，再调整触发方式。
 
@@ -101,15 +135,15 @@ Query expansion（查询扩展/查询改写）是先把一个复杂问题变成�
 
 | 粒度 | 做什么 | 当前 Search | Reflection 建议 |
 | --- | --- | --- | --- |
-| 多 query / query expansion | 同一轮对原问题及若干变体独立召回，再按 ref 和节点类型融合 | 复杂/长问题最多 4 条 query | 模型可以在不同轮次提出多个独立 memory.search 调用 |
-| 多轮 Search | 读上一轮结果后，形成新的 query 再搜索 | 当前没有模型驱动的 Search 轮次；只有前置 query plan | 需要：模型读结果后可补搜，直到证据够用或预算/停止条件触发 |
-| 多跳邻接 | 从 ref 读取相邻节点，沿新节点继续 Inspect/backlinks | 已有 BFS 式多跳，默认 max_hops=3；它沿图走，不会每一跳重跑词法/向量 Search | 需要：模型可按结果选择下一批 refs 继续 Inspect/backlinks，和多轮 Search 分开记账 |
+| 多 query / query expansion | 同一次 Search 内对原问题及若干变体独立召回，再按 ref 融合 | 复杂/长问题最多 4 条 query | 由 Search 内部处理；模型无需逐条编排 query 分支 |
+| 多轮 Search | 读上一轮结果后，形成新的 query 再搜索 | 当前没有模型驱动的 Search 轮次；只有前置 query plan | 可选：模型读结果后补搜，直到证据够用或预算/停止条件触发 |
+| 多跳邻接 | 从 ref 读取相邻节点，沿新节点继续 Inspect/backlinks | 已有 BFS 式多跳，默认 max_hops=3；它沿图走，不会每一跳重跑词法/向量 Search | 模型只需在下一轮 Search 中提供 `seed_refs`；BFS 的逐跳执行由 Search 内部完成 |
 
-当前 Mermaid 的线性图只是步骤类别，不能表示真正的控制流。Search 的 _expand 已按 frontier 逐层重复 Inspect 和 backlinks，递归加入新邻居直到没有新 frontier、达到 hop/neighbor/node 限制或请求 deadline；因此 Search 的多跳邻接已经实现。Reflection 则不同：只对新消息做一次合并 query，之后取一跳邻居，不是迭代多跳；而且它直接访问 store.edges，当前并未复用 Search 的 memory.inspect/backlinks 方法及对应 span。上面的 Search 图改用条件回边表示 BFS；Reflection 图改用模型工具循环表示自适应检索，也让两条链路将来复用同一套有观测的内部原语。
+当前 Mermaid 的条件回边表示真正的 BFS 控制流。Search 的 `_expand` 已按 frontier 逐层重复 Inspect 和 backlinks，递归加入新邻居直到没有新 frontier、达到 hop/neighbor/node 限制或请求 deadline；因此 Search 的多跳邻接已经实现。Reflection 当前仍是一次 `_discover` 加一跳直接边，目标改进是把 Add orientation 改成一次共用 Search，而不是再造一个 Reflection 专用 BFS。Reflection 的模型控制也简化为：读取当前 Search 结果，判断是否需要下一次 Search，并可从上下文 refs 中选择 `seed_refs`；每次 Search 内部自己完成 BFS 与 select，模型不逐跳编排 inspect/backlinks。
 
 ### 分支 query 在哪里合并
 
-合并点应位于“每条 query 的结构化节点发现”之后、“图扩展 seeds 选择”之前，并且在工作区中保留为可追溯的候选账本，而不是只留下一个总分：
+合并点位于“每条 query 的结构化节点发现”之后、“BFS 起点确定”之前，并且在工作区中保留为可追溯的候选账本，而不是只留下一个总分：
 
 ```mermaid
 flowchart LR
@@ -122,8 +156,8 @@ flowchart LR
   C0 --> L[候选账本：按 ref 合并命中记录]
   C1 --> L
   C2 --> L
-  L --> F[按 kind 分组与按需准入]
-  F --> G[选 seeds]
+  L --> F[候选带 kind/正文/关系语义]
+  F --> G[默认 seeds 或模型提供 seed_refs]
   G --> H[Inspect/backlinks BFS]
   H --> L
   L --> S[select：筛选并排序最终 refs]
@@ -135,23 +169,23 @@ flowchart LR
 
 1. 每个 `query_id` 在结构化 MemoryItem 上独立执行 lexical 和 embedding 发现，按 `kind` 保存原始 rank/value、cosine/rank、命中片段和 query 来源。不同算法的数值不直接横比。
 2. 以 canonical `ref` 去重，但不删除命中记录。例如同一 episode 同时被原问题和“旧配额”变体命中，只生成一个候选项，候选项内部保留两条 query 命中和各自 rank。重复 query 先按规范化文本去重；近似但不同的 query 仍保留分支 lineage。
-3. 在共享预算下按节点类型做准入。不是把六类节点硬分成固定比例，而是根据问题的时间、人物、关系、更新、冲突和多项事实线索提高对应 kind 的优先级；没有候选的 kind 不占用死配额，空余容量可以借给其它 kind。多条变体命中同一 ref 的支持可以增加优先级，但应设置饱和，避免一个 ref 因变体数量多而挤掉互补证据。
-4. 合并后的账本负责选图 seeds；Inspect/backlinks 发现的新节点以 `source=graph`、`hop`、`path` 和关系来源回写同一账本。图邻居不重新走 lexical/embedding，除非模型在下一轮明确发起新的 query。必要时由 selected MemoryItem 的 `source_refs` 加载 raw 片段；raw 只作为来源和 fallback，不进入默认类型平衡。最终 `select` 看到完整 lineage，再决定保留及顺序。
+3. 不在这里把六类节点硬分成固定比例，也不建立一个会先过滤 kind 的闸门。候选账本保留每个 ref 的 kind、正文、关系语义和 query 命中；这些内容随同上下文给模型。若模型已经知道某些引用值得沿图寻找，可在下一次 `memory.search` 中显式传入 `seed_refs`；没有显式起点时，Search 从 query 候选建立默认 seeds。
+4. BFS 发现的新节点以 `source=graph`、`hop`、`path` 和关系来源回写同一账本。图邻居不重新走 lexical/embedding，除非模型在下一轮明确发起新的 query。必要时由 selected MemoryItem 的 `source_refs` 加载 raw 片段；raw 只作为来源和 fallback。最终 `select` 看到完整 lineage，再决定保留及顺序。
 
-因此“分支查询后在哪里合并”的答案是：**在候选账本合并，图扩展前统一准入，图扩展后回写同一账本，最后由 select 收敛**。Reflection 的下一轮 query 不会清空上一轮账本，只追加新的命中记录并对过期 refs 做状态标记。观测需要分别记录 `branch_hits`、`merged_refs`、`admitted_refs` 和 `select_refs`，否则无法判断证据是在分支召回、合并预算还是 select 阶段消失。
+因此“分支查询后在哪里合并”的答案是：**在候选账本合并，BFS 前确定默认或显式 seeds，图扩展后回写同一账本，最后由 select 收敛**。Reflection 的下一轮 query 不会清空上一轮账本，只追加新的命中记录并对过期 refs 做状态标记。观测需要分别记录 `branch_hits`、`merged_refs`、`seed_refs`、`graph_refs` 和 `select_refs`，否则无法判断证据是在分支召回、BFS 起点、图扩展还是 select 阶段消失。
 
-Reflection 的粒度建议是“模型控制器 + 共用有界检索原语”，而不是在 Add 开始时硬编码很多 query：
+Reflection 的粒度建议是“模型控制器 + 共用有界 Search 原语”，而不是在 Add 开始时硬编码很多 query 或单独编排 BFS：
 
-1. 初始模型上下文给出本批 NEW 叙事、已知 role/session/ordinal/time 和可用工具。模型可在同一轮提出多条互不依赖的 `memory.search(query)`；每个调用内部都独立完成“query 变体合并 → kind 准入 → BFS → 一次 select”，调用方并行执行并逐条回传。Workspace 只把这些调用的结果按 query、kind 和词法/向量来源记录到同一个 lineage 账本，不再在外面偷偷增加第二次全局 select。
+1. 初始模型上下文给出本批 NEW 叙事、已知 role/session/ordinal/time，以及 Workspace 中已有 refs、正文、关系和来源。模型可以提出 `memory.search(query, seed_refs?)`；每个调用内部都独立完成“query 变体合并 → 默认或显式 seeds → BFS → 一次 select”，调用方逐条回传。Workspace 只把这些调用的结果按 query、kind 和词法/向量来源记录到同一个 lineage 账本，不再在外面偷偷增加第二次全局 select。
 2. 模型读完本轮结果后，可以跨轮补充更窄的 query，例如由找到的项目名、人物别名、旧金额、否定词或时间锚点引出下一次 Search。这才是多轮 Search。
-3. 模型也可从搜索结果中的 typed refs 选择一个或多个做 memory.inspect(ref)，查看该节点正文、来源和出边；若需要找反向提及，再调用 memory.backlinks(ref)。新读到的 refs 可继续 Inspect/backlinks，形成逐跳、多方向的邻接探索。
-4. 充分或达到停止/预算边界后，模型调用 reflection.finish(mutation)。同一次模型回合如果并行提交 Search 和 finish，编排器应拒绝提前 finish 或先执行工具再复核终止状态，不能越过尚未回放的检索结果。
+3. Search 结果会返回 selected refs、有限未选 refs、关系路径和来源。模型不需要逐跳调用 `memory.inspect` 或 `memory.backlinks`；如果上下文仍不足，只需从已有 refs 中选择 `seed_refs`，发起下一次更窄的 Search。Inspect/backlinks 继续作为 Search 内部可观测的图算子，必要时可保留为调试或未来扩展接口。
+4. 上下文足够或达到预算边界后，模型调用 `reflection.finish(mutation)`。同一次模型回合如果并行提交 Search 和 finish，编排器应先回放 Search 结果，再允许 finish；不能越过尚未回放的检索结果。
 
-这里的“多次 query”和“多轮 Search”不应混为一项配置。前者是同一轮多条独立候选发现；后者依赖上一轮返回内容，适合由模型工具调用自适应决定。Inspect/backlinks 的多跳又是沿 refs 扩图，不会自动再跑 query。三种步骤有不同输入、输出、调用数和观测父子关系。
+这里的“多次 query”和“多轮 Search”不应混为一项配置。前者是同一次 Search 内对原问题及变体的独立发现，由 Search 自己合并；后者依赖上一轮返回内容，由模型决定是否继续，并可以为下一次 Search 提供 `seed_refs`。因此 Reflection 不是完整 Agent runtime：每轮只需在 `memory_search` 和 `reflection_finish` 之间做一次有限选择。Inspect/backlinks 的多跳属于每次 Search 内部的 BFS，不再单独暴露成 Reflection 的逐跳循环。
 
 工具循环属于正常的检索方法步骤，不能用“重试”来解释。需要为一次 Add 设有限的模型回合数、search 调用数、inspect/backlinks 节点数、邻接深度、返回字符数、embedding 调用量和总 deadline；达到预算却没有 finish 时显式失败，不静默生成一个看似完整的 mutation。具体上限先从固定切片测量覆盖、延迟、token/费用，再配置，不在方案中先猜数值。
 
-Reflection 使用的 `memory.search` 仍复用同一完整 Search 原语：单条 query（内部可带 query 变体）经过结构化节点发现、kind 准入、候选账本、BFS Inspect/backlinks、source_refs 展开，然后对合并后的非空候选执行一次 `select`。工具结果返回 selected refs、有限的未选 refs 及其排除/截断原因。Reflection 模型可以根据返回内容发起更窄的下一条 query；一次 search 内部不把每个分支或每一跳再重复 select。外部官方 Search 也在所有 query 分支和图扩展合并后执行最终一次 select。两者都不引入名为 rerank 的操作。
+Reflection 使用的 `memory.search` 仍复用同一完整 Search 原语：单条 query（内部可带 query 变体）经过结构化节点发现、默认或显式 seeds、BFS Inspect/backlinks、source_refs 展开，然后对合并后的非空候选执行一次 `select`。工具结果返回 selected refs、有限的未选 refs 及其排除/截断原因。Reflection 模型可以根据返回内容发起更窄的下一条 query，并从结果 refs 中选择下一次 Search 的 `seed_refs`；一次 Search 内部不把每个分支或每一跳再重复 select。外部官方 Search 也在所有 query 分支和图扩展合并后执行最终一次 select。两者都不引入名为 rerank 的操作。
 
 select 可以在单次模型调用内同时完成筛选和排序：返回有序 refs 子集。API 工具 `select_memory_refs` 将这组 refs 作为有结构的 tool call 返回；query expansion 与 select 仍是独立阶段，前者扩大“找什么”的覆盖，后者收敛“留下什么”。
 
@@ -188,7 +222,7 @@ TinySoul 的 canonical ref 把记忆类型和可读 cite 放在地址中，例�
 
 TinySoul 的现有设计支持独立词法/向量发现、显式候选操作和多来源组合；它没有固定的 kind/relation 最低配额。AM-Link 也不应机械规定“每种节点至少一个”，因为简单事实题可能只需要一个 fact 和其来源。
 
-当前 AM-Link 的实际竞争方式值得注意：FTS lexical 在 raw 和 memory 节点上共用一个 top-k；向量只搜 MemoryItem；两路按倒数排名融合后共用 candidate_limit；图 seeds 优先挑 MemoryItem；扩展节点随后又与 raw/MemoryItem 共用一个候选池；select 预览超字符预算时从末尾直接移除候选。它没有节点类型/关系类型配额，episode、fact/event 或 person/entity/concept 可能互相挤占。目标改进不是再增加 raw/node/vector 三个预算池，而是把 lexical + embedding 视为结构化节点发现方式，再按 kind 做可解释的分组准入。
+当前 AM-Link 的实际竞争方式值得注意：FTS lexical 在 raw 和 memory 节点上共用一个 top-k；向量只搜 MemoryItem；两路按倒数排名融合后共用 candidate_limit；图 seeds 优先挑 MemoryItem；扩展节点随后又与 raw/MemoryItem 共用一个候选池；select 预览超字符预算时从末尾直接移除候选。它没有节点类型/关系类型配额，episode、fact/event 或 person/entity/concept 可能互相挤占。目标改进不是再增加 raw/node/vector 三个预算池，也不是另设 kind 闸门，而是把 lexical + embedding 视为结构化节点发现方式，把 kind/关系语义交给模型选择 BFS 起点，最后由 select 在 BFS 闭包上精炼。
 
 这里要分清“结构化节点类型”和“来源证据的作用”：
 
@@ -207,13 +241,13 @@ MemoryItem 可以按候选作用区分 context（episode）、claim/event（fact
 
 ### 节点类型由谁选择
 
-不再单独增加一个 LLM 节点类型路由器，也不把 raw lexical、node lexical、node embedding 作为三个需要互相竞争的通道。每条 query 默认在六类结构化节点上执行 lexical 和 embedding，随后用轻量问题线索做 kind-aware admission。LLM 可以做 query expansion，但只产生查询表达和可选的意图提示，不拥有关闭某类节点的权力。
+不再单独增加一个 LLM 节点类型路由器，也不把 raw lexical、node lexical、node embedding 作为三个需要互相竞争的通道。每条 query 默认在六类结构化节点上执行 lexical 和 embedding，候选带着 kind、正文和关系语义进入 Search；不设置先过滤某种 kind 的准入闸门。LLM 可以做 query expansion，也可以从已有上下文的 refs 中选择下一轮 `seed_refs`，但不负责逐跳执行 Inspect/backlinks。
 
 推荐的分工是：
 
 - 短而明确的问题先用确定性线索标出 `exact-value`、`time`、`person/relationship`、`history/update/conflict`、`multi-item`；不额外调用分类模型。
 - 复杂/长问题由 `plan_search_queries` tool 返回若干 query、每条 query 的 purpose/anchors 和可选 kind hints。Reflection 中也可以由 `memory.search` 的参数携带同样的意图提示，但它只是优先级提示，不是硬过滤器。
-- 引擎对每条有效 query 默认执行六类节点的 lexical + embedding；按 kind 分桶、选择 seeds，再进行 Search 内部的 BFS Inspect/backlinks。选中的节点需要 raw 证据时，通过 `source_refs` 加载原文。
+- 引擎对每条有效 query 默认执行六类节点的 lexical + embedding；将候选的 kind、正文和关系语义交给 Search 的 seed 规划，默认 seeds 来自 query 候选，也可以使用模型提供的 `seed_refs`，再进行 Search 内部的 BFS Inspect/backlinks。选中的节点需要 raw 证据时，通过 `source_refs` 加载原文。
 - 若某个 kind 没有结果、索引未建立或被预算跳过，必须记录真实原因；不能把模型没有选择该 kind 误写成“无证据”。
 
 例如，问题“之前和现在的每日配额分别是多少？”可以让模型标出 `history/update`，生成“每日配额”“旧配额”“更新后配额”三个 query，并提高 `fact/event/episode` 和 `supersedes` 两端的预算；它仍然保留六类节点的 lexical + embedding 发现，让 select 最后判断哪些内容真的需要交付。这样利用 LLM 的语义改写能力，又不让路由本身成为证据丢失的单点故障。
@@ -222,16 +256,16 @@ MemoryItem 可以按候选作用区分 context（episode）、claim/event（fact
 
 1. **节点内分源召回**：每个 kind 分别保存 lexical rank/value、embedding cosine/rank、命中 query 和可读片段。不同算法分数不直接横比；raw 不作为默认平行候选池。
 2. **构造导航与邻接**：MemoryItem 用作有类型的导航入口；来源 raw 随 selected node 按需展开；关系扩展只从被发现的 seeds 沿真实出边/入边加入邻居，并带上 relation、方向、路径及其来源。不要把整张图预先打散加入候选。
-3. **按 kind 和意图动态准入**：用 query 的显式线索决定 episode、fact/event、person/entity/concept 的优先级，而不是输出固定比例。精确数字/日期/否定优先 fact/event 与其 episode/source；人物关系提高 person/entity/concept 及关联边；更新/冲突把新旧事实和 `supersedes/contradicts` 两端作为证据组；多项汇总保留多个 event/fact。没有候选的 kind 不占死配额，空余预算可以借给其它 kind。
-4. **统一 Select**：在有限总字符/候选预算内给 LLM 一份按 kind 分组、带 refs、正文、关系路径和 source_refs 的候选集，由一次 select 完成筛选和排序。被 select 排除与在 kind 准入或预算阶段截断必须是两种独立观测事实。
+3. **模型可见的 seed 语义**：把 kind、正文、关系、时间和来源连同 refs 呈现给模型。模型可以根据“需要找人物关系、旧值、冲突另一端或同一事件”等语义选择 `seed_refs`，但不直接编排每一跳。没有显式 seeds 时，Search 使用 query 候选；图扩展始终由内部 BFS 完成。
+4. **统一 Select**：在有限总字符/候选预算内给 LLM 一份经过 BFS 的候选闭包，带 refs、正文、关系路径和 source_refs，由一次 select 完成筛选和排序。被 select 排除与在 query/seed/BFS 或装箱阶段截断必须是独立观测事实。
 
-具体执行可以分为“结构化节点发现 → kind 分组 → 意图排序 → 共享预算装箱”：先为六类节点分别保留 lexical/embedding 结果；图扩展另记邻接来源与 hop；根据 query 意图形成 kind 优先级；可先从每个有相关候选的 kind 纳入代表项，再按 kind 内 rank、意图优先级和内容成本逐项填充共享字符预算。关系证据组整体计入预算。某个 kind 没有相关候选或没有剩余证据时，未用容量立即借给其它 kind，不保留死配额。selected node 的 raw 来源按需展开，计入它所属证据组而不是新增一个 raw 类型池。
+具体执行可以分为“结构化节点发现 → seed 规划 → BFS 图扩展 → 共享预算装箱”：先为六类节点分别保留 lexical/embedding 结果；模型可在上下文中看到 kind 与关系语义并选择 `seed_refs`，否则由 query 候选建立默认 seeds；图扩展另记邻接来源与 hop；BFS 完成后，select 在共享字符预算内决定证据子集和顺序。关系证据组整体计入预算。selected node 的 raw 来源按需展开，计入所属证据组而不是新增一个 raw 类型池。
 
-短查询先用可解释词面提示标识 exact-value、time、person/relationship、history/update/conflict、multi-item 等意图；复杂/长查询复用 plan_search_queries 工具返回的意图标签和变体，不再增加一个单独分类调用。意图只是 kind 准入提示，不能排除其它节点类型；最终 select 仍看到各 kind 的来路并作语义筛选。
+短查询先用可解释词面提示标识 exact-value、time、person/relationship、history/update/conflict、multi-item 等意图；复杂/长查询复用 plan_search_queries 工具返回的意图标签和变体，不再增加一个单独分类调用。意图主要用于 query expansion 和向模型解释“哪些 refs 值得沿图展开”，不能直接排除其它节点类型；最终 select 仍看到各 kind 的来路并作语义筛选。
 
 关系候选也应避免度数高的通用节点垄断邻居窗口。每个 seed 的 outgoing/incoming、关系类型分开记录；按问题优先级扩展，留出剩余预算给另一方向/关系；冲突和 supersedes 两端作为一个证据组。没有 query-relevant neighbor 就停止该分支，不为“图看起来完整”而扩展所有边。Search 当前 _expand 使用每入口 max_neighbors 和全局 max_nodes，按单个 relation score 排序，没有关系类型保护；该限制需在切片上验证，避免一开始再堆复杂打分规则。
 
-评估时对每个案例同时记录候选在各 kind、词法/向量来源中的排名与最终路径，逐层改变共享预算、借用策略和关系组保护。切片至少覆盖：LM04 精确金额/重复购买、LoCoMo 人物共同兴趣、BEAM 新旧冲突、LM02 时间口径、遗忘与拒答。比较各 kind 的候选覆盖、各阶段流失、select 输入/输出、误截断、延迟和模型/embedding 次数；若案例提供来源标注，再计算来源召回作为额外效果指标。根据这些实测再定默认预算，不先拍一个 20/30/50 的比例。
+评估时对每个案例同时记录候选在各 kind、词法/向量来源中的排名、seed 选择与最终路径，逐层改变共享预算和 BFS 起点策略。切片至少覆盖：LM04 精确金额/重复购买、LoCoMo 人物共同兴趣、BEAM 新旧冲突、LM02 时间口径、遗忘与拒答。比较各 kind 的候选覆盖、seed 是否选对、各阶段流失、select 输入/输出、误截断、延迟和模型/embedding 次数；若案例提供来源标注，再计算来源召回作为额外效果指标。根据这些实测再定默认预算，不先拍一个 20/30/50 的比例。
 
 ## Reflection 稳定性与图质量
 
@@ -240,7 +274,7 @@ MemoryItem 可以按候选作用区分 context（episode）、claim/event（fact
 建议采用 API function tools 作为模型输出/检索控制协议，而不再要求模型自由撰写 JSON 对象：
 
 - Search 的 select 任务只暴露 select_memory_refs 工具，返回候选 refs 的有序子集；调用方校验 refs 都来自本轮候选。该工具负责筛选和排序两件事。
-- Reflection 暴露 `memory_search`、`memory_inspect`、`memory_backlinks` 等只读工具，以及 `reflection_finish` 状态工具。模型可以多轮找旧记忆，完成时以 finish 工具参数提交 items/links/forget 提案；上下文 compact 由编排器在工具循环前后按预算选择，不让模型把 compact 当成一个事实操作或暂缓出口。
+- Reflection 主要暴露 `memory_search` 只读工具和 `reflection_finish` 状态工具。`memory_search` 接受 query 和可选 `seed_refs`，内部完成 query、BFS、select；模型可以多轮找旧记忆，完成时以 finish 工具参数提交 items/links/forget 提案。`memory_inspect`/`memory_backlinks` 保留为 Search 内部算子和观测阶段，必要时再作为调试或后续扩展接口；上下文 compact 由编排器在工具循环前后按预算选择，不让模型把 compact 当成一个事实操作或暂缓出口。
 - Tool call 参数仍要有工具定义，TinySoul 也是由 provider-neutral ToolSpec 携带参数定义，再由 provider adapter 映射成 API tools。这个参数定义不是另造一套模型输出 JSON Schema；本地仍必须用 Pydantic 和业务规则校验模型参数，不能把供应商结构化输出当成信任边界。
 - AM-Link 只执行明确 allowlist 的内部工具，不接受模型给出的任意函数名、SQL、user_id 或跨用户 ref。`finish` 不直接绕过 Reflection 校验器和事务提交；Workspace compact 也不改变 RawEvent、MemoryItem 或关系真源。
 - API 连接层要归一化 tool call id/name/arguments 和 tool-result message；工具输出作为下一条模型上下文回放。模型 API 调用失败、参数无效或循环预算耗尽都显式返回，不执行内部错误重试。计划中的多轮 tool call 是正常方法步骤，不是失败重试。
@@ -266,8 +300,8 @@ Reflection 的语义稳定性仍需独立验证：固定案例检查工具调用
 | query plan / tool query | 原问题、query 变体、来源于哪一轮、模型提出的搜索理由（简短结构字段，不保存隐藏思维链） |
 | discover.lexical | 每条 query 的六类 MemoryItem refs、kind、原始 BM25 排名/值、命中文本 |
 | discover.embedding | 每条 query 的六类 MemoryItem refs、kind、模型标识、cosine 与排名；不得记录密钥 |
-| query merge / kind admission | 每个 ref 的 query 分支命中、kind、lexical/embedding 来源、各路排名、融合名次、准入/截断原因和预算余量；保留 branch lineage |
-| inspect / backlinks | 种子 ref、出边/入边、关系来源、实际读取节点、当前 hop、visited 状态和不扩展原因；区分 Search 内部 BFS 与模型的定向工具调用 |
+| query merge / seed planning | 每个 ref 的 query 分支命中、kind、lexical/embedding 来源、各路排名、融合名次、默认或模型提供的 `seed_refs`、未选起点原因和预算余量；保留 branch lineage |
+| inspect / backlinks | Search 内部 BFS 的种子 ref、出边/入边、关系来源、实际读取节点、当前 hop、visited 状态和不扩展原因 |
 | select | 模型所见候选投影、select_memory_refs 调用参数/顺序、未选 refs、参数校验结果 |
 | pack | 最终内容与来源；top-k/字符预算/状态过滤的剔除 refs 和理由 |
 | reflection tool loop | 每轮模型调用、tool call、tool result、下一轮父子关系、停止/继续原因 |
@@ -281,17 +315,17 @@ Reflection 的语义稳定性仍需独立验证：固定案例检查工具调用
 ## 分步实施与验收
 
 1. **Observation 与引用协议**：为 workspace、query branch merge、kind admission、select、候选来源、图 hop 和 tool loop 增加明确的 AM-Link 事件/产物字段；设计有语义的 typed refs 和可读叙事投影。验收：一条运行能从原文输入一路点到工作区、episode/其它 refs、边、模型工具调用、校验与返回内容。
-2. **默认完整 Search**：embedding 默认开启；每个非空结构化节点候选集都执行一次 select_memory_refs 工具调用，select 一次完成筛选和排序；查询扩展暂保留复杂/长查询触发。Search 内部一次完成 query 分支合并、kind 准入、BFS Inspect/backlinks、source_refs 展开和 select。验收：成功轨迹确实包含六类节点发现、类型准入、BFS 和 select；provider 错误显式可见；没有静默降级。
-3. **Reflection Workspace 与工具循环**：为每次 Add 载入并更新持久化工作区；接入 provider-neutral tool call/result 消息最小子集；开放有界完整 `memory.search`、定向 `inspect/backlinks` 和 finish 提案工具。compact 由编排器按预算选择，不暴露为模型的 defer 工具。验收：模型可复用上次 Add/Reflection 的旧 refs，跨 query、完整 Search 轮次和图 hop 找旧记忆；finish 后 WorkingMemory watermark 推进并清空已处理缓存视图，工具结果可回放。
-4. **查询分支合并与节点类型预算**：以 ref 候选账本合并 query 分支，按 episode/person/entity/concept/event/fact 分组和按需借出预算；raw 只通过 source_refs 或无结构化节点 fallback 进入上下文，不预设 raw 平行配额。验收：固定切片可比较分支覆盖、各 kind 召回、阶段流失、内容覆盖、关系组完整性和成本。
+2. **默认完整 Search**：embedding 默认开启；每个非空结构化节点候选集都执行一次 select_memory_refs 工具调用，select 一次完成筛选和排序；查询扩展暂保留复杂/长查询触发。Search 内部一次完成 query 分支合并、默认或显式 seed 规划、BFS Inspect/backlinks、source_refs 展开和 select。验收：成功轨迹确实包含六类节点发现、seed 选择、BFS 和 select；provider 错误显式可见；没有静默降级。
+3. **Reflection Workspace 与工具循环**：为每次 Add 载入并更新持久化工作区；接入 provider-neutral tool call/result 消息最小子集；开放有界完整 `memory.search(query, seed_refs?)` 和 finish 提案工具，Inspect/backlinks 留在 Search 内部。compact 由编排器按预算选择，不暴露为模型的 defer 工具。验收：模型可复用上次 Add/Reflection 的旧 refs，跨 query 变体、有限的后续 Search 和图 hop 找旧记忆；finish 后 WorkingMemory watermark 推进并清空已处理缓存视图，工具结果可回放。
+4. **查询分支合并与 seed 语义**：以 ref 候选账本合并 query 分支，保留 episode/person/entity/concept/event/fact 的语义标签，由模型按上下文选择 `seed_refs` 或由 Search 使用默认 seeds；raw 只通过 source_refs 或无结构化节点 fallback 进入上下文，不预设 raw 平行配额。验收：固定切片可比较分支覆盖、seed 选择、BFS 阶段流失、内容覆盖、关系组完整性和成本。
 5. **episode、身份与关系质量**：把 episode 定义为高保真情景日志，建立 raw→episode 来源链；迁移 ref 到有语义类别的可读路径，并在同名时追加不可变差分；加强 alias 候选、同名保护、近重复对比和关系证据校验。验收：固定人物/更新/冲突/同事件案例分别统计 episode 完整性、错误合并、重复、漏边、错误边。
 6. **小样本验证与真实 provider smoke**：先做真实 tool-call 最小 smoke，再运行 Reflection/Search 切片；不把语法合法等同于方法正确。分别报告 Add 成功率、工作区复用率、过程轨迹完整性、证据召回、图质量、诊断 Answer、延迟和真实模型/embedding 次数及费用。遇到接口失败不叠加内部重试。
 
 ## 讨论确认点
 
-已明确的设计要求：embedding 与 select 默认启用；select 同时筛选和排序，不另设 rerank；Search 是包含 query 分支合并、kind 准入、BFS Inspect/backlinks、source_refs 展开和 select 的完整复合原语；Reflection 需要多 query、多轮完整 Search 和多跳邻接；每次 Add 先做 orientation，硬信号或工作区压力才进入 tool loop；compact 由编排器可选执行，不是模型的 defer 工具；WorkingMemory 处理后清空缓存视图，结构化 refs 留在 Workspace；优先使用 API tools 传递 query plan、select 和 Reflection 结构；query expansion 暂保留复杂/长查询触发规则；Answer 辅助暂缓；运行观测以真实过程为主，不以 gold 标注为前提。
+已明确的设计要求：embedding 与 select 默认启用；select 同时筛选和排序，不另设 rerank；Search 是“可选 query 发现 → 候选合并 → BFS Inspect/backlinks 多跳扩展 → source_refs 展开 → select”的完整复合原语；节点 kind 作为模型可见语义，不设置先过滤 kind 的固定闸门；query 变体由 Search 内部处理，Reflection 只在上下文不足时发起有限的后续 Search，并通过可选 `seed_refs` 控制下一次 Search 的起点；BFS 由每次 Search 内部完成；每次 Add 先以当前 Add 调用一次 orientation Search，硬信号或工作区压力才进入简化的 Reflection Search loop；compact 由编排器可选执行，不是模型的 defer 工具；WorkingMemory 处理后清空缓存视图，结构化 refs 留在 Workspace；优先使用 API tools 传递 query plan、select、`seed_refs` 和 Reflection finish 结构；query expansion 暂保留复杂/长查询触发规则；Answer 辅助暂缓；运行观测以真实过程为主，不以 gold 标注为前提。
 
-建议下一步围绕两个仍需共同定形的实现问题讨论：一是 episode 的切分、合并和更新规则，以及 `episode/person/entity/concept/event/fact` 的 kind 准入提示；二是 Reflection Workspace 的持久字段，以及完整 Search/Reflection tool loop 的调用、Search 轮数、Inspect 深度、候选和字符上限如何用案例切片校准。具体上限应该由真实片段的覆盖/延迟/费用曲线决定，不能先拍数值。当前建议采用“类型/语义 slug 作为默认 canonical ref，重名时追加不可变差分”，完整 ref 在模型上下文中始终可见。
+建议下一步围绕两个仍需共同定形的实现问题讨论：一是 episode 的切分、合并和更新规则，以及模型如何从 kind、关系和正文中选择 `seed_refs`；二是 Reflection Workspace 的持久字段，以及完整 Search/Reflection loop 的调用、Search 轮数、BFS 深度、候选和字符上限如何用案例切片校准。具体上限应该由真实片段的覆盖/延迟/费用曲线决定，不能先拍数值。当前建议采用“类型/语义 slug 作为默认 canonical ref，重名时追加不可变差分”，完整 ref 在模型上下文中始终可见。
 
 上述均为设计目标，不代表当前代码已采用工具调用、默认向量、typed ref 或 Reflection 多轮搜索。
 

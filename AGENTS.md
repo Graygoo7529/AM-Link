@@ -6,7 +6,7 @@
 - 每次开始先读根 README、`docs/README.md`、`docs/phase-2/integration-research.md`；只按任务需要读历史长文，不把旧文档的当前状态当成今天的事实。
 - 统一研究展示入口是 `visualization/README.md`，覆盖数据构成、样本标注、理论链路与运行观测；`casestudies/` 留在根目录保存案例文档与唯一案例 catalog，两个视图共用它。网页 `index.html` 与会话片段 `view.html` 同源生成，原文/轨迹只进入忽略的 `visualization/data/`。用户不需要保存页面选择状态。
 - 根目录 `DESIGN.md` 是 AM-Link Add/Search 当前设计总览；修改二期链路、边界或案例结论时及时更新，并明确区分已实现、实测与待验证。实现细节仍以 `amlink/` 源码和 README 为准。
-- `docs/phase-2/method-improvement-plan.md` 是 2026-10-09 的二期方法改进讨论稿；向量/select 默认开启、select 同时筛选排序、结构化节点类型按需准入、`episode` 承担高保真情景日志、`raw` 作为来源与 fallback、Reflection Workspace 跨 Add 延续、多 query/多轮 Search/多跳邻接、API tool calling 优先及过程可观测是设计要求/方向，尚未实施；答案辅助明确延后。后续讨论需更新该计划并保持目标与实测分开。
+- `docs/phase-2/method-improvement-plan.md` 是 2026-10-10 的二期方法改进讨论稿；向量/select 默认开启、select 同时筛选排序、`episode` 承担高保真情景日志、`raw` 作为来源与 fallback、Search 统一为“可选 query 发现→BFS 多跳 Inspect/backlinks→select”、模型可通过 `seed_refs` 选择后续扩展起点、Reflection Workspace 跨 Add 延续、API tool calling 优先及过程可观测是设计要求/方向，尚未实施；不设置固定 kind 准入闸门，答案辅助明确延后。后续讨论需更新该计划并保持目标与实测分开。
 - AM-Link 二期埋点遵循 `benchmark/OBSERVABILITY.md`；`observability.py` 提供标准事件校验与 recorder。未采集是未知，理论方案与实测分开；已接入 `amlink.native:factory` 并记录真实模型切片；HTTP 服务默认不采集内部轨迹。
 - 2026-10-08 靶场增加 `python -m benchmark answer`：只读取真实 Search 问题与返回内容，运行 `gpt-5.6-luna` 诊断回答，并将 Answer、模型调用和后验人工 eval span 持久接入可视化。它不是 AM-Link API；正式比赛仍由主办方执行 Answer/Eval。案例与限制见 `docs/doing/2026-10-08-amlink-answer-research.md`。
 - 2026-10-07 研究已扩至 26 个案例、四视角（设计检查并入理论）。`benchmark/STUDIES.md` 是案例/数据切片运行、native 埋点、自动展示与持久评注入口；案例数据绑定仅存于 catalog，运行档案在忽略的 `benchmark/data/research/workspace.json`，重载用 `visualization.build --local --workspace --web`。实施见 `docs/doing/2026-10-07-research-infrastructure.md`。
