@@ -1,6 +1,6 @@
 # 项目文档
 
-更新日期：2026-10-09。目标是让新会话快速恢复项目背景和决策依据；旧过程记录留在一期归档中。
+更新日期：2026-10-11。目标是让新会话快速恢复项目背景和决策依据；旧过程记录留在一期归档中。
 
 | 阅读顺序 | 文档 | 用途 |
 | --- | --- | --- |
@@ -18,7 +18,7 @@
 | 12 | [Add/Search 记忆研究调研综述](./doing/2026-10-08-memory-research-survey.md) | 数据难点分类、Mem0 实例和二期设计建议 |
 | 13 | [AM-Link 二期方法实现](../amlink/README.md) | 本地服务、引用图、native 观测与[实施验证](./doing/2026-10-08-amlink-implementation.md) |
 | 14 | [Answer 靶场与真实案例复核](./doing/2026-10-08-amlink-answer-research.md) | gpt-5.6-luna 诊断 Answer、逐题后验复核、Add/Search 真实失败位置 |
-| 15 | [AM-Link 二期方法改进计划](./phase-2/method-improvement-plan.md) | 结合 TinySoul、案例与当前实现的讨论稿；涵盖 Reflection Search、select、候选平衡、证据闭环和专属观测 |
+| 15 | [AM-Link 二期方法改进计划](./phase-2/method-improvement-plan.md) | 结合 TinySoul、案例与当前实现的重构计划；每个 Add 先生成可检索最小 episode，工作区跨请求累积，Search/Reflection 分开 |
 
 `private/` 仅本机存在：包含已授权保存的 SSH 账号、服务器环境快照和模型 Key。公开文档只记录接入方法。
 

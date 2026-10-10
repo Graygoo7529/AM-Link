@@ -1,15 +1,15 @@
 # AM-Link Add/Search 设计总览
 
-更新日期：2026-10-10。本文是当前方法的持续更新入口，说明已经实现的二期本地链路、已有实验能支持的结论，以及仍待验证的设计目标。接口与默认值以 [`amlink/README.md`](./amlink/README.md)、[`amlink/PROTOCOL.md`](./amlink/PROTOCOL.md) 和源码为准；本文不替代它们。
+更新日期：2026-10-11。本文是当前方法的持续更新入口，说明已经实现的二期本地链路、已有实验能支持的结论，以及仍待验证的设计目标。接口与默认值以 [`amlink/README.md`](./amlink/README.md)、[`amlink/PROTOCOL.md`](./amlink/PROTOCOL.md) 和源码为准；本文不替代它们。
 
 ## 范围与原则
 
-结合 TinySoul 设计和当前案例提出的下一轮重构讨论稿见[方法改进计划](./docs/phase-2/method-improvement-plan.md)。本轮新增的目标是：以 `MemoryContext` 承载跨 Add 的活跃语境，以统一 `Search` 编排 Query、BFS 多跳 `Inspect/Backlink` 和 `Select`，并让 Reflection 作为顺序消费 `MemoryWorking` 的三状态协调器。下面明确区分当前二期代码与尚未实施的重构目标。
+结合 TinySoul 设计和当前案例提出的下一轮重构方案见[方法改进计划](./docs/phase-2/method-improvement-plan.md)。标准 Search 与 Add 内部 Reflection 复用部分算子，但拥有独立循环和语境：Search 每次从空白语境开始，只读取结构化 MemoryItem；Add Reflection 由阈值、硬信号或会话边界触发，跨 Add 维护 Reflection Workspace，因此不是每次 Add 都调用模型。每个成功 Add 先生成最小 `episode` 并完成词法/向量索引，保证 HTTP 200 后立即可检索；WorkingMemory 仍可等待后续 Reflection。若最后一次 Add 未触发 Reflection，首个 Search 直接查询它的 episode，不读取或排空 WorkingMemory，也不需要一次性阶段处理。当前 0.1.0 未实现这套重构目标。
 
 AM-Link 只实现比赛约定的 **Add** 与 **Search**，由主办方执行 Answer/Eval。Search 返回有来源的证据，不生成最终答案，也不把靶场诊断 Answer 当作官方成绩。二期 0.1.0 已可在本地运行，尚未部署或参加官方 Smoke。
 
 - 原始消息及其来源是事实依据；整理出的记忆必须能追溯到原文。
-- 按 `user_id` 隔离；Add 幂等，成功后可立即 Search。
+- 按 `user_id` 隔离；Add 幂等。重构目标以跨 Add 缓冲减少 Reflection 次数；每个成功 Add 先建立可检索的最小 episode，再决定是否触发 Reflection，Search 只查询已提交的结构化 MemoryItem。
 - 正文保留可读叙事；类型、稳定 ref、来源和关系用于组织与校验，不要求每段消息都生成完整知识图。
 - 工作过程有界，错误显式返回；服务不自行重试模型、embedding 或后台补偿。比赛调用方负责按官方规则重试。
 - 区分设计、实现、实测与未知，不根据 HTTP 成功、候选召回或合成测试推断端到端正确。
@@ -19,8 +19,8 @@ AM-Link 只实现比赛约定的 **Add** 与 **Search**，由主办方执行 Ans
 | 对象 | 当前含义 | 生命周期与边界 |
 | --- | --- | --- |
 | `RawEvent` | 带角色、会话、顺序和可选来源时间的原始消息 | 持久保留并建立词法索引；是派生记忆的证据来源 |
-| `WorkingMemory` | 某用户/会话尚未整理的原文工作视图 | 由 `processed_through` 处理位置和原文推导，不是另一份事实库；整理提交后推进位置 |
-| `MemoryContext`（重构目标） | Reflection 和内部 LLM 调用当前可见的 MemoryItem、关系、References、命中叙事和未决线索 | 可由 `Inspect`/`Backlink` 增量扩展，也可由 `Evit` 压缩；不是事实库 |
+| `WorkingMemory` | Add 侧尚在整理中的原文工作视图 | 当前 0.1.0 由 `processed_through` 推导；重构目标允许跨 Add 延续；不是标准 Search 的直接候选来源；每个 Add 的最小 episode 已承担立即可检索投影 |
+| Reflection `MemoryContext`（重构目标） | Add 内部 Reflection 当前可见的 MemoryItem、关系、References、命中叙事、WorkingMemory 和未决线索 | 可由 `Inspect`/`Backlink` 增量扩展；LLM 可选择逐出当前可逐出的内容，系统另做预算回收；不是事实库 |
 | `Reflection Workspace`（当前/目标） | 每次 Add 之间延续的 refs、来源、query 分支、图路径和未决线索 | 可压缩的派生上下文；不删除或替代 RawEvent/MemoryItem，节点状态变化后需刷新 |
 | `MemoryItem` | Reflection 整理出的可引用记忆节点 | 与原文共享来源引用；多个原文可形成一个节点，一条原文也可形成多个节点 |
 | `MemoryRef` | raw 或 memory 内容的稳定地址 | 用于精确读取、关联和追溯；读取时仍检查用户作用域 |
@@ -53,7 +53,7 @@ flowchart LR
 
 完整成功请求以相同 payload 重放时返回缓存结果，不重复调用模型；失败重放可继续尚未完成的阶段。触发且必需的阶段失败会显式返回错误，Search 对该用户返回 `425`，另一条不同 Add 返回 `409`。不把“原文已写入”伪装成完整整理成功，也不在服务内部重试。
 
-这张图描述的是 `amlink/` 0.1.0 的历史基线。下一轮重构不再把“达到阈值后的一次 Reflection”当成 Add 的完成条件，而是让 Add 追加到 `MemoryWorking` 后等待顺序协调器完成本轮必要的 `MemoryContext` 维护和 `MemoryItem` mutation；只有状态回到停止且数据可检索时才返回 `200`。完整状态机见下方“下一轮重构目标”。
+这张图描述的是 `amlink/` 0.1.0 的历史基线，当前 Search 仍可能检索 RawEvent。重构目标改为阈值/硬信号触发的跨 Add Reflection，非触发 Add 可让 WorkingMemory 继续积累；每个成功 Add 先建立最小 episode 并完成索引，因此比赛最后一个 Add 即使没有触发整理，首个 Search 也能查询该 episode。WorkingMemory 仍是 Reflection 的缓冲，不是 Search 的直接来源。
 
 ## 当前二期实现：Search：从问题找到证据闭包
 
@@ -78,16 +78,16 @@ flowchart TD
   N --> O[返回证据，不代答]
 ```
 
-1. Search 先确认用户没有未完成 Add；之后在六类结构化 MemoryItem 上做 lexical 与 embedding 发现，候选携带 `episode/person/entity/concept/event/fact` kind、正文和关系语义。Search 不设置固定 kind 准入闸门；`raw` 默认不作为平行候选池，必要时由 selected nodes 的 `source_refs` 展开，或在尚无结构化节点时 fallback。
+1. 当前 0.1.0 Search 先确认用户没有未完成 Add；之后对 RawEvent 和六类 MemoryItem 做词法发现，embedding 只覆盖 MemoryItem，两路候选合并后返回带来源的结果。此处描述的是当前实现，不是重构目标；目标版本只在已提交 MemoryItem 上做 Query。
 2. Search 是完整复合原语：query 分支先按 ref 合并；默认从 query 候选建立 seeds，也可以接收模型从当前上下文选择的 `seed_refs`。Inspect 沿出边读取已知节点，backlinks 查询真实入边；它们在内部组成多轮 BFS，随后加载必要来源并执行一次 select。Reflection 的 `memory.search` 和官方 Search 共用这条链，不把每个分支或每一跳单独 select。
 3. 图扩展是一个有界 BFS：从 seeds 逐层读取出边和入边，再把新节点放进下一层 frontier；默认最多 3 跳、最多新增 32 个节点、每个入口最多 8 个邻居。它不会在每一跳自动重新跑 lexical 或 embedding；超限、截断和来源路径进入本地观测。当前复杂/长查询最多执行一次 query plan，select 仍只在有候选且模型开关启用时执行。
 4. 输出前处理 superseded、contradicts、same-event、来源和撤回状态，返回可读证据内容。最终分数用于结果排序，不应解读为事实置信度。
 
-embedding 默认关闭；显式开启后是必需阶段。目标版本默认在结构化节点上启用 lexical + embedding；raw 仍保留 FTS 用于来源回溯和未整理 fallback，不与节点类型争夺默认配额。日期目前保留原话和可选日期字段，没有完整的区间/有效期过滤器。遗忘采用保守的整条来源屏蔽，不等于物理擦除或全局语义遗忘。SQLite 当前只支持单进程写入，向量检索线性扫描；规模与并发尚未校准。
+embedding 默认关闭；显式开启后是必需阶段。目标版本默认在结构化节点上启用 lexical + embedding；raw 只作为已选 Item 的来源回溯，不进入 Search Query，也不作为无 Item 时的 fallback。日期目前保留原话和可选日期字段，没有完整的区间/有效期过滤器。遗忘采用保守的整条来源屏蔽，不等于物理擦除或全局语义遗忘。SQLite 当前只支持单进程写入，向量检索线性扫描；规模与并发尚未校准。
 
-### 下一轮重构目标：统一 Search 与 Reflection
+### 下一轮重构目标：Search 与 Reflection 分开编排
 
-目标版本把 Search 明确为一个复合原语，不再把 orientation、seed 或固定的一次性 BFS 当作额外主流程：
+两条链路复用 Query、Inspect、Backlink、BFS 和 Select 等内部算子，但上下文和生命周期不同。标准 Search 是无状态的请求级循环；Reflection 是跨 Add 延续的有状态整理循环。目标 Search 复合原语为：
 
 ```text
 Query(question)
@@ -100,55 +100,112 @@ Query(question)
 
 ```mermaid
 flowchart TD
-  A[Query 输出 References] --> B[进入 MemoryContext]
-  B --> C{LLM 选择下一步}
-  C -->|Inspect ref1| D[Item1 content + 正向 ref2]
-  D --> E[ref2 与 Item1 一起进入 Context]
-  E --> C
-  C -->|Backlink ref1| F[真实反向 References + 命中叙事]
-  F --> G{候选过多？}
-  G -->|是| H[Select References 子集并排序]
-  G -->|否| I[保留 References]
-  H --> J[选中 refs 进入 Context]
+  A[question + 本次空白语境] --> B{可选 Query Expansion}
+  B -->|LLM：q -> q1...qn| C[Query 分支]
+  B -->|原问题| C
+  C --> D[BM25 + Embedding]
+  D --> E[References：语义 ref + 模型可读叙事]
+  E --> F[按 ref 合并分支，保留 lineage]
+  F --> G{超过候选预算？}
+  G -->|LLM Select| H[有序 References 子集]
+  G -->|否| I[Query References]
+  H --> J[进入本次 Search 语境 + frontier]
   I --> J
-  J --> C
-  C -->|停止| K[确定最终 References]
-  K --> L[展开对应 Item content]
-  L --> M[返回证据，不代答]
+  J --> K{LLM tool call}
+  K -->|Inspect(ref)| L[Item content + 正向 refs]
+  L --> J
+  K -->|Backlink(ref)| M[反向 References；过多时 LLM Select]
+  M --> J
+  K -->|Stop| N[活跃 Context]
+  N --> O[确定性装箱并展开 Item content]
+  O --> P[返回证据，不代答]
+
+  classDef llm fill:#fff3cd,stroke:#b8860b,color:#000
+  classDef deterministic fill:#e8f5e9,stroke:#2e7d32,color:#000
+  class B,H,K llm
+  class A,C,D,E,F,G,I,J,L,M,N,O,P deterministic
 ```
 
 Query 的多个表达式如果启用，只是多个发现分支；它们在进入下一阶段前按语义 ref 合并，并保留每个分支的命中片段和方法来源。Backlink 在每一层也先合并真实入边，再在候选过多时调用 Select。Inspect 只读取已知 ref 和正向引用，本身不 Select。每个工具结果立即写入 `MemoryContext`，所以 `Inspect(ref1) → ref2 → Inspect(ref2)` 与 `Backlink(ref1) → Select → ref2 → Inspect(ref2)` 都是同一套可观测的轻量工具循环。
 
 BFS 的“层”由编排器维护：`frontier`、`visited`、hop 和全局预算始终是系统状态；模型只从当前 frontier 选择要探索的 ref、方向和是否停止。工具产生的新 refs 进入下一层，同层可以保留多个待探索 ref。这样既保留多跳 BFS 的边界，又允许模型根据已经加入的 MemoryContext 动态决定下一步。
 
-目标版本的 Reflection 不再额外抽取一套 orientation 算子。每次 Add 的新叙事作为一次普通 Query 输入，结果进入跨 Add 的 `MemoryContext`；模型可以继续调用 Search 子步骤，直到上下文足够、预算用尽或决定进入 mutation。`seed_refs` 不再作为用户或主编排层的概念；如果模型要从已知引用继续探索，直接调用 `Inspect` 或 `Backlink` 并把引用作为工具参数。
+重构目标中，LLM 参与 Query Expansion（可选）、Select、BFS action、显式 Evict 的选择和 MemoryItem Mutation；BM25、Embedding、分支合并、Inspect、Backlink、BFS 边界、Evict 的安全校验/执行、预算回收和最终装箱由系统确定性处理。最终装箱不再追加 Select，完整的算子输入输出表见[方法改进计划](./docs/phase-2/method-improvement-plan.md)。
+
+停止后的 Item content 展开只是输出物化：优先复用 Context 中已有内容，否则按最终候选 ref 确定性读取正文和来源，不新增 frontier、不调用 LLM，也不重新筛选候选。
+
+标准 Search 每次从空白请求语境开始，query expansion（若启用）、Query 候选和 BFS 结果只在本次调用中存在。Reflection 内部则对累积的 WorkingMemory 做 orientation Query，并将结果加入该用户跨 Add 保留的 Reflection 语境；模型可继续内部 Query、Inspect、Backlink 或 Evict，再进入 Mutation 或明确 no-op。二者的 operators 相似，但不是同一个 Search loop，也不共享 context。最小 episode 已在 Add 200 前进入结构化候选和索引，首次 Search 不需要额外读取或整理 WorkingMemory。`seed_refs` 不再作为用户或主编排层的概念；模型从已知引用继续探索时，直接调用 `Inspect` 或 `Backlink` 并将引用作为参数。
 
 ### 候选融合与 Refs 精炼
 
 - 当前实现是 FTS5/BM25 搜索 raw 和 MemoryItem，embedding 只覆盖已整理的 MemoryItem；两路按倒数排名融合后共用候选窗口。
-- 目标版本把 lexical + embedding 视为结构化节点发现方式：每个 query 在六类 MemoryItem 上发现候选，候选携带 kind、正文、关系和来源语义；候选进入 LLM 驱动的 Inspect/Backlink BFS，再做 source_refs 展开。raw 不再作为默认平行候选池，只承担来源回溯和无结构化节点 fallback。
-- Search 的完整链路在分支合并、BFS 和来源展开之后调用一次 `select`。它决定哪些 refs 保留及其顺序；不新增名为 rerank 的操作或第二种排序阶段。
+- 目标版本把 lexical + embedding 视为结构化节点发现方式：每个 query 在六类 MemoryItem 上发现候选，主体是已提交节点，包括每个 Add 的最小 episode。候选携带 kind、正文、关系和来源语义，进入 LLM 驱动的 Inspect/Backlink BFS，再做 `source_refs` 展开。raw 不作为 Search 候选，也不承担无结构化节点 fallback；要让情景可检索，由 Add 的最低 episode 投影或后续 Reflection 形成更高层 `episode`。
+- 重构目标在 Query 分支合并后、以及每一层 Backlink 候选合并后，候选超过预算时调用 `select`。它决定该候选集保留哪些 refs 及其顺序；最终装箱不再追加 Select，也不新增名为 rerank 的操作。
 - `episode` 是默认情景入口，`fact/event` 偏向精确事实和状态，`person/entity/concept` 偏向身份与导航；这些是交给模型判断 BFS 起点和 select 的语义标签，不是固定最低比例或预过滤条件。
 - 当前 observation v1 受控类别仍使用 `operation="rerank"`，具体 span 名为 `select evidence refs`；目标 observation v2 应统一改成 select，旧轨迹不可改写。
 
 ### 下一轮重构目标：Add 与 Reflection 的顺序状态
 
+Add 先做有序、幂等的持久追加，并为每个请求生成最低可检索投影。WorkingMemory 跨多次 Add 累积；每个 Add 的 RawEvent 进入工作区后，系统确定性生成一个保留角色、顺序、会话、局部原文和 `source_refs` 的最小 `episode`，完成 BM25 与向量索引，再判断是否启动 Reflection。只有待整理规模、明确更正/遗忘等硬信号或会话边界满足时，才启动 Reflection。触发后，模型在积累的原文和跨 Add 保留的记忆语境上决定高层 Mutation 或真正 no-op。短并发合并窗口只合并近同时请求，不作为“批次完成”判断。
+
 ```mermaid
 flowchart TD
-  A[并发 Add] --> B[追加 MemoryWorking 并分配接收序号]
-  B --> C[单一顺序协调器]
-  C --> D[MemoryContext 维护]
-  D --> E{继续 Search 工具循环？}
-  E -->|Inspect / Backlink| D
-  E -->|进入更新| F[MemoryItem Mutation]
-  E -->|语境已足够| G[停止]
-  F --> H[校验并原子提交]
-  H --> I[推进水位，清空已处理 WorkingMemory 视图]
-  I --> D
-  G --> J[本次 Add 关联工作完成，返回 200]
+  A[并发或顺序 Add] --> B[校验 request_id 与 user_id]
+  B --> C[持久追加 RawEvent 和稳定序号]
+  C --> D[追加到持续累积的 WorkingMemory]
+  D --> E[确定性生成最小 episode]
+  E --> F[完成 BM25 + Embedding 索引]
+  F --> G{阈值、硬信号或会话边界？}
+  G -->|否| H{协调器是否停止？}
+  H -->|否| I[等待当前 Reflection 停止]
+  I --> H
+  H -->|是| J[Add 返回 HTTP 200；WorkingMemory 可继续累积]
+  G -->|是| K[顺序快照 W；短窗口合并近同时 Add]
+  K --> L[Reflection Context：累积 WorkingMemory + 旧语境]
+  L --> M[Query：BM25 + Embedding、合并/必要时 Select]
+  M --> N{LLM tool call}
+  N -->|Query| M
+  N -->|Inspect / Backlink| O[读取 Item/References 并更新 Context]
+  O --> N
+  N -->|Evict refs| P[LLM 选择；系统校验后移出活跃 Context]
+  P --> N
+  N -->|Mutation| Q[LLM 结构化高层 mutation]
+  Q --> R[来源/身份/关系校验并原子提交]
+  R --> S[settled_through 推进到 W]
+  N -->|确实无额外长期价值：no-op| S
+  S --> T[Reflection 停止；释放本快照等待者]
+  T --> U[相关 Add 返回 HTTP 200]
+
+  classDef llm fill:#fff3cd,stroke:#b8860b,color:#000
+  classDef embedding fill:#e3f2fd,stroke:#1565c0,color:#000
+  classDef deterministic fill:#e8f5e9,stroke:#2e7d32,color:#000
+  class N,P,Q llm
+  class F,M embedding
+  class A,B,C,D,E,G,H,I,J,K,L,O,R,S,T,U deterministic
 ```
 
-Add 可以并发接收，但同一记忆空间的 Reflection 按稳定接收序号消费。第一版重构不按 `user_id` 建复杂并行池；`user_id` 只承担官方要求的隔离语义，连续同值 Add 共享一张图，更换值才进入另一空间。Add 只有在属于本次请求的 MemoryContext 维护和必需 Mutation 完成、协调器回到停止，且已经可 Search 时才返回 `200`。这会让单次 Add 等待更长，但不会引入未获批的 `202` 状态语义。
+图中黄色为 LLM 参与，蓝色调用 Embedding，绿色为系统执行。最小 episode 和两路索引在 Reflection 触发判断前完成，所以非触发 Add 可以把 WorkingMemory 留给后续 Add 积累，同时已经满足 Add 200 的立即可检索要求；触发的快照按序 Reflection。`settled_through` 只表示高层 Reflection 已完成，不表示最低 episode 才刚刚可见。模型 no-op 表示不产生额外语义 Mutation，不会撤销最小 episode。
+
+#### Add 完成后进入 Search
+
+比赛虽然先完成全部 Add、再执行 Search，但这只影响调用顺序，不增加一个隐含的阶段收束 API。每个成功 Add 已经提交最小 episode 并完成 BM25/Embedding 索引；最后一个 Add 即使没有触发 Reflection，首个 Search 也直接建立新的空白 Context，从 episode 和其它已提交 MemoryItem 开始 Query。WorkingMemory 可继续留在 Reflection Workspace，标准 Search 不读取、消费或临时改写它。
+
+```mermaid
+flowchart LR
+  A[最后一个 Add] --> B[最小 episode + BM25/Embedding 已提交]
+  B --> C[WorkingMemory 等待后续 Reflection]
+  B --> D[首个 Search 建立空白 Context]
+  D --> E[Query → BFS Inspect/Backlink → Select → 证据装箱]
+  C -.阈值/硬信号/会话边界.-> F[Reflection Mutation 或 no-op]
+
+  classDef llm fill:#fff3cd,stroke:#b8860b,color:#000
+  classDef deterministic fill:#e8f5e9,stroke:#2e7d32,color:#000
+  class F llm
+  class A,B,C,D,E deterministic
+```
+
+因此不存在持久提交与临时 overlay 的阶段决策，也不存在首个 Search 的特殊尾部处理；Search 只返回证据，不代答。
+
 
 ## 当前二期实现：Reflection 如何复用旧记忆
 
