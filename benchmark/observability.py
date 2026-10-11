@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 VERSION = "amlink.observation.v1"
-OPERATIONS = {"add", "extract", "store", "index", "search", "retrieve", "rerank", "context", "answer", "eval", "model"}
+OPERATIONS = {"add", "extract", "store", "index", "search", "retrieve", "select", "reflection", "rerank", "context", "answer", "eval", "model"}
 STATUSES = {"ok", "error", "skipped"}
 RELATIONS = {"derived_from", "retrieved_from", "selected_from", "supports", "contradicts", "supersedes"}
 BASE_KEYS = {"schema_version", "run_id", "dataset_pack_sha256", "trace_id", "span_id", "parent_span_id",

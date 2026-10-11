@@ -1,15 +1,15 @@
 # AM-Link 二期重构设计与执行计划
 
-状态：准备实施；已确认每个成功 Add 先生成可检索的最小 `episode`，Reflection 仍按积累条件触发，代码尚未改动。
+状态：已实现 0.2.0；本地测试通过，真实模型回归进行中，官方 Smoke/部署尚未验证。
 更新日期：2026-10-11。
 
-本文描述当前二期代码归档后的重构目标，不代表已实现。`MemoryItem`、`MemoryRelation`、`References`、`MemoryContext`、`MemoryWorking`、`Search`、`Inspect`、`Backlink`、`BFS`、`Select` 和三种 Reflection 状态沿用已对齐的含义。
+本文记录二期代码归档后的重构设计、实现核对和剩余验证。`MemoryItem`、`MemoryRelation`、`References`、`MemoryContext`、`MemoryWorking`、`Search`、`Inspect`、`Backlink`、`BFS`、`Select` 和三种 Reflection 状态沿用已对齐的含义。实现入口为 `amlink/` 0.2.0，旧实现保留在 `archive/phase-2/amlink-0.1.0/`。
 
 已对齐：比赛按阶段先完成全部标准 Add，再执行标准 Search；Reflection 不在每次 Add 后运行，MemoryWorking 要积累到一定规模或遇到硬触发/会话边界后，才为模型提供更完整的全局视角。每个成功 Add 先生成一个最小 `episode` MemoryItem，并完成词法与向量索引；这一步是协议可见性保证，不等于启动 Reflection，也不由模型决定是否省略。触发后的模型决定是否补充、更新或删除更高层结构化记忆，确实没有额外长期价值时才 no-op。标准 Search 每次新建临时 Context，其 Query/BFS loop 只处理已提交的结构化 MemoryItem（包括最小 episode），不直接读取 WorkingMemory，也不和 Reflection 共用语境。最后一个 Add 未触发 Reflection 时，WorkingMemory 可以继续保留，但其最小 episode 已经可检索；首个 Search 不需要阶段性排空或处理尾部。
 
 ## 设计边界
 
-AM-Link 仍只提供官方要求的 Add/Search，主办方负责 Answer/Eval。Search 返回证据，不能生成最终答案或把答案伪装成记忆记录。当前二期代码、真实运行和失败档案仍然保留为研究基线；这份计划描述归档后重构目标，不回写成“已实现”。
+AM-Link 仍只提供官方要求的 Add/Search，主办方负责 Answer/Eval。Search 返回证据，不能生成最终答案或把答案伪装成记忆记录。以下“已实现”只表示本地代码和靶场验证，不表示官方成绩；真实运行、失败档案和待验证项单独记录在 [2026-10-11 实施报告](../doing/2026-10-11-amlink-refactor-implementation.md)。
 
 官方 Add 请求要求持久化后立即可检索，未获批的异步状态地址不能返回 202；单个 Add 或 Search 请求最长可运行 30 分钟。公开 contract 快照中的 Add 调度上限为 16–64，Search 为 16–256；它们是评测调度上限，不是保证吞吐。`user_id` 是唯一检索隔离字段，连续 Add 使用同一个 `user_id` 属于同一记忆空间；`session_id` 用于来源会话组织，不是 Search 过滤条件。[官方 API Guide](https://agentmemories.ai/api-guide)
 
@@ -335,43 +335,43 @@ Reflection 建立新节点前必须先通过 Search、Inspect 或 Backlink 读�
 
 ## 重构执行计划
 
-### 0. 归档与契约冻结
+### 0. 归档与契约冻结（done）
 
-归档当前 `amlink/` 为二期初版，保留源码、测试、运行记录和失败案例；不删除 `dataset/`、`benchmark/`、`casestudies/`、`visualization/`。为新实现单独建立目录和版本号，先冻结 Add/Search 外部协议、user/session 隔离、幂等和错误边界。
+已将旧 `amlink/` 归档为 `archive/phase-2/amlink-0.1.0/`，新实现版本为 0.2.0；保留 `dataset/`、`benchmark/`、`casestudies/`、`visualization/`。Add/Search 外部协议、user/session 隔离、幂等和错误边界已冻结。
 
-验收：旧实现可以按历史版本复现；新实现尚未声称兼容旧内部数据库；官方同步 Add/Search contract 有来源和日期记录。
+验收：旧实现可以按历史版本复现；新实现不兼容旧内部数据库；官方同步 Add/Search contract 有来源和日期记录。
 
-### 1. 最小事实层
+### 1. 最小事实层（done；并发压测待验证）
 
 实现 RawEvent、MemoryWorking、MemoryItem、MemoryRelation、References 和接收/Reflection 完成游标。先完成事务、同 user 隔离、稳定接收序号、幂等重放；RawEvent 持久保存并作为来源依据；每个 Add 同步生成带 source_refs 的最小 episode，并完成 BM25/Embedding 索引后才返回 200。Search 请求只读已提交 MemoryItem，WorkingMemory 可以继续留给 Reflection。
 
 验收：并发 Add 不丢消息、不重排接收序号；成功重放不重复写入；每个成功 Add 的最小 episode 可被标准 Search 发现；标准 Search 请求看不到 WorkingMemory 或其他 user 的数据；来源可由合法 Item 回溯到 RawEvent，并核对 Add 200 与官方“立即可检索”要求。
 
-### 2. 共享检索算子与 BFS
+### 2. 共享检索算子与 BFS（done；长程质量待验证）
 
 实现 Query 的 BM25 + Embedding、查询分支合并、References 叙事、Select、Inspect、Backlink 和有界 BFS action。把算子做成可被 Add 内 Reflection 和标准 Search 分别编排的内部能力；此阶段不把两者并成同一个 loop。Query 和 Backlink 的候选过多时调用 Select；Inspect 只做确定性读取。
 
 验收：用金额、更新、时间、人物关系、冲突和拒答切片逐步检查每个 ref 在 Query、Select、Inspect、Backlink 和 BFS frontier 中的去向；真实 Embedding 和 Select 默认开启，失败显式暴露；算子输入不隐含共享 Context。
 
-### 3. Add 内部 Reflection loop
+### 3. Add 内部 Reflection loop（done；复杂关系质量待验证）
 
 接入 provider-neutral API tool calling。仅当缓冲阈值、硬信号或会话边界触发时，才对稳定快照启动 Reflection；不为每条 Add 单独调用模型。触发时以累积 WorkingMemory 和旧记忆作为 orientation，在该用户跨 Add 保留的 Reflection Context 中运行；模型可继续内部 Query、Inspect、Backlink、Evict，并通过 tool call 判断 Mutation 或真正 no-op。公开 Search 不共享该 loop 或 context。编排器按预算自动回收上下文，并为轮数、字符、候选、图 hop、模型调用和总 deadline 设置边界。
 
 验收：存在正向 `Inspect → forward ref → Inspect` 和反向 `Backlink → Select → ref → Inspect` 两类真实轨迹；未触发的 Add 不调用 Reflection 模型；模型不能调用任意工具或跨 user ref；一个被触发的快照有明确 mutation/no-op 终结，不以“输出合法 JSON 但过程未执行”伪装成功。
 
-### 4. MemoryItem Mutation 与 Add 完成边界
+### 4. MemoryItem Mutation 与 Add 完成边界（done；高噪声模型输出仍需优化）
 
 使用结构化工具调用提出新增、更新、删除节点和关系；本地校验 source refs、身份、关系和状态，事务提交后推进 Reflection 完成水位。每个 Add 已先完成最小 episode 与索引；触发 Reflection 的 Add 还要等待所覆盖快照终结，未触发的 Add 可在最低投影完成后返回 200；失败保留 RawEvent/WorkingMemory 和阶段记录，不做内部重试。
 
 验收：跨 Add 的更新、冲突、人物身份和同义重复案例能显示“先读取旧记忆，再 mutation”；重复 Add 不产生近似节点；关系两端和来源可回溯；低于阈值的 Add 尾部仍可通过已提交 episode 被 Search 发现，并在后续 Reflection 中归并或补充。
 
-### 5. 标准 Search 独立 loop
+### 5. 标准 Search 独立 loop（done；大规模延迟待校准）
 
 完成 Add 写入后，接入标准 Search 的请求级新语境：每个请求独立 Query 已提交 MemoryItem，并运行独立的 Query expansion/合并/Select/BFS/Inspect/Backlink/装箱；请求 loop 不直接读取 WorkingMemory、不共享 Reflection Workspace、不包含答案生成。最后一个 Add 是否触发 Reflection 不改变 Search 编排，首个 Search 直接查询已提交的最小 episode 与其它 MemoryItem。
 
 验收：连续 Search 间不共享探索状态；同一 user 的并发 Search 看到一致的已提交结构化快照；未触发 Reflection 的最后一个 Add 仍能通过 episode 返回相关证据；空 Item 图且没有成功 Add 时返回空证据，不回退到 RawEvent。
 
-### 6. 联合靶场与可视化
+### 6. 联合靶场与可视化（done；网页投影已支持大运行）
 
 把每个状态和 Search 子步骤接入现有 `benchmark/OBSERVABILITY.md`、native recorder 和统一网页。可视化按“输入语境 → 工具调用 → References 叙事 → Context 增量 → Mutation/返回”展示，保留旧案例轨迹并新增正向/反向 BFS 案例。
 
@@ -394,7 +394,7 @@ WorkingMemory 跨多次 Add 积累，以更大的语境支持全局 Reflection�
 
 因此，最后一个 Add 没有触发 Reflection 时，WorkingMemory 可以继续等待，`settled_through` 可以落后于 `accepted_through`，但标准 Search 已能检索其 episode。Search 不读取或消费 WorkingMemory，不新增一次性阶段处理；后续 Reflection 再利用累积的多个 episode 和旧 MemoryContext 做归并、冲突处理、关系维护或明确 no-op。模型 no-op 的范围是“不再产生额外语义 Mutation”，不能删除最低 episode。
 
-设计已冻结到可实施状态。下一步可以在保留当前 `amlink/`、测试和运行档案的前提下归档旧实现，并按本计划建立新实现目录；归档前仍须把每个已验证事实、目标行为和待验证项与代码版本分开记录，不把计划写成已实现。
+设计已从“准备实施”进入“实现后核对”。本地 39 项测试通过；真实单案例回归 2 Add/1 Search 全成功，100 问题 LoCoMo 运行及其修复前后对照已保存。仍待官方 Smoke、目标并发压测、长程关系质量、模型费用统计和完整 Answer/Eval 联合评估。不要根据 HTTP 200 或单案例召回推断全量竞赛成绩。
 
 ## 依据
 

@@ -20,7 +20,7 @@ def create_app(*, config=None, store=None, providers=None, observer=None):
     config = config or Config.from_env()
     if config.mode == "graph" and providers is None and not config.llm_api_key:
         raise ValueError("graph mode requires AML2_LLM_API_KEY")
-    if config.mode == "graph" and config.embedding_enabled and providers is None and not config.embedding_api_key:
+    if config.embedding_enabled and providers is None and not config.embedding_api_key:
         raise ValueError("embedding mode requires AML2_EMBEDDING_API_KEY")
     if config.auth_scheme != "none" and not config.api_key:
         raise ValueError("authentication requires AML2_API_KEY")
@@ -39,7 +39,7 @@ def create_app(*, config=None, store=None, providers=None, observer=None):
             providers.close()
             store.close()
 
-    app = FastAPI(title="AM-Link phase 2", version="0.2.0", lifespan=lifespan)
+    app = FastAPI(title="AM-Link phase 2", version="0.1.0", lifespan=lifespan)
 
     @app.exception_handler(MemoryError)
     async def memory_error(_request: Request, error: MemoryError):

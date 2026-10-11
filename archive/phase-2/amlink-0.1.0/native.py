@@ -27,7 +27,7 @@ class NativeTarget:
         self.observer = Observer(recorder, artifacts)
         if config.mode == "graph" and providers is None and not config.llm_api_key:
             raise ValueError("graph mode requires AML2_LLM_API_KEY")
-        if config.mode == "graph" and config.embedding_enabled and providers is None and not config.embedding_api_key:
+        if config.embedding_enabled and providers is None and not config.embedding_api_key:
             raise ValueError("embedding requires AML2_EMBEDDING_API_KEY")
         self.providers = providers or Providers(config, self.observer)
         self.model_capture_complete = providers is None
@@ -38,7 +38,7 @@ class NativeTarget:
                 dumps({"version": __version__, "config": config.public(), "retries": 0,
                        "source_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
                                          for p in sorted(Path(__file__).parent.glob("*.py"))},
-                       "embedding_scope": "structured episode and memory items; raw events remain provenance",
+                       "embedding_scope": "memory nodes; pending raw uses lexical",
                        "answer": "not part of AM-Link"}) + "\n", encoding="utf-8")
 
     def set_observation_parent(self, parent):

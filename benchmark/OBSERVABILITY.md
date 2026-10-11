@@ -1,6 +1,6 @@
 # AM-Link 可观测性标准接口 v1
 
-状态：接口约定、Python recorder、校验器与研究视图接入已实现；Mem0 研究实验和 AM-Link 二期 0.1.0 均已接入 native 内部步骤观测，并保留真实模型切片档案。AM-Link 尚未部署或参加官方 Smoke。此接口是诊断侧接口，不改变比赛 Add/Search API。
+状态：接口约定、Python recorder、校验器与研究视图接入已实现；Mem0 研究实验和 AM-Link 二期 0.2.0 均已接入 native 内部步骤观测，并保留真实模型切片档案。AM-Link 尚未部署或参加官方 Smoke。此接口是诊断侧接口，不改变比赛 Add/Search API。
 
 靶场的 `ObservedTarget` 自动提供 API 根 span；native 工厂可通过 `set_observation_parent` 连接内部步骤。`Artifacts.text` 提供 `amlink.artifact.v1` 可显示正文，`amlink.note.v1` 将研究评注绑定到真实查询/步骤/哈希，详见 [接入与评注指南](./STUDIES.md)。两者是独立附属格式，不修改 observation v1 事件字段。
 
@@ -13,7 +13,7 @@
 | store / index | 成功写入的版本或快照引用；成功并不自动代表所有增强完成 |
 | search | 原始 query 引用、最终返回结果及顺序、错误与耗时 |
 | retrieve | 查询改写/扩展后的 query 引用、候选及检索分数、候选来源 |
-| rerank | 排序前后候选、实际 rank/score、是否选中；不同方法分数不可直接横比 |
+| select | Query/Backlink 候选、实际 rank/score、是否选中和候选预算截断；不同方法分数不可直接横比 |
 | context | 最终可见上下文 artifact，引用精确片段；被裁剪/排除的候选 selected=false |
 | answer | 实际上下文 → 回答 artifact；模型版本记录在子 model span |
 | eval | 回答 → 评估 artifact；指标/rubric、评估器版本和判定保存在 artifact |
@@ -26,7 +26,7 @@
 每行是一个完成的 span，`schema_version=amlink.observation.v1`。精确字段和验证入口见 [`observability.py`](./observability.py) 的 `validate_event`。事件分为：
 
 - 身份：run_id、dataset_pack_sha256、trace_id、span_id、parent_span_id、record_id、task_id、request_id。
-- 阶段：operation、name、attempt（从 1 起）、replay（none/cached/resumed）。同逻辑请求重试 request_id 不变；每次尝试的 span_id 不同。
+- 阶段：operation、name、attempt（从 1 起）、replay（none/cached/resumed）。二期使用 `select` 表示模型对 Query/Backlink 候选 References 的筛选与排序，使用 `reflection` 表示工作区维护和 Mutation 工具循环；不另设 rerank。同逻辑请求重试 request_id 不变；每次尝试的 span_id 不同。
 - 时间与结果：带时区 started_at/ended_at、单调时钟 duration_ms、status（ok/error/skipped）、error（code/retryable）。空结果是成功 Search 且 outputs/candidates 为空；依赖失败必须 error。
 - 证据：inputs/outputs 引用；links 为 derived_from/retrieved_from/selected_from/supports/contradicts/supersedes；只能连接本 span 已声明的引用。
 - 候选：candidates 的 ref_id、rank、score（可 null）、selected；rank 从 1 起，不重复。

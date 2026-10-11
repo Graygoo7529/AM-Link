@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 Text = Annotated[str, Field(min_length=1)]
 Kind = Literal["episode", "person", "entity", "concept", "event", "fact"]
 Relation = Literal["about", "contains", "supersedes", "contradicts", "same_event_as"]
-DateText = Annotated[str, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")]
+DateText = Annotated[str, Field(pattern=r"^\d{4}-\d{2}-\d{2}$", description="Calendar date YYYY-MM-DD only; no time or timezone. Omit if unknown.")]
 
 
 class StrictModel(BaseModel):
@@ -43,6 +43,7 @@ class SearchRequest(StrictModel):
 
 
 class ItemChange(StrictModel):
+    # new:<label> is a batch-local ref; memory:<id> updates a navigation page.
     ref: Text
     kind: Kind
     text: Annotated[str, Field(min_length=1, max_length=6000)]
@@ -59,7 +60,7 @@ class ItemChange(StrictModel):
         if self.time_start and self.time_end and self.time_start > self.time_end:
             raise ValueError("time range must be ordered")
         if (self.time_start or self.time_end) and not self.time_expression:
-            raise ValueError("normalized time requires original expression")
+            raise ValueError("time range must be ordered and preserve original expression")
         return self
 
 
@@ -82,25 +83,10 @@ class Mutation(StrictModel):
     forget: list[ForgetChange] = Field(default_factory=list, max_length=16)
 
 
-class QueryExpansion(StrictModel):
+class QueryPlan(StrictModel):
     queries: list[Text] = Field(default_factory=list, max_length=3)
+    history: bool = False
 
 
 class Selection(StrictModel):
     refs: list[Text] = Field(max_length=100)
-
-
-class BfsAction(StrictModel):
-    action: Literal["inspect", "backlinks", "stop"]
-    ref: Text | None = None
-    reason: str | None = None
-
-
-class EvictAction(StrictModel):
-    refs: list[Text] = Field(default_factory=list, max_length=64)
-
-
-class ReflectionAction(StrictModel):
-    action: Literal["search", "evict", "mutation", "stop"]
-    question: str | None = None
-    refs: list[Text] = Field(default_factory=list, max_length=32)

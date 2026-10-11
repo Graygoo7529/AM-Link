@@ -214,7 +214,7 @@
   const root=document.getElementById('aml-research');
   const el=id=>root.querySelector('#ar-'+id);
   const {catalog,profiles}=bundle;
-  const operations={add:'接收写入',extract:'抽取事实',store:'保存记忆',index:'建立索引',search:'接收检索',retrieve:'召回候选',rerank:'重新排序',context:'组成回答上下文',answer:'生成回答',eval:'评估',model:'调用模型'};
+  const operations={add:'接收写入',extract:'抽取事实',store:'保存记忆',index:'建立索引',search:'接收检索',retrieve:'召回候选',select:'Select 精炼与排序',reflection:'Reflection 语境维护',rerank:'历史排序',context:'组成回答上下文',answer:'生成回答',eval:'评估',model:'调用模型'};
   const noteKinds={observation:'已观察事实',hypothesis:'待验证假设',next_experiment:'下一步实验'};
   let draftKey='';
   const roles={history:['历史','Add → Search','--viz-series-1'],task:['任务输入','Search → Answer','--viz-series-2'],annotations:['评估标注','仅 Eval / 研究复核','--viz-series-3'],auxiliary:['辅助材料','默认不进入 Add','--viz-series-4'],metadata:['身份与类别','分组 / 对齐来源','--viz-series-5']};
@@ -324,7 +324,8 @@
     txt('answer-status',q.answer?`导入记录 · ${q.answer.model} · prompt ${q.answer.prompt_version} · 上下文结果序号 ${q.answer.context_result_ranks.join(', ')||'空'}`:'未执行或未采集 Answer；不能展示“实际答对了”。');
     hide('answer-text',!q.answer);txt('answer-text',q.answer?.text.text||'');txt('eval',q.evaluation?`${q.evaluation.label} · ${q.evaluation.metric} · ${q.evaluation.evaluator}`:'回答质量：未评分');
     const obs=r.observability;
-    txt('span-status',obs.status==='missing'?'目标未采集内部步骤；不能推断抽取、索引或模型调用。':`${obs.status==='incomplete'?'存在缺少父步骤的记录':'已验证步骤关联'} · 本题相关 ${q.spans.length} 步 · 全运行模型调用 ${obs.model_calls??'总数未知'} · USD ${obs.cost_usd??'费用未知'}${obs.capture_declared_complete?' · 采集方声明已完整记录模型调用':' · 未声明完整采集'}`);
+    const omitted=q.span_omitted||0;
+    txt('span-status',obs.status==='missing'?'目标未采集内部步骤；不能推断抽取、索引或模型调用。':`${obs.status==='incomplete'?'存在缺少父步骤的记录':'已验证步骤关联'} · 本题展示 ${q.spans.length}/${q.span_total??q.spans.length} 步${omitted?'（页面省略 '+omitted+' 步，原始观测仍保留）':''} · 全运行模型调用 ${obs.model_calls??'总数未知'} · USD ${obs.cost_usd??'费用未知'}${obs.capture_declared_complete?' · 采集方声明已完整记录模型调用':' · 未声明完整采集'}`);
     hide('span-body',!q.spans.length);
     options('span',q.spans.map((s,i)=>({value:s.span_id,label:`第 ${i+1} 步 · ${operations[s.operation]||s.operation} · ${s.name} · ${s.status} · ${s.duration_ms} ms`})),el('span').value);drawSpan();
     drawNotes(r,q);

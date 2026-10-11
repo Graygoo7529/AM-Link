@@ -27,8 +27,8 @@ class Observer:
             token = self.current.set(event)
             try:
                 if inputs is not None:
-                    event["inputs"] = [self._artifact(
-                        "source" if operation == "store" else "context", inputs, name + " 输入")]
+                    event["inputs"] = [self.artifacts.text(
+                        "source" if operation == "store" else "context", dumps(inputs), title=name + " 输入")]
                 else:
                     event["inputs"] = list(parent["inputs"])
                 yield event
@@ -41,7 +41,7 @@ class Observer:
     def output(self, event, value, *, kind="memory", title="记忆步骤产物"):
         if event is None:
             return
-        ref = self._artifact(kind, value, title)
+        ref = self.artifacts.text(kind, dumps(value), title=title)
         event["outputs"].append(ref)
         for source in event["inputs"]:
             event["links"].append({"from_id": ref["id"], "to_id": source["id"], "relation": "derived_from"})
@@ -55,13 +55,3 @@ class Observer:
             event["candidates"].append({"ref_id": ref["id"], "rank": rank,
                 "score": row.get("score"), "selected": row.get("ref") in selected})
 
-    def _artifact(self, kind, value, title):
-        """Keep one display artifact below the visualization's 5 MB limit."""
-        text = dumps(value)
-        limit = 4_500_000
-        encoded = text.encode("utf-8")
-        if len(encoded) > limit:
-            clipped = encoded[:limit].decode("utf-8", errors="ignore")
-            text = clipped + "\n...[artifact truncated by AM-Link observability]"
-            title += "（有界截断）"
-        return self.artifacts.text(kind, text, title=title)

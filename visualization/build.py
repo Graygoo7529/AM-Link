@@ -124,7 +124,10 @@ def case_observation_index(registrations, *, catalog, profiles, runs, repo_root)
 
 
 def build_bundle(local: bool = False, run_specs: list[tuple[Path, str]] | None = None,
-    observations: Path | None = None, workspace: bool = False, workspace_runs: list[str] | None = None) -> dict:
+    observations: Path | None = None, workspace: bool = False, workspace_runs: list[str] | None = None,
+    max_queries: int = 20, max_spans: int | None = None) -> dict:
+    if max_queries < 1 or (max_spans is not None and max_spans < 1):
+        raise ValueError("max_queries and max_spans must be positive")
     catalog = load_catalog()
     profiles = json.loads((ROOT / "profiles.json").read_text(encoding="utf-8"))
     profiles["bindings"] = {k: c["data"] for k, c in catalog["cases"].items() if c.get("data")}
@@ -154,7 +157,7 @@ def build_bundle(local: bool = False, run_specs: list[tuple[Path, str]] | None =
     bundle = {"schema_version": 1, "updated": profiles["updated"], "catalog": catalog,
         "profiles": profiles, "scope": "local" if local else "curated",
         "local": local_sources(profiles) if local else {"samples": {}, "stats": {}, "missing": []},
-        "runs": [read_run(path, kind) for path, kind in specs]}
+        "runs": [read_run(path, kind, max_queries=max_queries, max_spans=max_spans) for path, kind in specs]}
     bundle["case_observations"] = case_observation_index(all_registrations, catalog=catalog,
         profiles=profiles, runs=bundle["runs"], repo_root=ROOT.parent)
     from benchmark.workspace import read_notes
@@ -185,6 +188,10 @@ def main() -> None:
     parser.add_argument("--local", action="store_true")
     parser.add_argument("--workspace", action="store_true", help="load the persistent local run registry and comments")
     parser.add_argument("--workspace-run", action="append", help="registered run ID to include; default: latest five")
+    parser.add_argument("--max-queries", type=int, default=20,
+        help="maximum Search queries projected into one page (full run artifacts remain available)")
+    parser.add_argument("--max-spans", type=int,
+        help="maximum internal steps projected per Search query (full observations remain available)")
     parser.add_argument("--run", type=Path, action="append", default=[])
     parser.add_argument("--run-kind", choices=("fixture", "experiment"), action="append", default=[])
     parser.add_argument("--observations", type=Path)
@@ -197,7 +204,10 @@ def main() -> None:
         parser.error("each --run requires one --run-kind")
     if args.workspace_run and not args.workspace:
         parser.error("--workspace-run requires --workspace")
-    bundle = build_bundle(args.local, list(zip(args.run, args.run_kind)), args.observations, args.workspace, args.workspace_run)
+    if args.max_queries < 1 or (args.max_spans is not None and args.max_spans < 1):
+        parser.error("--max-queries and --max-spans must be positive")
+    bundle = build_bundle(args.local, list(zip(args.run, args.run_kind)), args.observations,
+        args.workspace, args.workspace_run, args.max_queries, args.max_spans)
     fragment = render_fragment(presentation_bundle(bundle), (ROOT / "view.template.html").read_text(encoding="utf-8"))
     while len(fragment.encode("utf-8")) >= 1_000_000 and args.workspace and not args.workspace_run and not args.run and len(bundle["runs"]) > 1:
         omitted = bundle["runs"].pop(0)

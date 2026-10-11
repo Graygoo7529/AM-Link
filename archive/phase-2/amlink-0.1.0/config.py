@@ -18,10 +18,9 @@ class Config:
     max_batches: int = 8
     max_request_chars: int = 64000
     max_request_messages: int = 128
-    old_candidates: int = 32
+    old_candidates: int = 24
     seed_count: int = 8
     candidate_limit: int = 64
-    select_candidate_limit: int = 24
     max_hops: int = 3
     max_nodes: int = 32
     max_neighbors: int = 8
@@ -33,12 +32,10 @@ class Config:
     model_timeout: float = 60.0
     model_max_tokens: int = 5000
     search_model: bool = True
-    reflection_steps: int = 8
-    search_steps: int = 8
     llm_base_url: str = "https://api.zhizengzeng.com/v1"
     llm_api_key: str = ""
     llm_model: str = "gpt-4o-mini"
-    embedding_enabled: bool = True
+    embedding_enabled: bool = False
     embedding_base_url: str = "https://open.bigmodel.cn/api/paas/v4"
     embedding_api_key: str = ""
     embedding_model: str = "embedding-3"
@@ -66,8 +63,6 @@ class Config:
                 raise ValueError(f"{field.name} must be positive")
         if not 0 <= self.max_hops <= 8 or self.embedding_batch > 64:
             raise ValueError("invalid graph depth or embedding batch")
-        if self.reflection_steps < 1 or self.search_steps < 1 or self.select_candidate_limit < 1:
-            raise ValueError("tool loops must have a positive step budget")
         if self.model_timeout > self.request_seconds:
             raise ValueError("model timeout must fit request deadline")
 

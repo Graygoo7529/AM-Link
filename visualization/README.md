@@ -23,6 +23,8 @@
 .\.venv\Scripts\python.exe -m visualization.build --local --workspace --web
 ```
 
+大型运行可以使用 `--max-queries N --max-spans N` 降低单页投影大小；页面会标出省略的步骤，完整 trace、report 和观测 artifact 不受影响。例如：`--workspace-run amlink-refactor-locomo-100-real-20261011b --max-queries 3 --max-spans 60`。
+
 [案例实验指南](../benchmark/STUDIES.md)提供按案例、完整历史或片段运行的方法。默认显示最近最多五次登记运行；超出容量时明确减少较早运行，原档案保留。用重复的 `--workspace-run <运行 ID>` 指定要对照的运行。网页中的评注草稿需要导入工作区才能长期保存；命令行记录会自动更新页面。
 
 [Mem0 六条件实测](../casestudies/mem0-microstudy.md)已接入：公共视图显示定性摘要，本地视图可查看写入后记忆、Search、Answer、逐例审查及 63 个 span。重新加载已有运行（不会调用模型）：

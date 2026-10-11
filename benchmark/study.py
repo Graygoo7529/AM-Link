@@ -72,7 +72,7 @@ def main(argv=None):
     if args.phase1_models and args.target != "phase1":
         parser.error("--phase1-models applies only to --target phase1")
     system_name = args.system_name or {"phase1": "AM-Link 一期"}.get(args.target, args.target)
-    system_version = args.system_version or {"phase1": "0.3.0", "native": "0.1.0"}.get(args.target, "v1")
+    system_version = args.system_version or {"phase1": "0.3.0", "native": "0.2.0"}.get(args.target, "v1")
     output = ROOT / "benchmark/data" / ("plans" if args.plan_only else "runs") / run_id
     output.mkdir(parents=True, exist_ok=False)
     write_json(output / "dataset-pack.json", pack)

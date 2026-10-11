@@ -25,7 +25,7 @@ class Providers:
     def close(self):
         self.client.close()
 
-    def _post(self, *, base, path, key, body, model, embedding, deadline, parser=None):
+    def _post(self, *, base, path, key, body, model, embedding, deadline):
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise MemoryError("request_deadline", 504)
@@ -77,10 +77,15 @@ class Providers:
             if time.monotonic() >= deadline:
                 raise MemoryError("request_deadline", 504)
             self.observer.output(event, data, kind="memory", title="模型公开输出及用量")
-            return parser(data) if parser is not None else data
+            return data
 
-    @staticmethod
-    def _parse_json(data):
+    def json(self, purpose, prompt, payload, deadline):
+        data = self._post(base=self.config.llm_base_url, path="/chat/completions",
+            key=self.config.llm_api_key, model=self.config.llm_model, embedding=False, deadline=deadline,
+            body={"model": self.config.llm_model, "temperature": 0,
+                  "max_tokens": self.config.model_max_tokens, "response_format": {"type": "json_object"},
+                  "messages": [{"role": "system", "content": prompt},
+                               {"role": "user", "content": dumps({"purpose": purpose, "data": payload})}]})
         try:
             choice = data["choices"][0]
             if choice.get("finish_reason") != "stop":
@@ -89,30 +94,19 @@ class Providers:
             if not isinstance(result, dict):
                 raise ValueError("expected JSON object")
             return result
-        except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError):
+        except (KeyError, IndexError, TypeError, ValueError):
             raise MemoryError("model_output_invalid", 502) from None
 
-    @staticmethod
-    def _parse_tool(data):
-        try:
-            choice = data["choices"][0]
-            message = choice["message"]
-            calls = message.get("tool_calls") or []
-            if len(calls) != 1:
-                raise ValueError("expected exactly one tool call")
-            function = calls[0]["function"]
-            name = function["name"]
-            arguments = json.loads(function["arguments"])
-            if not isinstance(name, str) or not isinstance(arguments, dict):
-                raise ValueError("invalid tool call")
-            return name, arguments
-        except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError):
-            raise MemoryError("model_tool_output_invalid", 502) from None
-
-    def _parse_embedding(self, data, expected):
+    def embed(self, texts, deadline):
+        if not texts or len(texts) > self.config.embedding_batch:
+            raise ValueError("invalid embedding batch size")
+        data = self._post(base=self.config.embedding_base_url, path="/embeddings",
+            key=self.config.embedding_api_key, model=self.config.embedding_model, embedding=True, deadline=deadline,
+            body={"model": self.config.embedding_model, "input": texts,
+                  "dimensions": self.config.embedding_dimensions})
         try:
             rows = sorted(data["data"], key=lambda r: r["index"])
-            if [r["index"] for r in rows] != list(range(expected)):
+            if [r["index"] for r in rows] != list(range(len(texts))):
                 raise ValueError("embedding count/order")
             result = []
             for row in rows:
@@ -127,33 +121,3 @@ class Providers:
         except (KeyError, TypeError, ValueError):
             raise MemoryError("embedding_output_invalid", 502) from None
 
-    def json(self, purpose, prompt, payload, deadline):
-        return self._post(base=self.config.llm_base_url, path="/chat/completions",
-            key=self.config.llm_api_key, model=self.config.llm_model, embedding=False, deadline=deadline,
-            body={"model": self.config.llm_model, "temperature": 0,
-                  "max_tokens": self.config.model_max_tokens, "response_format": {"type": "json_object"},
-                  "messages": [{"role": "system", "content": prompt},
-                               {"role": "user", "content": dumps({"purpose": purpose, "data": payload})}]},
-            parser=self._parse_json)
-
-    def tool(self, purpose, prompt, payload, tools, deadline):
-        """Run one structured tool decision; the caller owns the bounded loop."""
-        return self._post(base=self.config.llm_base_url, path="/chat/completions",
-            key=self.config.llm_api_key, model=self.config.llm_model, embedding=False, deadline=deadline,
-            body={"model": self.config.llm_model, "temperature": 0,
-                  "max_tokens": self.config.model_max_tokens,
-                  "parallel_tool_calls": False,
-                  "tools": [{"type": "function", "function": tool} for tool in tools],
-                  "tool_choice": "auto",
-                  "messages": [{"role": "system", "content": prompt},
-                               {"role": "user", "content": dumps({"purpose": purpose, "data": payload})}]},
-            parser=self._parse_tool)
-
-    def embed(self, texts, deadline):
-        if not texts or len(texts) > self.config.embedding_batch:
-            raise ValueError("invalid embedding batch size")
-        return self._post(base=self.config.embedding_base_url, path="/embeddings",
-            key=self.config.embedding_api_key, model=self.config.embedding_model, embedding=True, deadline=deadline,
-            body={"model": self.config.embedding_model, "input": texts,
-                  "dimensions": self.config.embedding_dimensions},
-            parser=lambda data: self._parse_embedding(data, len(texts)))

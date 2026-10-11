@@ -9,8 +9,8 @@ from visualization.sources import digest, excerpt, file_digest
 from visualization.spans import attach_spans
 
 
-def read_run(path: Path, kind: str, max_queries: int = 20) -> dict:
-    if kind not in {"fixture", "experiment"} or max_queries < 1:
+def read_run(path: Path, kind: str, max_queries: int = 20, max_spans: int | None = None) -> dict:
+    if kind not in {"fixture", "experiment"} or max_queries < 1 or (max_spans is not None and max_spans < 1):
         raise ValueError("explicit run kind and positive query limit required")
     report = json.loads((path / "report.json").read_text(encoding="utf-8"))
     plan = json.loads((path / "plan.json").read_text(encoding="utf-8"))
@@ -96,6 +96,14 @@ def read_run(path: Path, kind: str, max_queries: int = 20) -> dict:
         "total_queries": len(seen), "shown_queries": len(queries), "queries": queries,
         "artifacts": {n: file_digest(path/n) for n in ("plan.json", "dataset-pack.json", "trace.jsonl", "report.json")}}
     attach_spans(result, path, request_scope)
+    if max_spans is not None:
+        for query in result["queries"]:
+            query["span_total"] = len(query["spans"])
+            query["span_omitted"] = max(0, len(query["spans"]) - max_spans)
+            if query["span_omitted"]:
+                query["spans"] = query["spans"][:max_spans]
+                visible = {span["span_id"] for span in query["spans"]}
+                query["span_previews"] = {key: value for key, value in query["span_previews"].items() if key in visible}
     return result
 
 
