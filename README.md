@@ -19,7 +19,7 @@ AM-Link 和设计灵感来源 **TinySoul-Agent** 都是 Graygoo7529 的个人原
 | [样本与案例分析](./casestudies/README.md) | [持续更新的网页](./casestudies/index.html)、会话内复用、真实案例与[手动下载清单](./casestudies/downloads.md) |
 | [archive/phase-1](./archive/phase-1/) | 一期代码、原始设计、历史文档及测试，作为冻结参考 |
 
-一期运行代码基线为 `1881abe`，归档前仓库 HEAD 为 `447608a`。旧文档中的“当前部署”“待 Smoke”等描述是当时记录；当前状态以根目录文档为准。二期已在 `amlink/` 实现 0.1.0 本地 Add/Search，尚未部署或参加官方 Smoke；`dataset/` 和 `benchmark/` 是公开数据研究与本地诊断工具。
+一期运行代码基线为 `1881abe`，归档前仓库 HEAD 为 `447608a`。旧文档中的“当前部署”“待 Smoke”等描述是当时记录；当前状态以根目录文档为准。二期当前为 `amlink/` 0.2.1，0.1.0 已归档；[核心工程修复](./docs/doing/2026-10-11-amlink-core-repairs.md)已完成本地回归及有限真实诊断，缓冲触发、证据披露和语义图质量继续研究，尚未部署或参加官方 Smoke；`dataset/` 和 `benchmark/` 是公开数据研究与本地诊断工具。
 
 ## 本地复核一期
 

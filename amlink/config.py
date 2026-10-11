@@ -15,7 +15,7 @@ class Config:
     reflection_chars: int = 6000
     batch_chars: int = 18000
     batch_messages: int = 32
-    max_batches: int = 8
+    max_batches: int = 64
     max_request_chars: int = 64000
     max_request_messages: int = 128
     old_candidates: int = 32
@@ -29,8 +29,8 @@ class Config:
     result_chars: int = 7000
     context_chars: int = 24000
     model_input_chars: int = 80000
-    request_seconds: float = 240.0
-    model_timeout: float = 60.0
+    request_seconds: float = 1740.0
+    model_timeout: float = 120.0
     model_max_tokens: int = 5000
     search_model: bool = True
     reflection_steps: int = 8
@@ -70,6 +70,8 @@ class Config:
             raise ValueError("tool loops must have a positive step budget")
         if self.model_timeout > self.request_seconds:
             raise ValueError("model timeout must fit request deadline")
+        if self.request_seconds >= 1800:
+            raise ValueError("request deadline must leave headroom below the official 30 minute limit")
 
     @classmethod
     def from_env(cls):

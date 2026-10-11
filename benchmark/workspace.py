@@ -8,10 +8,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from benchmark.core import write_json
+from benchmark.observability import OPERATIONS
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "benchmark/data/research/workspace.json"
-STAGES = {"add", "search", "answer", "eval", "extract", "store", "index", "retrieve", "rerank", "context", "model"}
+STAGES = frozenset(OPERATIONS)
 
 
 def registrations(path=REGISTRY):

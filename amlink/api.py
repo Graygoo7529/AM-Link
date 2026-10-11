@@ -8,6 +8,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
+from . import __version__
 from .config import Config
 from .engine import Engine
 from .errors import MemoryError
@@ -39,7 +40,7 @@ def create_app(*, config=None, store=None, providers=None, observer=None):
             providers.close()
             store.close()
 
-    app = FastAPI(title="AM-Link phase 2", version="0.2.0", lifespan=lifespan)
+    app = FastAPI(title="AM-Link phase 2", version=__version__, lifespan=lifespan)
 
     @app.exception_handler(MemoryError)
     async def memory_error(_request: Request, error: MemoryError):

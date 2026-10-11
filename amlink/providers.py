@@ -13,6 +13,16 @@ from .errors import MemoryError
 from .text import digest, dumps
 
 
+def tool_body(config, purpose, prompt, payload, tools):
+    """One canonical serialization for engine preflight and the actual HTTP call."""
+    return {"model": config.llm_model, "temperature": 0,
+            "max_tokens": config.model_max_tokens, "parallel_tool_calls": False,
+            "tools": [{"type": "function", "function": tool} for tool in tools],
+            "tool_choice": "required",
+            "messages": [{"role": "system", "content": prompt},
+                         {"role": "user", "content": dumps({"purpose": purpose, "data": payload})}]}
+
+
 class Providers:
     def __init__(self, config, observer, *, transport=None):
         self.config, self.observer = config, observer
@@ -33,7 +43,9 @@ class Providers:
             raise MemoryError("provider_not_configured", 503)
         chars = len(dumps(body))
         if chars > self.config.model_input_chars:
-            raise MemoryError("model_input_budget", 413)
+            with self.observer.span("context", "model input budget", inputs={
+                    "chars": chars, "limit": self.config.model_input_chars, "provider_called": False}):
+                raise MemoryError("model_input_budget", 413)
         with self.lock:
             if self.calls >= self.config.max_provider_calls or self.input_chars + chars > self.config.max_provider_input_chars:
                 raise MemoryError("provider_run_budget", 429)
@@ -96,6 +108,8 @@ class Providers:
     def _parse_tool(data):
         try:
             choice = data["choices"][0]
+            if choice.get("finish_reason") != "tool_calls":
+                raise ValueError("incomplete tool output")
             message = choice["message"]
             calls = message.get("tool_calls") or []
             if len(calls) != 1:
@@ -138,16 +152,17 @@ class Providers:
 
     def tool(self, purpose, prompt, payload, tools, deadline):
         """Run one structured tool decision; the caller owns the bounded loop."""
+        allowed = {tool["name"] for tool in tools}
+
+        def parse(data):
+            name, arguments = self._parse_tool(data)
+            if name not in allowed:
+                raise MemoryError("model_unknown_tool", 502)
+            return name, arguments
+
         return self._post(base=self.config.llm_base_url, path="/chat/completions",
             key=self.config.llm_api_key, model=self.config.llm_model, embedding=False, deadline=deadline,
-            body={"model": self.config.llm_model, "temperature": 0,
-                  "max_tokens": self.config.model_max_tokens,
-                  "parallel_tool_calls": False,
-                  "tools": [{"type": "function", "function": tool} for tool in tools],
-                  "tool_choice": "auto",
-                  "messages": [{"role": "system", "content": prompt},
-                               {"role": "user", "content": dumps({"purpose": purpose, "data": payload})}]},
-            parser=self._parse_tool)
+            body=tool_body(self.config, purpose, prompt, payload, tools), parser=parse)
 
     def embed(self, texts, deadline):
         if not texts or len(texts) > self.config.embedding_batch:

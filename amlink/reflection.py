@@ -21,6 +21,11 @@ For a new item, set ref to a `new:` placeholder (a semantic `fact:name` or
 `person:name` label is also accepted as new); an existing item must use the
 exact loaded `memory:` ref. Never invent a semantic ref for an existing item.
 Do not emit the mandatory episode as a new semantic item.
+Never rewrite a minimal episode: it is the immutable verbatim source log. Build
+separate facts/events and reuse identified people/entities where useful. Read known
+references with reflection_inspect/reflection_backlinks when their contents or
+connections are needed before deciding a mutation; reflection_search discovers refs.
+Do not invent nodes or edges to meet a count. Unrelated information may remain separate.
 Facts/events remain independently readable. Use about for a fact/event to a person/entity/
 concept/event, contains for an episode to a fact/event, supersedes only explicit replacement,
 contradicts for unresolved incompatible claims, and same_event_as only for the same occurrence.
@@ -31,11 +36,11 @@ when no additional durable semantic change is needed.
 
 
 def prompt():
-    return REFLECTION_PROMPT + "\nMutation tool schema:\n" + dumps(Mutation.model_json_schema())
+    return REFLECTION_PROMPT
 
 
 def _semantic_ref(user: str, request_id: str, number: int, label: str, kind: str) -> str:
-    clean = re.sub(r"[^a-zA-Z0-9_-]+", "-", label).strip("-").lower()[:36] or kind
+    clean = re.sub(r"[^\w-]+", "-", label).strip("-").lower()[:36] or kind
     return f"memory:{kind}-{clean}-{digest([user, request_id, number, label])[:10]}"
 
 
@@ -45,7 +50,8 @@ def prepare_mutation(value, *, user, request_id, number, context, store):
     except ValidationError:
         raise MemoryError("mutation_schema_invalid", 502) from None
     sources = {row["ref"]: row for row in context["sources"]}
-    old = {row["ref"]: row for row in context["memories"]}
+    old = {row["ref"]: row for row in context.get("items", {}).values()}
+    old.update({row["ref"]: row for row in context.get("memories", [])})
     aliases, items = {}, []
 
     def checked(refs):
@@ -70,6 +76,9 @@ def prepare_mutation(value, *, user, request_id, number, context, store):
             label = item.ref[4:] if item.ref.startswith("new:") else item.ref.split(":", 1)[1]
             ref = duplicate["ref"] if duplicate else _semantic_ref(user, request_id, number, label, item.kind)
         elif item.ref in old and old[item.ref]["kind"] == item.kind:
+            if store.is_minimum_episode(user, item.ref):
+                if item.text != old[item.ref]["text"] or set(refs) != set(old[item.ref]["source_refs"]):
+                    raise MemoryError("minimum_episode_immutable", 502)
             if not set(old[item.ref]["source_refs"]).issubset(refs):
                 raise MemoryError("mutation_drops_provenance", 502)
             if item.kind in {"fact", "event"} and any(
@@ -94,13 +103,14 @@ def prepare_mutation(value, *, user, request_id, number, context, store):
             raise MemoryError("mutation_unknown_memory", 502)
         return ref
 
-    links, seen = [], set()
+    links, seen, filtered_links = [], set(), []
     for link in mutation.links:
         # Raw refs are provenance, not graph nodes. The mandatory episode
         # already carries these source_refs, so a model-emitted contains(raw)
         # edge is redundant and is safely ignored after provenance validation.
         if link.from_ref.startswith("raw:") or link.to_ref.startswith("raw:"):
             checked(link.source_refs)
+            filtered_links.append({**link.model_dump(), "reason": "raw_is_provenance_not_node"})
             continue
         left, right = resolve(link.from_ref), resolve(link.to_ref)
         if left == right:
@@ -110,10 +120,12 @@ def prepare_mutation(value, *, user, request_id, number, context, store):
             # Episodes are already the minimum durable projection. A model may
             # use any relation as a loose narrative association between
             # episodes; that is not a graph edge in this vocabulary.
+            filtered_links.append({**link.model_dump(), "reason": "episode_to_episode_outside_relation_vocabulary"})
             continue
         if link.relation == "about" and (a["kind"] == "episode" or b["kind"] == "episode"):
             # about is reserved for semantic facts/events and their subjects;
             # episode context is already represented by source_refs/contains.
+            filtered_links.append({**link.model_dump(), "reason": "about_requires_semantic_nodes"})
             continue
         if link.relation == "contains" and a["kind"] in {"fact", "event"} and b["kind"] == "episode":
             left, right, a, b = right, left, b, a
@@ -145,4 +157,4 @@ def prepare_mutation(value, *, user, request_id, number, context, store):
             raise MemoryError("forget_requires_known_scope", 502)
         raw_refs = checked(list(raw_refs))
         forget.append({"source_refs": raw_refs, "memory_refs": memory_refs, "instruction_refs": instructions})
-    return {"items": items, "links": links, "forget": forget}
+    return {"items": items, "links": links, "forget": forget, "filtered_links": filtered_links}

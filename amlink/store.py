@@ -175,6 +175,14 @@ class Store:
             row["raw_refs"] = json.loads(row["raw_refs"])
         return row
 
+    def require_reflection(self, user, rid, watermark):
+        with self.transaction() as db:
+            db.execute("UPDATE requests SET reflection_watermark=MAX(reflection_watermark,?) WHERE user_id=? AND request_id=?",
+                       (watermark, user, rid))
+
+    def is_minimum_episode(self, user, ref):
+        return self.one("SELECT 1 FROM requests WHERE user_id=? AND episode_ref=?", (user, ref)) is not None
+
     def request_complete(self, user, rid, episode_ref, watermark=0):
         with self.transaction() as db:
             db.execute("UPDATE requests SET status='done',episode_ref=?,reflection_watermark=? WHERE user_id=? AND request_id=?",
@@ -226,7 +234,7 @@ class Store:
                        (episode["ref"], user, rid))
 
     def get(self, user, ref, *, include_blocked=False):
-        if not isinstance(ref, str) or not re.fullmatch(r"(?:raw|memory):[a-zA-Z0-9_-]+", ref):
+        if not isinstance(ref, str) or not re.fullmatch(r"(?:raw|memory):[\w-]+", ref):
             return None
         if ref.startswith("raw:"):
             row = self.one("SELECT * FROM raw_events WHERE user_id=? AND ref=?", (user, ref))
@@ -280,10 +288,12 @@ class Store:
     def source_states(self, user, source_ref):
         return [self._node(row) for row in self.rows("SELECT DISTINCT n.* FROM nodes n,json_each(n.sources) s WHERE n.user_id=? AND s.value=? AND n.status IN ('superseded','conflict')", (user, source_ref))]
 
-    def commit_mutation(self, user, mutation, *, watermark, fingerprint, vectors):
+    def commit_mutation(self, user, mutation, *, watermark, fingerprint, vectors, context=None):
         with self.transaction() as db:
             for item in mutation["items"]:
                 old = db.execute("SELECT created_at,status FROM nodes WHERE user_id=? AND ref=?", (user, item["ref"])).fetchone()
+                if db.execute("SELECT 1 FROM requests WHERE user_id=? AND episode_ref=?", (user, item["ref"])).fetchone():
+                    raise MemoryError("minimum_episode_immutable", 502)
                 db.execute("INSERT OR REPLACE INTO nodes VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                            (user, item["ref"], item["kind"], item["text"], dumps(item["source_refs"]),
                             old["status"] if old else "active", item.get("time_expression"), item.get("time_start"), item.get("time_end"),
@@ -316,13 +326,24 @@ class Store:
                     db.execute("DELETE FROM lexical WHERE user_id=? AND ref=?", (user, ref))
                     db.execute("DELETE FROM vectors WHERE user_id=? AND ref=?", (user, ref))
             db.execute("UPDATE working SET settled_through=MAX(settled_through,?),state='stopped',context=? WHERE user_id=?",
-                       (watermark, dumps({}), user))
-            db.execute("UPDATE requests SET status='done',reflection_watermark=? WHERE user_id=? AND status='accepted' AND request_id IN (SELECT request_id FROM raw_events WHERE user_id=? AND ordinal<=?)",
-                       (watermark, user, user, watermark))
+                       (watermark, dumps(context or {}), user))
 
-    def finish_minimum(self, user, rid, watermark=0):
+    def finish_minimum(self, user, rid, watermark=0, *, require_vector=False):
         with self.transaction() as db:
-            db.execute("UPDATE requests SET status='done',reflection_watermark=? WHERE user_id=? AND request_id=?", (watermark, user, rid))
+            row = db.execute("SELECT * FROM requests WHERE user_id=? AND request_id=?", (user, rid)).fetchone()
+            node = db.execute("SELECT * FROM nodes WHERE user_id=? AND ref=?", (user, row["episode_ref"])).fetchone() if row else None
+            if not node:
+                raise MemoryError("minimum_episode_incomplete", 503)
+            if node["status"] != "tombstoned":
+                if not db.execute("SELECT 1 FROM lexical WHERE user_id=? AND ref=?", (user, node["ref"])).fetchone():
+                    raise MemoryError("minimum_index_incomplete", 503)
+                vector = db.execute("SELECT vector FROM vectors WHERE user_id=? AND ref=?", (user, node["ref"])).fetchone()
+                if require_vector and (not vector or not json.loads(vector[0])):
+                    raise MemoryError("minimum_index_incomplete", 503)
+            state = db.execute("SELECT settled_through FROM working WHERE user_id=?", (user,)).fetchone()
+            if state[0] < max(row["reflection_watermark"], watermark):
+                raise MemoryError("reflection_incomplete", 503)
+            db.execute("UPDATE requests SET status='done' WHERE user_id=? AND request_id=?", (user, rid))
 
     def snapshot(self, user):
         state = self.state(user)

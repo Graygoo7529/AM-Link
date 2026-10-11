@@ -104,6 +104,15 @@ class StudyTests(unittest.TestCase):
             (path/span["outputs"][0]["artifact"]).write_text('{}',encoding='utf-8')
             with self.assertRaisesRegex(ValueError,"hash mismatch"): read_run(path,"experiment")
 
+    def test_select_and_reflection_notes_can_be_saved_and_reloaded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp); run=run_local(path)
+            for stage in ("select", "reflection"):
+                note=make_note(run,search_id=run["queries"][0]["search_id"],stage=stage,
+                    kind="observation",author="test",text="A source was lost at this stage.")
+                append_note(path,note)
+            self.assertEqual([n["stage"] for n in read_notes(path,run)],["select","reflection"])
+
     def test_store_is_isolated_and_idempotent(self):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)
