@@ -20,7 +20,7 @@
 | 14 | [Answer 靶场与真实案例复核](./doing/2026-10-08-amlink-answer-research.md) | gpt-5.6-luna 诊断 Answer、逐题后验复核、Add/Search 真实失败位置 |
 | 15 | [AM-Link 二期方法改进计划](./phase-2/method-improvement-plan.md) | 结合 TinySoul、案例与当前实现的重构计划；每个 Add 先生成可检索最小 episode，工作区跨请求累积，Search/Reflection 分开 |
 
-最新状态先读[0.2.1核心修复与方法议题](./doing/2026-10-11-amlink-core-repairs.md)：工程回归与真实小切片已完成，语义归属、图质量和证据完整性仍有失败；[0.2.0核心审计](./doing/2026-10-11-amlink-core-audit.md)保留失败基线。旧版实施和Answer报告是历史观察。
+最新状态先读[0.2.1核心修复与方法议题](./doing/2026-10-11-amlink-core-repairs.md)和[100题真实重跑诊断](./doing/2026-10-11-amlink-100-rerun-analysis.md)：工程回归与真实小切片已完成，100题首次重跑被会话切换中断，新的完整基线正在补跑；语义归属、图质量和证据完整性仍有失败。[0.2.0核心审计](./doing/2026-10-11-amlink-core-audit.md)保留失败基线。旧版实施和Answer报告是历史观察。
 
 `private/` 仅本机存在：包含已授权保存的 SSH 账号、服务器环境快照和模型 Key。公开文档只记录接入方法。
 
