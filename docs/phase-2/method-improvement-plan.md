@@ -1,11 +1,11 @@
 # AM-Link 二期重构设计与执行计划
 
 状态：0.2.1 核心工程修复已实施；方法质量、并发协调器和完整设计验收继续推进。官方 Smoke/部署尚未验证。
-更新日期：2026-10-11。
+更新日期：2026-10-12。
 
 **状态边界：**以下对象语义、协调器流程和验收条件包含已确认目标，不代表当前代码全部具备。[核心审计](../doing/2026-10-11-amlink-core-audit.md)保存0.2.0失败基线；[修复报告](../doing/2026-10-11-amlink-core-repairs.md)记录0.2.1的分批/预算、逐请求完成、episode保护、持续Workspace、Reflection图操作、Select分页及有序装箱修复。完整并发追加协调器、整理时机与有用语义图仍未验收；不能恢复原先步骤1–6全部done的说法。
 
-本文记录二期代码归档后的重构设计、实现核对和剩余验证。`MemoryItem`、`MemoryRelation`、`References`、`MemoryContext`、`MemoryWorking`、`Search`、`Inspect`、`Backlink`、`BFS`、`Select` 和三种 Reflection 状态沿用已对齐的含义。实现入口为 `amlink/` 0.2.1，旧实现保留在 `archive/phase-2/amlink-0.1.0/`。
+本文记录二期代码归档后的重构设计、实现核对和剩余验证。`MemoryItem`、`MemoryRelation`、`References`、`MemoryContext`、`MemoryWorking`、`Search`、`Inspect`、`Backlink`、`BFS`、`Select` 和三种 Reflection 状态沿用已对齐的含义。实现入口为 `amlink/` 0.2.1，旧实现保留在 `archive/phase-2/amlink-0.1.0/`。2026-10-12 的100题真实重跑完成了基线，但发现分页 Select 的位置坐标协议错误；代码已改为页内位置并补充稳定的 `candidate_position` 观测字段，真实复跑因两个模型端点网络不可达而待验证。
 
 已对齐：本轮普通文本靶场先完成全部标准 Add，再执行标准 Search；Reflection 不在每次 Add 后运行，MemoryWorking 要积累到一定规模或遇到硬触发/会话边界后，才为模型提供更完整的全局视角。每个成功 Add 先生成一个最小 `episode` MemoryItem，并完成词法与向量索引；这一步是协议可见性保证，不等于启动 Reflection，也不由模型决定是否省略。触发后的模型决定是否补充、更新或删除更高层结构化记忆，确实没有额外长期价值时才 no-op。标准 Search 每次新建临时 Context，其 Query/BFS loop 只处理已提交的结构化 MemoryItem（包括最小 episode），不直接读取 WorkingMemory，也不和 Reflection 共用语境。最后一个 Add 未触发 Reflection 时，WorkingMemory 可以继续保留，但其最小 episode 已经可检索；首个 Search 不需要阶段性排空或处理尾部。
 
@@ -429,3 +429,11 @@ WorkingMemory 跨多次 Add 积累，以更大的语境支持全局 Reflection�
 100题旧实验保留为失败基线，不能覆盖后重新宣布原实现有效。官方Streaming支持增量检索，不采用“所有赛道一定先全量Add再Search”的前提；标准Search依然只读取已提交MemoryItem。
 
 下一阶段先讨论[修复报告的方法方案](../doing/2026-10-11-amlink-core-repairs.md)：把“允许模型维护语境”与“必须立刻Mutation”分开；按完整会话/来源范围逐步整理；保护人物归属及关系证据；评估按互补来源装箱。无需新增Answer生成环节，也不预先追求某种节点或边的数量。
+
+## 2026-10-13 扩展验证更新
+
+21个跨数据集锚点已覆盖LoCoMo、LongMemEval、BEAM、PerLTQA、PersonaMem、MAB和PV3；3个边界案例另行定向复验。运行成功率不能代替证据链：12个有作者证据标注的问题中，top-5找回24/27个目标证据，只有11/12个问题完整覆盖。Reflection在这些真实锚点里没有调用Inspect/Backlink，结构仍以episode/event为主。说明当前方法拥有图探索能力，但未证明模型会在整理时利用它。
+
+60项确定性回归通过；新增加的无效边过滤保留有效节点，遗忘授权仍严格拒绝。L04定向复验5/5 Add，却仍只有5/7标注来源且完整链为0，是后续证据片段、主体归属与装箱对照的优先案例。跨数据集详情及待完成100题修复版见[扩展验证报告](../doing/2026-10-13-amlink-expanded-validation.md)。
+
+此报告中的 `...20261012m` 是中断的部分100题运行，不能与完整历史基线合并。最新100题完整复跑 `...20261013n` 仍在执行；完成后应先按Add成功前提与问题类别重新分析，再调整缓冲触发或候选预算。

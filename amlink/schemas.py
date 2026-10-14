@@ -93,6 +93,7 @@ class Selection(StrictModel):
 class BfsAction(StrictModel):
     action: Literal["inspect", "backlinks", "stop"]
     ref: Text | None = None
+    frontier_position: int | None = None
     reason: str | None = None
 
 

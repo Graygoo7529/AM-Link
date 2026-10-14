@@ -1,12 +1,12 @@
 # AM-Link 0.2.1 真实重跑与方法改进诊断
 
-更新日期：2026-10-11。本文记录 0.2.1 修复版的 100 题 LoCoMo 重跑过程、可复核的中间结果和后续改进方案。它不等同于官方 Smoke/Full 成绩；模型返回的证据仍由主办方 Answer/Eval 负责评测。
+更新日期：2026-10-12。本文记录 0.2.1 修复版的 100 题 LoCoMo 重跑过程、可复核的中间结果和后续改进方案。它不等同于官方 Smoke/Full 成绩；模型返回的证据仍由主办方 Answer/Eval 负责评测。
 
 ## 状态边界
 
 本轮第一次 100 题进程在用户切换会话时被中断，只留下部分运行目录 `benchmark/data/runs/amlink-repaired-locomo-100-real-20261011/`，没有 `report.json`，因此不能称为完整 100 题结果。该目录的观测文件和数据库保留为中间证据，不能覆盖或删除。
 
-截至中断时，目录中可核查到：
+截至该进程停止时，目录中可核查到：
 
 | 项目 | 结果 |
 | --- | ---: |
@@ -17,9 +17,34 @@
 | 原始消息 | 419 |
 | MemoryItem | 71（29 episode、42 event） |
 | MemoryRelation | 8（7 contains、1 same_event_as） |
-| 主要错误 | 46 selection_unknown_ref、9 mutation_relation_types、3 minimum_episode_immutable、3 mutation_invalid_identity |
+| 主要错误事件 | 46 selection_unknown_ref、9 mutation_relation_types、3 minimum_episode_immutable、3 mutation_invalid_identity |
 
-这些数字只说明真实链路已经走到了错误位置：它们不代表全量准确率，也不代表 0.2.1 已完成。第二次独立重跑使用新的 run-id，完成后再补充可比较的完整统计。
+这些是嵌套观测中的错误事件计数，不等于独立请求失败数；对应的请求级统计以 `trace.jsonl` 为准。它们只说明真实链路已经走到了错误位置：不代表全量准确率，也不代表 0.2.1 已完成。随后已用新的 run-id 完成完整四记录、100 题重跑，结果见下文。
+
+## 完整 100 题基线（done，2026-10-12）
+
+运行目录为忽略的 `benchmark/data/runs/amlink-repaired-locomo-100-real-20261012/`，包含四个记录、100 个问题、145 次 Add 和 100 次 Search；版本标识为 `0.2.1-position-select`。
+
+| 指标 | 结果 |
+| --- | ---: |
+| Add 成功 | 138/145（95.17%） |
+| Search 成功 | 90/100（90.00%） |
+| Add 延迟 p50 / p95 / 最大 | 15.75s / 44.31s / 71.09s |
+| Search 延迟 p50 / p95 / 最大 | 23.33s / 41.36s / 52.03s |
+| 成功 Search @5 证据召回 / 命中率 / 完整链覆盖 | 0.323 / 0.410 / 0.270 |
+| 多跳 @5 证据召回 / 命中率 / 完整链覆盖 | 0.278 / 0.486 / 0.143 |
+| 时间题 @5 证据召回 / 命中率 / 完整链覆盖 | 0.375 / 0.358 / 0.358 |
+| 结构化节点 | 146 episode、164 event、26 fact；person/entity/concept 为 0 |
+| 关系 | 29 条：about 4、contains 22、contradicts 1、supersedes 2 |
+| Reflection 图工具 | Inspect 192、Backlink 42；Reflection 内 Inspect/Backlink 仍为 0 |
+
+这说明请求级链路可以完成，但成功率不是记忆质量。Add 失败 7 次，主要为 mutation 引用/关系/不可变 episode 校验；Search 失败 10 次均为 `selection_invalid_position`。成功 Search 的标注证据召回只有 0.323；`single_hop` 只有 2 题，不能据此比较单跳优势。
+
+### Select 分页坐标错误（已修复，待真实重跑）
+
+完整基线中 10 次 `selection_invalid_position` 具有同一模式：分页 Select 的模型输出位置来自候选全集，而当前页工具按本页白名单校验。观测候选也没有明确页内坐标，说明分页协议和观测协议没有统一。这是 AM-Link 的实现错误，不应归因于模型质量。
+
+代码已改为：每页提供从 0 开始的页内 `position`，每条候选另带 `candidate_position` 作为全集稳定位置；系统只用页内位置映射回当前页真实 ref。52 项 `amlink/tests` 与 `benchmark/tests` 已通过。由于本轮之后两个模型提供方网络不可达，尚未对 100 题做修复后的真实重跑，因此“错误消失”目前是代码与本地回归结论，仍待真实验证。
 
 ## 当前链路中已经验证的事实
 
@@ -96,6 +121,19 @@ Select 决定候选 References 是否值得继续探索；最终装箱决定已�
 
 所有内部工作保持单请求有界、显式错误、无内部自动重试；官方约定内的重试仍由调用方负责。
 
+## 跨数据集切片尝试（网络阻断，不计为方法结果）
+
+在修复代码上准备了 `p1/p2/b1/b2/l1/l2/pv1/m1` 八个公开案例锚点，运行脚本为忽略的 `benchmark/data/research/core-repairs-20261011/run_cross_cases_20261012.py`。每个切片使用独立数据库与标准 native 观测。
+
+八个切片的 Add 均在首次 embedding 请求处以 `provider_network` 失败；不带凭据的 HTTPS 与 TCP 检查也无法连接 `open.bigmodel.cn:443` 和 `api.zhizengzeng.com:443`。之后产生的空 Search 结果有 Add 前置失败，必须标为 `source_add_failed`，不能用于召回或记忆质量统计。网络恢复后重跑上述锚点，再至少扩展到 CLBench、LongMemEval、PersonaMem、BEAM 各一个切片，并分别报告原始输入构成、完成 Add、图结构、证据路径和模型调用。
+
+## 当前设计判断与继续实施顺序
+
+1. **证据范围仍是第一瓶颈。** 长 episode 的 Reference 可能只展示头部 4/18 条来源消息。若关键句未进片段，Select 排除候选是预期行为，根因是 Query 分支片段并集与 Inspect continuation 尚未闭合。当前代码已加入 `hit_fragments` 和覆盖元数据，但收益仍待真实对照。
+2. **主体/来源归属仍是第二瓶颈。** 小样本和100题运行都出现 event/fact 引用语义不支持的 speaker 或消息。来源 ref 存在、类型合法，不等于来源支持陈述。Mutation 应显式呈现 speaker、ordinal、日期和原句；不确定时保留 episode，不新增高层断言。
+3. **最终装箱仍是第三瓶颈。** 当前装箱保持 Select 顺序、去重来源、保留日期并记录逐项丢弃原因，但图新增候选追加在后，集合题仍可能被 top_k 挤掉互补来源。可以对照一个受限 LLM 装箱：模型只选已有证据片段编号和顺序，系统确定性展开、去重、验证来源和预算；真实同切片对照前不作为默认，也不允许模型生成答案。
+4. **缓冲整理需要独立校准。** 最小 episode 已立即可检索；Reflection 仍按阈值/硬信号跨 Add 消费 WorkingMemory。后续用短连续 Add、会话切换、更新/遗忘和长历史切片，检查整理时机是否获得完整上下文、no-op 是否保留未决消息，以及 Reflection 是否实际调用旧图 Inspect/Backlink。
+
 ## 目标流程
 
 ```mermaid
@@ -123,6 +161,10 @@ flowchart TD
 
 图中标准 Search 与 Add 内 Reflection 始终是两个独立 loop；标准 Search 不读 WorkingMemory，不把临时探索写回长期记忆。
 
+## 部分运行的结论边界
+
+目录中的 `observability.jsonl` 和 `trace.jsonl` 是可复核的中间材料；没有 `report.json`，不能从它们推断四记录或 100 题的总体召回率。失败请求被适配器明确记录，原始消息和已提交节点也保留，便于之后定位，但该运行不再继续追加，避免把中断前后的方法状态混在一个基线中。
+
 ## 待验证而非已完成
 
 - 新一轮四记录基线是否能完整跑完；
@@ -132,3 +174,20 @@ flowchart TD
 - 跨批 Workspace 是否改善主体归属、时间组合和冲突处理；
 - 各类模型调用的成本、延迟与官方 30 分钟请求边界。
 
+## 2026-10-12 局部修复与真实复核（进行中）
+
+为处理上一轮已定位的两个确定性边界，本轮先做了小范围代码修复：
+
+1. **Select 多余位置容忍**：模型如果同时返回页内合法位置和少量页外位置，系统保留合法位置并记录被丢弃的位置；只有完全没有合法位置时才报告选择错误。这样不会因为一个额外编号丢掉整页有效候选，也没有把未知编号模糊映射成别的引用。
+2. **非法关系局部过滤**：Mutation 中若一条关系的端点类型不符合现有 schema，系统保留来源、主体和节点变更，过滤该条关系并记录 `relation_type_mismatch`；引用不存在、主体不存在等其他错误仍显式失败。该修复不改变关系词汇或放宽端点定义，目的是避免一个错误边使整批有来源的有效节点全部回滚。
+
+本地 `amlink` 与 `benchmark` 回归共 **58 项通过**（另有 pytest 缓存目录权限警告，不影响测试结果）。新的 100 题真实复核使用独立 run-id `amlink-repaired-locomo-100-real-20261012m`，仍覆盖 145 次 Add、100 次 Search；在报告生成前不宣称成功率、图质量或证据覆盖已有改善。运行目录和观测材料位于忽略的 `benchmark/data/runs/`，不进入版本库。
+
+真实复核重点检查：
+
+- `mutation_relation_types` 是否下降，同时有效节点是否能提交；
+- `selection_invalid_position` 是否由“整次失败”变成有合法选择的成功记录；
+- Reflection 是否实际调用 Inspect/Backlink，是否形成有来源且端点正确的导航边；
+- 证据范围、主体/来源归属和最终装箱是否仍是独立瓶颈。
+
+无论本轮结果如何，以下问题仍不能由这两个局部修复自动解决：长 episode 的命中片段可能未覆盖关键句、主体归属可能缺少语义支持、最终装箱可能挤掉互补证据，以及跨批 Workspace 是否获得足够全局视角。它们需要单独的同切片对照实验，不能从 HTTP 200 或节点数量推断已经解决。

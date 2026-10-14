@@ -34,7 +34,8 @@ class Scripted:
         self.calls.append((purpose, payload))
         assert len(dumps(tool_body(self.engine.config, purpose, prompt, payload, tools))) <= self.engine.config.model_input_chars
         if purpose == "select":
-            assert tools[0]["parameters"]["properties"]["refs"]["items"]["enum"] == [row["ref"] for row in payload["candidates"]]
+            positions = [row["position"] for row in payload["candidates"]]
+            assert tools[0]["parameters"]["properties"]["positions"]["items"]["enum"] == positions
         return self.decide(purpose, payload)
 
 
@@ -163,12 +164,14 @@ def test_select_pages_visit_all_candidates_and_global_order_is_preserved(make):
     def decide(purpose, payload):
         assert "context" not in payload
         assert payload["question"] == "topic"
-        return "select", {"refs": [row["ref"] for row in reversed(payload["candidates"])]}
+        return "select", {"positions": list(reversed([row["position"] for row in payload["candidates"]]))}
 
     provider.decide = decide
     selected = engine._select_refs("u", "topic", candidates, {"text": "x" * 200000}, time.monotonic() + 30, reason="query")
     calls = [payload for name, payload in provider.calls if name == "select"]
     assert [len(payload["candidates"]) for payload in calls] == [2, 2, 1, 5]
+    assert [row["position"] for row in calls[2]["candidates"]] == [0]
+    assert [row["position"] for row in calls[3]["candidates"]] == [0, 1, 2, 3, 4]
     assert {row["ref"] for payload in calls[:3] for row in payload["candidates"]} == {row["ref"] for row in candidates}
     assert [row["ref"] for row in selected] == ["memory:fact-4", "memory:fact-2", "memory:fact-3", "memory:fact-0", "memory:fact-1"]
 
@@ -176,7 +179,7 @@ def test_select_pages_visit_all_candidates_and_global_order_is_preserved(make):
 def test_select_empty_is_valid_and_unknown_tool_is_error(make):
     engine, provider = make()
     row = {"ref": "memory:fact-a", "kind": "fact", "text": "A", "source_refs": []}
-    provider.decide = lambda *args: ("select", {"refs": []})
+    provider.decide = lambda *args: ("select", {"positions": []})
     assert engine._select_refs("u", "B", [row], {}, time.monotonic() + 10, reason="query") == []
     provider.decide = lambda *args: ("select", {"refs": ["memory:fact-typo"]})
     with pytest.raises(MemoryError, match="selection_unknown_ref"):
@@ -184,6 +187,131 @@ def test_select_empty_is_valid_and_unknown_tool_is_error(make):
     provider.decide = lambda *args: ("other_tool", {"refs": []})
     with pytest.raises(MemoryError, match="model_unknown_tool"):
         engine._select_refs("u", "B", [row], {}, time.monotonic() + 10, reason="query")
+
+
+def test_select_keeps_valid_positions_when_provider_adds_one_out_of_page(make):
+    engine, provider = make()
+    rows = [{"ref": f"memory:fact-{i}", "kind": "fact", "text": f"Fact {i}", "source_refs": []}
+            for i in range(3)]
+    provider.decide = lambda purpose, payload: ("select", {"positions": [1, 20]})
+    selected = engine._select_refs("u", "facts", rows, {}, time.monotonic() + 10, reason="query")
+    assert [row["ref"] for row in selected] == [rows[1]["ref"]]
+
+
+def test_invalid_relation_is_filtered_without_dropping_grounded_items(make):
+    engine, _ = make(mode="raw")
+    engine.add(request("source", ["Maya discussed a design meeting."]))
+    source = engine.store.raw("u")[0]["ref"]
+    context = {"sources": engine.store.raw("u"), "items": {}, "memories": [], "new_refs": [source]}
+    mutation = prepare_mutation({
+        "items": [
+            {"ref": "new:meeting", "kind": "event", "text": "Maya discussed a design meeting.", "source_refs": [source]},
+            {"ref": "new:topic", "kind": "fact", "text": "The topic was design.", "source_refs": [source]},
+        ],
+        "links": [{"from_ref": "new:meeting", "to_ref": "new:topic", "relation": "about", "source_refs": [source]}],
+        "forget": [],
+    }, user="u", request_id="followup", number=1, context=context, store=engine.store)
+    assert len(mutation["items"]) == 2
+    assert mutation["links"] == []
+    assert mutation["filtered_links"][0]["reason"] == "relation_type_mismatch"
+
+
+def test_self_and_unknown_links_are_filtered_without_dropping_items(make):
+    engine, _ = make(mode="raw")
+    engine.add(request("source", ["Maya discussed a design meeting."]))
+    source = engine.store.raw("u")[0]["ref"]
+    context = {"sources": engine.store.raw("u"), "items": {}, "memories": [], "new_refs": [source]}
+    mutation = prepare_mutation({
+        "items": [{"ref": "new:meeting", "kind": "event",
+                   "text": "Maya discussed a design meeting.", "source_refs": [source]}],
+        "links": [
+            {"from_ref": "new:meeting", "to_ref": "new:meeting", "relation": "same_event_as", "source_refs": [source]},
+            {"from_ref": "new:meeting", "to_ref": "memory:event-not-loaded", "relation": "same_event_as", "source_refs": [source]},
+        ],
+        "forget": [],
+    }, user="u", request_id="followup", number=1, context=context, store=engine.store)
+    assert len(mutation["items"]) == 1
+    assert mutation["links"] == []
+    assert [link["reason"] for link in mutation["filtered_links"]] == ["self_link", "unknown_memory"]
+
+
+def test_misplaced_root_time_fields_are_observable_and_discarded(make):
+    engine, _ = make(mode="raw")
+    engine.add(request("source", ["Maya discussed a design meeting."]))
+    source = engine.store.raw("u")[0]["ref"]
+    context = {"sources": engine.store.raw("u"), "items": {}, "memories": [], "new_refs": [source]}
+    mutation = prepare_mutation({
+        "items": [{"ref": "new:meeting", "kind": "event",
+                   "text": "Maya discussed a design meeting.", "source_refs": [source]}],
+        "links": [], "forget": [], "time_start": "2026-01-01",
+    }, user="u", request_id="followup", number=1, context=context, store=engine.store)
+    assert len(mutation["items"]) == 1
+    assert mutation["filtered_fields"] == [{"field": "time_start", "reason": "mutation_field_without_item"}]
+
+
+def test_select_merge_fits_with_full_survivor_set_and_heavy_lineage(make):
+    engine, provider = make()
+    candidates = [{"ref": f"memory:event-{'semantic-name-' * 5}{i}", "kind": "event",
+        "text": (f"Person {i} completed a distinct project in 2023. " * 160),
+        "source_refs": [f"raw:{j:032d}" for j in range(32)],
+        "lineage": [{"branch": f"Which project did person {i} complete? " * 20,
+                     "channel": "embedding", "rank": j, "cosine": .8} for j in range(4)]}
+        for i in range(64)]
+    provider.decide = lambda purpose, payload: ("select", {
+        "positions": [row["position"] for row in payload["candidates"]]})
+    selected = engine._select_refs("u", "Which projects were completed?", candidates, {},
+                                  time.monotonic() + 30, reason="query")
+    assert [row["ref"] for row in selected] == [row["ref"] for row in candidates]
+    calls = [payload for purpose, payload in provider.calls if purpose == "select"]
+    assert len(calls[-1]["candidates"]) == 64
+    assert all(row["narrative"] and row["ref"] for row in calls[-1]["candidates"])
+
+
+def test_select_compacts_a_single_oversized_candidate(make):
+    engine, provider = make(model_input_chars=12000, select_candidate_limit=24)
+    candidate = {"ref": "memory:episode-long", "kind": "episode",
+        "text": "A long source message with a date and a subject. " * 1200,
+        "source_refs": [f"raw:{i:032d}" for i in range(64)],
+        "lineage": [{"branch": "which date and subject?" * 20,
+                     "channel": "embedding", "rank": i, "cosine": .8} for i in range(8)]}
+    provider.decide = lambda purpose, payload: ("select", {"positions": [0]})
+    selected = engine._select_refs("u", "which date?", [candidate], {},
+                                   time.monotonic() + 30, reason="query")
+    assert [row["ref"] for row in selected] == [candidate["ref"]]
+    calls = [payload for purpose, payload in provider.calls if purpose == "select"]
+    assert len(calls) == 1
+    assert calls[0]["candidates"][0]["ref"] == candidate["ref"]
+
+
+def test_reflection_schema_explains_event_time_and_episode_semantics(make):
+    engine, _ = make()
+    schema = engine._mutation_tool_schema({"sources": [{"ref": "raw:source", "role": "user"}]})
+    item = schema["$defs"]["ItemChange"]["properties"]
+    assert "Never copy the source message timestamp" in item["time_start"]["description"]
+    assert "Exact time phrase" in item["time_expression"]["description"]
+    assert "minimum episode is immutable" in item["kind"]["description"]
+
+
+def test_about_episode_link_is_filtered_without_dropping_grounded_nodes(make):
+    engine, _ = make(mode="raw")
+    engine.add(request("source", ["I am Maya and I attended a design meeting."]))
+    raw_ref = engine.store.raw("u")[0]["ref"]
+    episode_ref = engine.store.request("u", "source")["episode_ref"]
+    context = {"sources": engine.store.raw("u"), "items": {}, "memories": [], "new_refs": [raw_ref]}
+    mutation = prepare_mutation({
+        "items": [
+            {"ref": "new:meeting", "kind": "event", "text": "Maya attended a design meeting.", "source_refs": [raw_ref]},
+            {"ref": "new:maya", "kind": "person", "text": "Maya.", "source_refs": [raw_ref]},
+        ],
+        "links": [
+            {"from_ref": "new:meeting", "to_ref": "new:maya", "relation": "about", "source_refs": [raw_ref]},
+            {"from_ref": "new:meeting", "to_ref": episode_ref, "relation": "about", "source_refs": [raw_ref]},
+        ],
+        "forget": [],
+    }, user="u", request_id="followup", number=1, context=context, store=engine.store)
+    assert len(mutation["items"]) == 2
+    assert [row["relation"] for row in mutation["links"]] == ["about"]
+    assert mutation["filtered_links"][0]["reason"] == "about_requires_semantic_nodes"
 
 
 def graph(engine):
