@@ -1,6 +1,6 @@
 # AM-Link Add/Search 设计总览
 
-更新：2026-10-13，当前实现 **0.2.1，核心工程修复已实施，方法质量继续验证**。只提供 Add/Search，主办方负责 Answer/Eval；未部署或参加官方 Smoke。最新21个跨数据集锚点和三个定向复验见[扩展验证报告](./docs/doing/2026-10-13-amlink-expanded-validation.md)；100题完整重跑仍在进行。
+更新：2026-10-14，当前实现 **0.2.1，核心工程修复已实施，方法质量继续验证**。只提供 Add/Search，主办方负责 Answer/Eval；未部署或参加官方 Smoke。最新[100题重跑复核](./docs/doing/2026-10-14-amlink-100-rerun-review.md)显示128/145 Add、100/100 Search；Search BFS已实测，但Reflection尚未形成稳定Inspect/Backlink探索路径。
 
 入口：[实现与配置](./amlink/README.md)、[协议](./amlink/PROTOCOL.md)、[执行计划](./docs/phase-2/method-improvement-plan.md)。[0.2.0 核心审计](./docs/doing/2026-10-11-amlink-core-audit.md)保存失败基线；[0.2.1 修复与方法议题](./docs/doing/2026-10-11-amlink-core-repairs.md)记录本轮改变及验证。旧实验不自动变成新版本成绩。
 
@@ -69,7 +69,7 @@ flowchart TD
 
 本地总期限默认 **1740秒（29分钟）**，包含 Add 排队；单次模型等待最多120秒且受剩余总期限约束。不为空耗时而等待。触发后默认每批最多32条完整消息、约18000字符，最多64批；对整包工具定义、提示词、语境和原文按80000字符检查。单条消息本身无法容纳时显式失败，不通过截短全部原文假装完成。
 
-目前仍是**同用户锁内同步处理**，尚未实现计划中的“并发先追加、短窗口合并、单全局协调器”。延长期限不能代替吞吐验证。默认8条/6000字符以及现有更新关键词触发规则暂未调整；真实主实验曾过早触发，下一步需要改进触发的语义。2026-10-12 的100题基线还发现 Select 分页将全集位置误当页内位置，已改为页内位置并保留 `candidate_position` 观测；代码回归通过，真实复跑待网络恢复。
+目前仍是**同用户锁内同步处理**，尚未实现计划中的“并发先追加、短窗口合并、单全局协调器”。延长期限不能代替吞吐验证。默认8条/6000字符以及现有更新关键词触发规则暂未调整；真实主实验曾过早触发，下一步需要改进触发的语义。2026-10-12 的100题基线还发现 Select 分页将全集位置误当页内位置，已改为页内位置并保留 `candidate_position` 观测；代码回归通过，2026-10-13n 真实复跑已完成，结果与缺口见[100题重跑复核](./docs/doing/2026-10-14-amlink-100-rerun-review.md)。
 
 内部工具名 `reflection_search` 目前实际是 Query/Select；后续 Inspect/Backlink 由同一 Reflection loop 决策。这已补上探索能力，但还不是“一次调用完整复用标准 Search”的嵌套实现，需避免术语误导。
 
@@ -126,7 +126,7 @@ flowchart LR
 
 ## 验证与未完成事项
 
-确定性回归覆盖失败 Add 重放、分批与水位、完整消息预算、最低 episode 保护、派生节点嵌入、Select 分页/空集/顺序、Inspect/Backlink 交替、Workspace 保留和日期去重装箱；2026-10-13又覆盖Select页外位置、非法关系、自环/未知端点及错误根字段，当前60项通过。旧真实积压1445条在副本中用替身模型分48批消费完，最终代码最大模型输入74596字符；**这不是实际 Reflection 质量验证**。真实模型21个跨数据集锚点显示Search均完成，但Reflection未调用Inspect/Backlink，结构仍主要是episode/event；完整结果见[扩展验证报告](./docs/doing/2026-10-13-amlink-expanded-validation.md)。
+确定性回归覆盖失败 Add 重放、分批与水位、完整消息预算、最低 episode 保护、派生节点嵌入、Select 分页/空集/顺序、Inspect/Backlink 交替、Workspace 保留和日期去重装箱；2026-10-13又覆盖Select页外位置、非法关系、自环/未知端点及错误根字段，当前60项通过。旧真实积压1445条在副本中用替身模型分48批消费完，最终代码最大模型输入74596字符；**这不是实际 Reflection 质量验证**。真实模型21个跨数据集锚点和完整100题运行都显示：Search已使用Inspect/Backlink，Reflection仍主要直接Mutation/Stop；结构数量增加不等于来源归属和导航质量提高。完整结果见[10月14日重跑复核](./docs/doing/2026-10-14-amlink-100-rerun-review.md)和[扩展验证报告](./docs/doing/2026-10-13-amlink-expanded-validation.md)。
 
 待讨论：会话边界与容量触发如何支持更完整视角；跨批维护后再 Mutation 的粒度；人物身份复用和有来源的稀疏导航图；复杂问题的互补证据需求；长节点 Inspect 的进一步披露。当前预算投影可能隐藏重要内容，完整 Workspace 也尚无自动容量回收策略。
 

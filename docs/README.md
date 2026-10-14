@@ -1,6 +1,6 @@
 # 项目文档
 
-更新日期：2026-10-13。目标是让新会话快速恢复项目背景和决策依据；旧过程记录留在一期归档中。
+更新日期：2026-10-14。目标是让新会话快速恢复项目背景和决策依据；旧过程记录留在一期归档中。
 
 | 阅读顺序 | 文档 | 用途 |
 | --- | --- | --- |
@@ -20,7 +20,7 @@
 | 14 | [Answer 靶场与真实案例复核](./doing/2026-10-08-amlink-answer-research.md) | gpt-5.6-luna 诊断 Answer、逐题后验复核、Add/Search 真实失败位置 |
 | 15 | [AM-Link 二期方法改进计划](./phase-2/method-improvement-plan.md) | 结合 TinySoul、案例与当前实现的重构计划；每个 Add 先生成可检索最小 episode，工作区跨请求累积，Search/Reflection 分开 |
 
-最新状态先读[10月13日扩展真实链路验证](./doing/2026-10-13-amlink-expanded-validation.md)：21个跨数据集锚点完成，32/35 Add、21/21 Search，12道可评分题top-5找到24/27证据；但Reflection没有实际Inspect/Backlink，图仍主要是episode/event，完整多跳证据和跨批缓冲尚未验收。60项本地回归通过；最新100题完整修复版正在运行，不能把中断的20261012m当作完整结果。历史完整基线Add 68/145、Search 99/100及旧0.2.0审计分别见[100题诊断](./doing/2026-10-11-amlink-100-rerun-analysis.md)和[核心审计](./doing/2026-10-11-amlink-core-audit.md)。
+最新状态先读[10月14日100题重跑复核](./doing/2026-10-14-amlink-100-rerun-review.md)：完整修复版报告已生成，128/145 Add、100/100 Search；目标Add均成功的94道题上，top-5证据召回约55.3%、完整链约59.6%。Search实测338次Inspect、72次Backlink和787次Select，但Reflection的127次工具决策仍只有Mutation/Stop，没有形成稳定的先探索再整理路径。60项本地回归通过；跨数据集锚点和定向复验见[10月13日扩展验证](./doing/2026-10-13-amlink-expanded-validation.md)。历史完整基线Add 68/145、Search 99/100及旧0.2.0审计分别见[100题诊断](./doing/2026-10-11-amlink-100-rerun-analysis.md)和[核心审计](./doing/2026-10-11-amlink-core-audit.md)。
 
 `private/` 仅本机存在：包含已授权保存的 SSH 账号、服务器环境快照和模型 Key。公开文档只记录接入方法。
 
