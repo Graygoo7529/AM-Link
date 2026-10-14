@@ -22,4 +22,3 @@ build/
 *.local.md
 *.local.env
 reference/
-docs/report/
