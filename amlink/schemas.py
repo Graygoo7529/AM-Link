@@ -77,6 +77,10 @@ class ForgetChange(StrictModel):
 
 
 class Mutation(StrictModel):
+    basis: Literal["new_information", "update_existing", "resolve_conflict",
+                   "identify_person", "add_relation"] = "new_information"
+    inspected_refs: list[Text] = Field(default_factory=list, max_length=64)
+    no_prior_match: bool = False
     items: list[ItemChange] = Field(default_factory=list, max_length=128)
     links: list[LinkChange] = Field(default_factory=list, max_length=256)
     forget: list[ForgetChange] = Field(default_factory=list, max_length=16)

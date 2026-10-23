@@ -25,6 +25,14 @@ Never rewrite a minimal episode: it is the immutable verbatim source log. Build
 separate facts/events and reuse identified people/entities where useful. Read known
 references with reflection_inspect/reflection_backlinks when their contents or
 connections are needed before deciding a mutation; reflection_search discovers refs.
+Before reflection_mutation, set basis to one of new_information, update_existing,
+resolve_conflict, identify_person or add_relation. Updates, conflicts, identity
+decisions and relation changes must include refs actually inspected or followed with
+backlinks in inspected_refs. Include every existing item being changed and every
+existing endpoint of a changed relation; inspecting an unrelated ref is insufficient.
+For genuinely new information, use no_prior_match only
+after orientation found no matching old memory. The minimum episode is not a derived
+mutation and is never blocked by this rule.
 Do not infer an event date from a message timestamp. Set time_start/time_end only when
 the source text states an event date, and copy that exact time phrase into time_expression;
 otherwise leave all three time fields null. The source message timestamp remains provenance.
@@ -48,7 +56,8 @@ def _semantic_ref(user: str, request_id: str, number: int, label: str, kind: str
     return f"memory:{kind}-{clean}-{digest([user, request_id, number, label])[:10]}"
 
 
-def prepare_mutation(value, *, user, request_id, number, context, store):
+def parse_mutation(value):
+    """Validate tool output before either the exploration gate or mutation work."""
     filtered_fields = []
     if isinstance(value, dict):
         # Some tool providers occasionally place an ItemChange field at the
@@ -64,6 +73,11 @@ def prepare_mutation(value, *, user, request_id, number, context, store):
         mutation = Mutation.model_validate(value)
     except ValidationError:
         raise MemoryError("mutation_schema_invalid", 502) from None
+    return mutation, filtered_fields
+
+
+def prepare_mutation(value, *, user, request_id, number, context, store):
+    mutation, filtered_fields = parse_mutation(value)
     sources = {row["ref"]: row for row in context["sources"]}
     old = {row["ref"]: row for row in context.get("items", {}).values()}
     old.update({row["ref"]: row for row in context.get("memories", [])})

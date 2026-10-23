@@ -12,7 +12,7 @@ AM-Link 只提供官方要求的 Add/Search，Search 返回证据，不生成最
 - Add 可以先停在 `WorkingMemory`。达到条数/字符阈值、出现更新/遗忘信号或会话切换时，Reflection 才消费这一批工作记忆；同一用户的 Reflection 按水位串行。
 - Reflection 的 context 由本批完整 WorkingMemory、持续保留的旧结构化节点和来源组成。模型可以 Query/Select（工具名 `reflection_search`）、Inspect、Backlink、Evict、Mutation 或真正 no-op；提交后保留Workspace，推进实际消费的批次水位。最低episode不可摘要覆盖，全部改变节点均同步嵌入。
 - 标准 Search 每次创建独立语境，只检索结构化 `MemoryItem`（包括最小 episode），不读取 WorkingMemory，也不与 Reflection 共用 loop。Query 是 BM25+embedding（复杂问题可先做查询扩展），多个分支合并后统一 `select`；之后由模型决定 Inspect、Backlink 或停止，按深度/节点/邻居预算进行 BFS。
-- `select` 同时筛选排序，不另设 `rerank`；输入仅question与自包含References，按大小分页后对保留候选统一精炼。最终装箱保留该顺序、去重来源正文并输出日期；图新增候选目前追加在后，尚无最终证据闭包选择。
+- `select` 同时筛选排序，不另设 `rerank`；输入仅question与自包含References，按大小分页后对保留候选统一精炼。Reference 预览保留互补来源片段、shown range 和省略原因；最终装箱按同一顺序做确定性证据闭合，逐来源记录 evidence units 和裁剪原因。受限 LLM 装箱只作为后续离线对照，不进入默认链路。
 - 模型调用只尝试一次；依赖失败显式返回错误，不伪装为成功。官方调用方负责约定内重试。
 
 默认本地总期限1740秒（Add含排队）、模型单次超时120秒、整包模型输入80000字符；Reflection每批最多32条完整消息/18000字符、最多64批。Select每页最多24候选。默认8条/6000字符的触发阈值尚待方法校准；完整并发追加协调器未实现，当前仍采用同用户锁。配置示例见[.env.example](./.env.example)。原0.2.0实验数据库不会自动修复或重建。
@@ -21,14 +21,16 @@ AM-Link 只提供官方要求的 Add/Search，Search 返回证据，不生成最
 
 ```powershell
 .\.venv\Scripts\python.exe -m py_compile (Get-ChildItem amlink -Filter *.py)
-.\.venv\Scripts\python.exe -m pytest -q benchmark/tests
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
-重构实现的本地回归也可运行：
+在仓库根目录运行。根 `pytest.ini` 默认收集当前方法、靶场、数据层和可视化测试；只检查方法与靶场也可运行：
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q amlink/tests benchmark/tests
 ```
+
+根 `conftest.py` 为每次运行分配 `amlink/data/pytest-tmp/run-<唯一编号>/`，用于 `tmp_path`、测试数据库和 `.owner` 锁文件；缓存写入 `amlink/data/pytest-cache/`，均由现有 `data/` 规则忽略。独立目录避免并行测试互相清空，旧产物可按需清理，不能存放研究数据库。仍允许显式 `--basetemp`；若指定新路径，须先创建父目录，且 pytest 会清空该目录。不要再创建根目录 `.tmp-phase2-*`。标准库 `TemporaryDirectory` 仍使用系统临时目录。
 
 需要真实模型时，使用被忽略的 `AML2_*` 环境变量，并通过靶场的
 `--factory amlink.native:factory` 运行；不要把密钥写入代码、观测或报告。

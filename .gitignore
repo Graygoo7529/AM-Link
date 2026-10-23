@@ -13,6 +13,13 @@ build/
 *.sqlite
 *.sqlite3
 *.sqlite3-*
+# Store ownership locks belong next to ignored databases.
+*.db.owner
+*.sqlite.owner
+*.sqlite3.owner
+# Legacy pytest output roots; new tests use amlink/data/ via pytest.ini.
+/.tmp-phase2-*/
+/pytest-tmp/
 .env
 .env.*
 !.env.example

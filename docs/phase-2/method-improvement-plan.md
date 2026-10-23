@@ -1,7 +1,7 @@
 # AM-Link 二期重构设计与执行计划
 
 状态：0.2.1 核心工程修复已实施；方法质量、并发协调器和完整设计验收继续推进。官方 Smoke/部署尚未验证。
-更新日期：2026-10-14。
+更新日期：2026-10-16。
 
 **状态边界：**以下对象语义、协调器流程和验收条件包含已确认目标，不代表当前代码全部具备。[核心审计](../doing/2026-10-11-amlink-core-audit.md)保存0.2.0失败基线；[修复报告](../doing/2026-10-11-amlink-core-repairs.md)记录0.2.1的分批/预算、逐请求完成、episode保护、持续Workspace、Reflection图操作、Select分页及有序装箱修复。完整并发追加协调器、整理时机与有用语义图仍未验收；不能恢复原先步骤1–6全部done的说法。
 
@@ -441,3 +441,38 @@ WorkingMemory 跨多次 Add 积累，以更大的语境支持全局 Reflection�
 ## 2026-10-14 100题重跑复核
 
 完整修复版报告已生成。Add 128/145、Search 100/100；在目标Add均成功的94道题上，top-5证据召回约55.3%、完整链约59.6%，没有证明方法质量提升。Search真实执行338次Inspect、72次Backlink、787次Select；Reflection的127次工具决策仍只有Mutation/Stop。详情见[100题重跑复核](../doing/2026-10-14-amlink-100-rerun-review.md)。下一步优先做Reference互补片段、Reflection先看再写和受限最终装箱对照。
+
+## 2026-10-15 证据链修复实施
+
+已按上一节的真实缺陷完成第一版本地实现，详细记录见[证据链修复记录](../doing/2026-10-15-evidence-chain-repair.md)。当前边界是：
+
+- Reference/Select：最小 episode 可以按查询分支展示多个互补来源片段，片段保留来源、角色、序号、时间、`shown_range` 和省略原因；多页 Select 合并不再抹掉片段对象和覆盖信息；
+- Reflection：orientation 仍是每个整理批次的有界 Query。内部 Mutation tool 增加 `basis`、`inspected_refs`、`no_prior_match`；更新、冲突、人物身份和关系变更若没有当前 Workspace 的 Inspect/Backlink 依据，会记录 `reflection_orientation_required` 并继续工具循环；纯新信息可声明无旧匹配；
+- 最终装箱：默认仍为确定性过程，但已为逐来源 EvidenceUnit 记录完整/片段范围、闭合状态和省略原因。受限 LLM 装箱暂不进入默认 Search，只做离线对照。
+
+本地 `amlink/tests benchmark/tests` 共64项通过，`py_compile`通过。以上是工程和观测层结果，尚未证明真实模型会主动执行 Reflection 图探索，也尚未证明100题召回或完整链改善；下一步先做困难切片真实复验，再扩大规模。
+
+## 2026-10-16 三项改进核对与验证
+
+| 改进点 | 当前结论 | 证据 |
+| --- | --- | --- |
+| Reference 片段覆盖和覆盖账本 | 已实现；账本继续传递到模型最终语境投影 | complementary_passages 记录来源、范围、字符数和原因；model_projection 记录原文/实际展示字符数及完整性；64项回归通过 |
+| Reflection 风险类型门槛和旧记忆探索记录 | 已实现为确定性门槛；真实模型是否会响应门槛仍未证实 | basis、inspected_refs、no_prior_match 校验；orientation、Inspect/Backlink 和拒绝原因均有观测 |
+| 确定性 EvidenceUnit 闭合装箱 | 已实现并在无模型切片核验 | l4 本地切片 5/5 Add、1/1 Search；top-5 recall、hit、chain coverage 均为1.0，5张卡均 complete，无 omitted/partial；同日 l2、l1、b2 也分别完成 1/1、2/2、1/1 的 Add，来源单元均完整装入 |
+
+上述切片均使用原文模式并关闭 embedding、Search Select 和 Reflection 模型，因此只证明确定性 Query/Inspect/Backlink 观测、覆盖账本和 EvidenceUnit 装箱契约；不能据此宣称语义召回、模型 Select 或 Reflection 图质量已经改善。l4 的 @1 召回为 0.429、l1 的 @1 召回为 0.5，而两者 @5 均完整，说明窄候选预算下仍有首位排序问题；b2 没有 gold evidence，只用于验证冲突切片的运行和闭合记录。四个运行均已写入可视化索引。
+
+10月16日同切片的真实模型运行由本地调用器报告 provider_network 而失败，不能把失败 Add 或空 Search 当作方法指标，也不能据此认定供应商故障。10月20日最小探测已定位到本机 socket 权限阻断（WinError 10013），服务可用性仍待在允许联网的环境核验，见[模型接入经验](../operations/models.md)。下一阶段应在执行环境能够成功调用模型后先复跑同一 l4 切片，再扩展到时间、冲突、多跳和集合题；比较模型实际看到的覆盖、门槛触发后的图探索、关系质量和最终闭合链。
+
+## 2026-10-23 提交边界与下一步
+
+提交前审查发现三项改进仍有确定性边界缺陷，已修复并用100项联合回归验证：最终装箱不再受预览的4来源上限限制；账本记录来源复用和不可用状态；风险门槛逐项检查已有变更目标，而非接受任意一次探索。工具参数先经过结构校验，避免门槛检查直接抛出 TypeError。测试产物统一进入已忽略的 `amlink/data/`。见[提交前检查](../doing/2026-10-23-commit-readiness.md)。
+
+本轮可提交为工程检查点，不作为方法质量验收。下一步按以下顺序推进：
+
+1. **可见范围**：同一长来源中的多个分支命中仍可能只保留一处；模型语境二次裁剪只有长度/完整性标记，尚需把实际展示范围映射回原文，并在实际可见引用集合上生成工具参数。
+2. **探索充分性**：已有目标的逐项门槛已实施；新人物、新关系的旧身份查找和相关来源依据仍需案例验证。`no_prior_match` 只是声明，不能单凭声明证明没有旧记忆。
+3. **证据组合**：当前 complete 只说明声明来源的展示完整；不保证完整回答链。停止后的 Query 候选与图新增候选尚无统一的最终语义组合。受限 LLM 只选 EvidenceUnit 编号与顺序的离线对照仍待实施。
+4. **缓冲整理**：继续保留跨批 Workspace、完整会话与触发粒度的研究，不通过每次 Add 都 Mutation 来替代缓冲设计。
+
+先用构造反例验证丢失范围、目标门槛和卡片预算，再在联网可用时恢复 L04/时间/冲突/多跳切片与20题均衡对照；没有新的实测依据前不扩大声称效果。

@@ -8,9 +8,9 @@ import time
 from pydantic import ValidationError
 
 from .errors import MemoryError
-from .evidence import episode_label, episode_text, passages, slug, source_date
+from .evidence import complementary_passages, episode_label, episode_text, passages, slug, source_date
 from .providers import tool_body
-from .reflection import prepare_mutation, prompt
+from .reflection import parse_mutation, prepare_mutation, prompt
 from .schemas import AddRequest, BfsAction, EvictAction, Mutation, QueryExpansion, SearchRequest, Selection
 from .text import CHANGE, COMPLEX, FORGET, digest, dumps, excerpt, terms
 
@@ -88,6 +88,20 @@ class Engine:
             if not reference and ref in items:
                 reference = self._reference(items[ref], result["question"], "context")
             reference["narrative"] = excerpt(str(reference.get("narrative", "")), 700, result["question"])
+            if isinstance(reference.get("evidence_fragments"), list):
+                projected_fragments = []
+                for fragment in reference["evidence_fragments"][:4]:
+                    value = dict(fragment)
+                    original_text = str(value.get("text", ""))
+                    projected_text = excerpt(original_text, 520, result["question"])
+                    value["text"] = projected_text
+                    value["model_projection"] = {
+                        "source_text_chars": len(original_text),
+                        "shown_chars": len(projected_text),
+                        "complete": projected_text == original_text,
+                    }
+                    projected_fragments.append(value)
+                reference["evidence_fragments"] = projected_fragments
             result["references"][ref] = reference
             if ref in items:
                 result["items"][ref] = self._model_row(items[ref], result["question"], 2400)
@@ -118,8 +132,16 @@ class Engine:
         projection = {"omitted_refs": omitted, "source_count": len(context.get("sources", [])),
                       "shown_source_count": len(result["sources"]), "reason": "context_budget"}
         result["projection"] = projection
+        if context.get("orientation_refs") or context.get("last_gate_error"):
+            result["reflection_control"] = {
+                "orientation_refs": list(context.get("orientation_refs", []))[:64],
+                "last_gate_error": context.get("last_gate_error"),
+                "instruction": "Risky mutations require Inspect or Backlink evidence in inspected_refs.",
+            }
         if len(dumps(result)) > limit:
             result["projection"] = {"omitted_ref_count": len(omitted), "reason": "context_budget"}
+        if len(dumps(result)) > limit:
+            result.pop("reflection_control", None)
         if len(dumps(result)) > limit:
             return {}
         return result
@@ -252,6 +274,18 @@ class Engine:
                        for row in context.get("sources", []))
             ]
             forget["instruction_refs"]["items"] = {"type": "string", "enum": instruction_refs}
+        properties = schema.setdefault("properties", {})
+        properties["basis"] = {
+            "type": "string",
+            "enum": ["new_information", "update_existing", "resolve_conflict",
+                      "identify_person", "add_relation"],
+            "description": "Updates, conflicts, person identity and relation changes require a prior Inspect or Backlink."}
+        properties["inspected_refs"] = {
+            "type": "array", "items": {"type": "string"}, "maxItems": 64,
+            "description": "Exact loaded memory refs examined before this mutation."}
+        properties["no_prior_match"] = {
+            "type": "boolean",
+            "description": "True only when orientation found no old match for genuinely new information."}
         return schema
 
     def _ensure_episode(self, request, row, raw_refs, started):
@@ -379,8 +413,22 @@ class Engine:
                 continue
             if name == "reflection_mutation":
                 with self.observer.span("reflection", "reflection mutation validate", inputs=arguments) as event:
+                    try:
+                        self._check_reflection_basis(arguments, context)
+                    except MemoryError as error:
+                        if error.code != "reflection_orientation_required":
+                            raise
+                        context["last_gate_error"] = error.code
+                        self.observer.output(event, {"accepted": False, "reason": error.code,
+                                                     "required": "Inspect or Backlink before this mutation"}, kind="context",
+                                            title="Reflection 先看再写门槛")
+                        self.store.save_workspace(user, state="maintenance", context=context)
+                        continue
                     prepared = prepare_mutation(arguments, user=user, request_id=request.request_id, number=watermark,
                                                 context=context, store=self.store)
+                    self.observer.output(event, {"basis": arguments.get("basis", "new_information"),
+                                                 "inspected_refs": arguments.get("inspected_refs", []),
+                                                 "accepted": True}, kind="context", title="Reflection 先看再写门槛")
                     self.observer.output(event, prepared, kind="memory", title="Reflection Mutation 校验结果")
                 self.store.save_workspace(user, state="mutation", context=context)
                 self._commit_reflection(user, prepared, watermark, deadline, context)
@@ -408,7 +456,7 @@ class Engine:
             # Retain navigation and old/new items, not the completed raw batch.
             for item in prepared["items"]:
                 retained.setdefault("items", {})[item["ref"]] = item
-                retained.setdefault("references", {})[item["ref"]] = self._reference(item, "", "mutation")
+                retained.setdefault("references", {})[item["ref"]] = self._reference(item, "", "mutation", user)
             retained["new_refs"] = []
             retained["sources"] = []
             retained["memories"] = list(retained.get("items", {}).values())
@@ -427,17 +475,60 @@ class Engine:
         context["new_refs"] = [row["ref"] for row in pending]
         context["depths"], context["explored"], context["expanded_refs"] = {}, [], []
         self._refresh_context(user, context, pending)
-        refs = self._search_refs(user, query, context, deadline, mode="reflection")
+        with self.observer.span("reflection", "reflection orientation", inputs={
+                "question": query, "pending_refs": context["new_refs"]}) as event:
+            refs = self._search_refs(user, query, context, deadline, mode="reflection")
+            self.observer.output(event, {"references": [row["ref"] for row in refs],
+                                         "count": len(refs), "orientation_only": True}, kind="context",
+                                title="Reflection Orientation 旧记忆候选")
         self._add_context_refs(user, context, refs[:self.config.old_candidates], deadline)
+        context["orientation_refs"] = [row["ref"] for row in refs[:self.config.old_candidates]]
         for ref in context["references"]:
             context["depths"].setdefault(ref, 0)
         return context
 
-    def _reference(self, row, query, via):
+    @staticmethod
+    def _check_reflection_basis(arguments, context):
+        """Require graph evidence before risky derived mutations."""
+        mutation, _ = parse_mutation(arguments)
+        known = set(context.get("items", {})) | set(context.get("references", {}))
+        targets = {item.ref for item in mutation.items if item.ref in known}
+        targets.update(ref for link in mutation.links for ref in (link.from_ref, link.to_ref)
+                       if ref in known)
+        risky = mutation.basis != "new_information" or bool(mutation.links) or bool(targets)
+        risky = risky or any(item.kind == "person" for item in mutation.items)
+        inspected = set(mutation.inspected_refs)
+        explored = {tuple(entry) for entry in context.get("explored", [])}
+        actual = {ref for ref, action in explored if action in {"inspect", "backlinks"}}
+        # Reading an unrelated node cannot authorize changes to old targets.
+        # A new_information label/no_prior_match never bypasses a payload risk.
+        if risky and (not (inspected & actual) or not targets.issubset(inspected & actual)):
+            raise MemoryError("reflection_orientation_required", 409)
+
+    def _reference(self, row, query, via, user=None):
         label = excerpt(re.sub(r"\[[^\]\n]*\]", "", row["text"]).strip(), 140, query)
-        return {"ref": row["ref"], "kind": row["kind"], "label": label,
+        reference = {"ref": row["ref"], "kind": row["kind"], "label": label,
                 "narrative": f"{via} 命中 {row['kind']} {row['ref']}：{excerpt(row['text'], self.config.preview_chars, query)}",
                 "source_refs": row.get("source_refs", []), "status": row.get("status", "active")}
+        fragments = row.get("reference_fragments")
+        coverage = row.get("reference_coverage")
+        if user and row["kind"] == "episode" and self.store.is_minimum_episode(user, row["ref"]):
+            sources = self.store.raw(user, row.get("source_refs", []))
+            branches = [query] + [str(entry.get("branch", "")) for entry in row.get("lineage", [])
+                                  if isinstance(entry, dict) and entry.get("branch")]
+            fragments, coverage = complementary_passages(sources, branches[:4],
+                                                         min(2400, max(500, self.config.preview_chars * 2)),
+                                                         max_fragments=4)
+        if fragments:
+            reference["evidence_fragments"] = fragments
+        if coverage:
+            reference["coverage"] = coverage
+            reference["shown_ranges"] = [range_value
+                                          for entry in coverage if entry.get("included")
+                                          for range_value in (entry.get("shown_ranges") or
+                                                              ([entry["shown_range"]]
+                                                               if entry.get("shown_range") else []))]
+        return reference
 
     def _add_context_refs(self, user, context, refs, deadline):
         # Higher-ranked candidates are loaded last so recency projection keeps
@@ -446,7 +537,7 @@ class Engine:
             if not row or row["ref"].startswith("raw:"):
                 continue
             context.setdefault("question", "")
-            context.setdefault("references", {})[row["ref"]] = self._reference(row, context.get("question", ""), row.get("via", "inspect"))
+            context.setdefault("references", {})[row["ref"]] = self._reference(row, context.get("question", ""), row.get("via", "inspect"), user)
             context.setdefault("items", {})[row["ref"]] = self._view(row)
             if self.store.get(user, row["ref"]):
                 for source_ref in row.get("source_refs", []):
@@ -479,7 +570,7 @@ class Engine:
         for ref in context.get("references", {}):
             node = self.store.get(user, ref)
             if node:
-                refs[ref] = self._reference(node, context.get("question", ""), "context")
+                refs[ref] = self._reference(node, context.get("question", ""), "context", user)
         context["references"] = refs
         sources = {row["ref"]: self._view(row) for row in pending}
         for item in items.values():
@@ -541,14 +632,14 @@ class Engine:
         merged = sorted(candidates.values(), key=lambda row: (-row["score"], row["ref"]))
         result = merged[:self.config.candidate_limit]
         with self.observer.span("retrieve", "query.merge", inputs={"query": query, "branches": branches}) as event:
-            self.observer.output(event, {"references": [self._reference(row, query, "query") for row in result],
+            self.observer.output(event, {"references": [self._reference(row, query, "query", user) for row in result],
                 "lineage": {row["ref"]: row.get("lineage", []) for row in result},
                 "discarded": [{"ref": row["ref"], "reason": "candidate_budget"} for row in merged[self.config.candidate_limit:]]},
                 kind="result", title="Query 分支合并和候选预算")
         if len(result) > self.config.seed_count * 2 and self.config.mode == "graph" and self.config.search_model:
             result = self._select_refs(user, query, result, context, deadline, reason="query")
         with self.observer.span("retrieve", "query.result", inputs={"query": query}) as event:
-            self.observer.output(event, {"references": [self._reference(row, query, "query") for row in result]}, kind="result")
+            self.observer.output(event, {"references": [self._reference(row, query, "query", user) for row in result]}, kind="result")
         return result
 
     def _select_refs(self, user, query, candidates, context, deadline, *, reason):
@@ -587,7 +678,7 @@ class Engine:
         def payload(rows, size, *, compact=False):
             previews = []
             for index, row in enumerate(rows):
-                reference = self._reference(row, query, reason)
+                reference = self._reference(row, query, reason, user)
                 narrative = excerpt(row["text"], size, query)
                 coverage = "full" if len(row["text"]) <= size else "excerpt"
                 branches = [query]
@@ -607,13 +698,21 @@ class Engine:
                                 "complete": all(entry["included"] and entry.get("complete") for entry in source_coverage),
                                 "omitted_count": sum(not entry["included"] for entry in source_coverage)}
                     for branch in branches:
-                        fragment, branch_coverage = passages(sources, branch, branch_size)
-                        hit_fragments.append({"query": excerpt(branch, 160),
-                            "text": fragment or excerpt(row["text"], branch_size, branch),
-                            "coverage": {"source_count": len(branch_coverage),
-                                "shown_source_count": sum(entry["included"] for entry in branch_coverage),
-                                "complete_count": sum(entry.get("complete", False) for entry in branch_coverage),
-                                "omitted_count": sum(not entry["included"] for entry in branch_coverage)}})
+                        branch_fragments, branch_coverage = complementary_passages(
+                            sources, [branch], branch_size, max_fragments=2)
+                        if branch_fragments:
+                            hit_fragments.extend(branch_fragments)
+                        else:
+                            hit_fragments.append({"query": excerpt(branch, 160),
+                                "text": excerpt(row["text"], branch_size, branch),
+                                "coverage": {"source_count": len(branch_coverage),
+                                    "shown_source_count": sum(entry["included"] for entry in branch_coverage),
+                                    "complete_count": sum(entry.get("complete", False) for entry in branch_coverage),
+                                    "omitted_count": sum(not entry["included"] for entry in branch_coverage)}})
+                    coverage["shown_ranges"] = [entry["shown_range"]
+                                                 for fragment in hit_fragments
+                                                 for entry in [{"shown_range": fragment.get("shown_range")}]
+                                                 if fragment.get("shown_range")]
                     if not narrative:
                         narrative = excerpt(row["text"], size, query)
                 else:
@@ -626,12 +725,19 @@ class Engine:
                     # branch metadata and per-fragment coverage tables. Keep
                     # semantic refs and evidence text; the full page inputs and
                     # candidate lineage remain in the observation artifacts.
-                    fragments = list(dict.fromkeys(fragment["text"] for fragment in hit_fragments
-                                                   if fragment["text"] != narrative))
+                    fragments = []
+                    seen_fragments = set()
+                    for fragment in hit_fragments:
+                        value = fragment if isinstance(fragment, dict) else {"text": fragment}
+                        text = value.get("text")
+                        if text and text != narrative and text not in seen_fragments:
+                            seen_fragments.add(text)
+                            fragments.append(value)
                     previews.append({"position": index, "ref": row["ref"], "kind": row["kind"],
                         "label": excerpt(reference["label"], min(80, size)),
                         "narrative": narrative, "hit_fragments": fragments,
-                        "coverage": "partial excerpts; full source is available through Inspect",
+                        "coverage": coverage,
+                        "shown_ranges": coverage.get("shown_ranges", []) if isinstance(coverage, dict) else [],
                         "time_expression": row.get("time_expression"),
                         "time_start": row.get("time_start"), "time_end": row.get("time_end")})
                     continue
@@ -746,7 +852,7 @@ class Engine:
                    "frontier": [], "depths": {}, "explored": [], "expanded_refs": []}
         candidates = self._search_refs(request.user_id, request.query, context, deadline)
         for row in candidates:
-            context["references"][row["ref"]] = self._reference(row, request.query, "query")
+            context["references"][row["ref"]] = self._reference(row, request.query, "query", request.user_id)
             context["depths"][row["ref"]] = 0
         pool = {row["ref"]: row for row in candidates}
         for step in range(self.config.search_steps):
@@ -818,7 +924,7 @@ class Engine:
                 continue
             if other not in context["references"]:
                 context["expanded_refs"].append(other)
-            context["references"][other] = self._reference(node, query, node["via"])
+            context["references"][other] = self._reference(node, query, node["via"], user)
             context["depths"][other] = min(context["depths"].get(other, depth + 1), depth + 1)
             admitted.append(node)
         with self.observer.span("retrieve", "graph context update", inputs={"ref": ref, "action": action, "depth": depth}) as event:
@@ -869,7 +975,7 @@ class Engine:
                 self.observer.output(event, {"ref": ref, "available": False}, kind="result", title="Inspect 空结果")
                 return None
             links = self.store.edges(user, ref)
-            value = {"reference": self._reference(node, "", "inspect"), "node": self._view(node), "links": links, "source_refs": node["source_refs"]}
+            value = {"reference": self._reference(node, "", "inspect", user), "node": self._view(node), "links": links, "source_refs": node["source_refs"]}
             self.observer.output(event, value, kind="context", title="Inspect Item 与正向 References")
             return value
 
@@ -881,14 +987,17 @@ class Engine:
                 other = edge["from_ref"] if edge["to_ref"] == ref else edge["to_ref"]
                 node = self.store.get(user, other)
                 if node:
-                    values.append({"reference": self._reference(node, "", "backlink"), "edge": edge})
+                    values.append({"reference": self._reference(node, "", "backlink", user), "edge": edge})
             self.observer.output(event, values, kind="context", title="Backlink 反向 References")
             return links
 
     def _assemble(self, user, query, rows, top_k, preferred_query):
         result, used_sources, total, decisions = [], {}, 0, []
         # Incoming order is authoritative: Query fusion or final Select order.
-        # Retrieval scores remain in trace artifacts, not a second sorter.
+        # Retrieval scores remain in trace artifacts, not a second sorter. The
+        # source coverage below is the deterministic evidence-closure pass: a
+        # selected item keeps complementary source fragments and records every
+        # omitted source instead of silently collapsing to one large excerpt.
         for index, row in enumerate(rows):
             decision = {"ref": row["ref"], "candidate_order": index, "included": False}
             decisions.append(decision)
@@ -908,8 +1017,9 @@ class Engine:
             remaining = self.config.context_chars - total
             slots = min(top_k - len(result), len(rows) - index, max(1, remaining // 800))
             budget = min(self.config.result_chars, remaining // max(1, slots))
-            sources = [self.store.get(user, ref) for ref in node.get("source_refs", [])]
-            sources = sorted((source for source in sources if source), key=lambda source: source["ordinal"])
+            source_refs = list(dict.fromkeys(node.get("source_refs", [])))
+            available_sources = {ref: self.store.get(user, ref) for ref in source_refs}
+            sources = sorted((source for source in available_sources.values() if source), key=lambda source: source["ordinal"])
             sessions = list(dict.fromkeys(source["session_id"] for source in sources))
             header = f"[{node['kind']}][{node['ref']}][status={node['status']}]"
             dates = {key: node[key] for key in ("time_expression", "time_start", "time_end") if node.get(key)}
@@ -943,7 +1053,28 @@ class Engine:
             if repeated:
                 parts.append("来源原文已在前面的证据中展示：" + ", ".join(dict.fromkeys(used_sources[ref] for ref in repeated)))
             source_budget = budget - len("\n".join(parts)) - 1
-            content, coverage = passages([source for source in sources if source["ref"] not in used_sources], query, max(0, source_budget))
+            remaining_sources = [source for source in sources if source["ref"] not in used_sources]
+            content, coverage = passages(remaining_sources, query, max(0, source_budget))
+            if minimum and remaining_sources and not all(entry.get("complete") for entry in coverage):
+                # Plan evidence closure before rendering a card: expose
+                # complementary source fragments with explicit ranges so one
+                # long source cannot consume the whole card and hide the other
+                # messages that make the episode answerable.
+                content_fragments, coverage = complementary_passages(
+                    remaining_sources, [query, preferred_query], max(0, source_budget),
+                    max_fragments=len(remaining_sources))
+                content = "\n".join(fragment["text"] for fragment in content_fragments)
+            source_coverage = {entry["ref"]: entry for entry in coverage}
+            for ref in source_refs:
+                source = available_sources[ref]
+                if source is None:
+                    source_coverage[ref] = {"ref": ref, "included": False, "complete": False,
+                                            "reason": "source_unavailable"}
+                elif ref in used_sources:
+                    source_coverage[ref] = {"ref": ref, "included": True, "complete": True,
+                                            "shown_range": [0, len(source["text"])],
+                                            "reused_from": used_sources[ref], "reason": "deduplicated_source"}
+            coverage = [source_coverage[ref] for ref in source_refs]
             if content:
                 parts.append(content)
             if minimum and not content and not repeated:
@@ -970,14 +1101,37 @@ class Engine:
                            "score": round(1 / (len(result) + 1), 8), "created_at": node["created_at"]})
             total += len(content)
             for entry in coverage:
-                if entry["included"] and entry.get("complete"):
+                if entry["included"] and entry.get("complete") and not entry.get("reused_from"):
                     used_sources[entry["ref"]] = node["ref"]
             decision.update(included=True, reason="packed", chars=len(content), budget=budget,
                             source_coverage=coverage, deduplicated_sources=repeated,
                             relation_coverage=relation_coverage,
+                            evidence_units=[{"source_ref": entry["ref"],
+                                             "included": entry["included"],
+                                             "complete": entry.get("complete", False),
+                                             "shown_range": entry.get("shown_range") or (entry.get("shown_ranges") or [None])[0],
+                                             "shown_ranges": entry.get("shown_ranges", []),
+                                             "reused_from": entry.get("reused_from"),
+                                             "reason": entry.get("reason")}
+                                            for entry in coverage],
+                            closure=("complete" if coverage and all(entry["included"] and entry.get("complete", False)
+                                                                    for entry in coverage) else "partial"),
                             body_replaced_by_sources=minimum)
         with self.observer.span("context", "evidence packing decisions", inputs={"top_k": top_k, "context_chars": self.config.context_chars}) as event:
-            self.observer.output(event, {"decisions": decisions, "output_chars": total}, kind="context")
+            self.observer.output(event, {
+                "decisions": decisions,
+                "output_chars": total,
+                "closure": {
+                    "packed_refs": [decision["ref"] for decision in decisions if decision.get("included")],
+                    "omitted_refs": [{"ref": decision["ref"], "reason": decision.get("reason")}
+                                     for decision in decisions if not decision.get("included")],
+                    "partial_source_units": [
+                        {"ref": decision["ref"], "source_ref": unit["source_ref"], "reason": unit["reason"]}
+                        for decision in decisions for unit in decision.get("evidence_units", [])
+                        if unit.get("included") is False or unit.get("complete") is False
+                    ],
+                },
+            }, kind="context")
         return result
 
 

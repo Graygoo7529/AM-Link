@@ -22,6 +22,7 @@
 - 根 `.venv\Scripts\python.exe` 是 Python 3.13.14，源自 `C:\Anaconda3\envs\common`；一期要求 Python 3.10+。归档后 editable 安装已指向 `archive/phase-1/src`。
 - 安装：根目录执行 `.\.venv\Scripts\python.exe -m pip install -e "./archive/phase-1[dev]"`。
 - 测试：在 `archive/phase-1` 执行 `..\..\.venv\Scripts\python.exe -m pytest -q --basetemp B:\tmp\aml-phase1-pytest`。此临时目录专供 pytest，勿存放其他文件。
+- 当前二期测试：在根目录执行 `.\.venv\Scripts\python.exe -m pytest -q`。根 `pytest.ini` / `conftest.py` 将临时库放在已忽略的 `amlink/data/pytest-tmp/run-<唯一编号>/`，缓存放在 `amlink/data/pytest-cache/`；独立运行不共享临时库，不能在其中存研究数据。显式 `--basetemp` 仍优先，须先建父目录并注意 pytest 会清空指定目录；不要再创建根目录 `.tmp-phase2-*`。已被 Git 跟踪的历史测试产物需单独取消跟踪，ignore 不会自动移除它们。
 - 本地禁止安装和使用 Docker；确需构建时使用 GitHub Actions 或服务器。旧 workflow 已随一期归档，根目录目前没有自动 CI。
 - 当前环境若 Git 提示 dubious ownership，使用单次参数 `git -c safe.directory=B:/WorkSpace/AM-Link ...`；不要为此改全局信任设置。
 

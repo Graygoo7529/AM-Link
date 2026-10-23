@@ -18,7 +18,17 @@
 
 本次确认本地到提供方的网络、现存 Key 和最小调用可用；未测试并发容量、记忆质量或服务器侧模型调用，未查询余额及实际账单。模型名称为提供方自报，二期合规边界仍以正式核验为准。
 
-## 一期调用方式
+## 2026-10-20 二期调用路径与网络阻断核验
+
+重新读取 `AGENTS.md` 和私有配置：`OPENAI_API_KEY`、`ZHIPU_API_KEY` 均为非空且无空白、非占位值；两个 HTTPS 地址与上表一致。此检查不代表 Key 尚未过期或具备模型权限。当前终端进程没有 `AML2_LLM_API_KEY` / `AML2_EMBEDDING_API_KEY`；`Config.from_env()` 只读取 `AML2_*`，不会自动加载一期配置。
+
+本次在单独探测进程内显式将上述两个 Key 和对应 base URL 传入二期 `Config`，没有改动环境文件。使用真实 `Providers.tool()` / `Providers.embed()`：LLM 要求 `tool_choice=required`、`parallel_tool_calls=false`，调用测试工具返回 `ok=true`；embedding 输入一条合成短句，要求 512 维。两者均为 Bearer 鉴权、HTTPX 传输、无内部重试；没有发送数据集内容。
+
+北京时间 11:27 的两次请求均在建立连接时失败：LLM 45 ms，embedding 22 ms；底层异常链均为 `ConnectError → PermissionError(errno=13, winerror=10013)`。尚未收到 HTTP 响应，无法判断 Key、模型服务或 tool calling 是否可用。此前探测只保留 `provider_network` / `ConnectError`，不能据此归因于供应商故障。本次申请网络限制外复核时，自动审批检查超时，命令没有执行。
+
+后续应在允许外网连接的执行环境使用同一调用器再次核验；不把本地 socket 权限失败计入方法质量，也不要求更换 Key。
+
+## 一期调用方式（历史）
 
 一期使用 HTTPX 直接发送兼容请求，不使用 pi SDK，也不要求安装 OpenAI SDK。两种模型分别启用：`AML_LLM_ENABLED=true`、`AML_EMBEDDING_ENABLED=true`；`AML_ENRICHMENT_MODE=sync`。配置模板在 [归档 .env.example](../../archive/phase-1/.env.example)，模板和旧默认值不是二期推荐值。
 

@@ -1,6 +1,6 @@
 # AM-Link Add/Search 设计总览
 
-更新：2026-10-14，当前实现 **0.2.1，核心工程修复已实施，方法质量继续验证**。只提供 Add/Search，主办方负责 Answer/Eval；未部署或参加官方 Smoke。最新[100题重跑复核](./docs/doing/2026-10-14-amlink-100-rerun-review.md)显示128/145 Add、100/100 Search；Search BFS已实测，但Reflection尚未形成稳定Inspect/Backlink探索路径。
+更新：2026-10-16，当前实现 **0.2.1，证据可见范围与 Reflection 先看再写已实施，方法质量继续验证**。只提供 Add/Search，主办方负责 Answer/Eval；未部署或参加官方 Smoke。最新[100题重跑复核](./docs/doing/2026-10-14-amlink-100-rerun-review.md)显示128/145 Add、100/100 Search；Search BFS已实测，Reflection 的风险 Mutation 现在必须提供旧记忆 Inspect/Backlink 依据。10月16日端到端模型复验再次受 provider network 阻断，另以无模型本地切片核验了证据闭合装箱。
 
 入口：[实现与配置](./amlink/README.md)、[协议](./amlink/PROTOCOL.md)、[执行计划](./docs/phase-2/method-improvement-plan.md)。[0.2.0 核心审计](./docs/doing/2026-10-11-amlink-core-audit.md)保存失败基线；[0.2.1 修复与方法议题](./docs/doing/2026-10-11-amlink-core-repairs.md)记录本轮改变及验证。旧实验不自动变成新版本成绩。
 
@@ -23,7 +23,7 @@
 | MemoryContext | 当前活跃节点、引用、关系和来源；送模型前对完整序列化请求作预算检查，裁剪投影不改底层原文 |
 | Reflection Workspace | 跨 Add、跨批次保留已加载结构；提交不再清空，下一批刷新节点/来源；模型可以 Evict 活跃内容 |
 
-最低 episode 禁止被 Mutation 改写成摘要。所有新增/改变的节点（含派生 episode）先嵌入，再事务提交正文、词法/向量索引和关系。旧实验里已损坏的 episode/向量不会自动重建；新实验使用独立数据库。
+最低 episode 禁止被 Mutation 改写成摘要。所有新增/改变的节点（含派生 episode）先嵌入，再事务提交正文、词法/向量索引和关系。旧实验里已损坏的 episode/向量不会自动重建；新实验使用独立数据库。模型语境投影还会记录原文字符数、实际展示字符数和 \`complete\`，因此 Reference 覆盖账本延伸到真正送入模型的最后一层。
 
 ## Add：有界整理完成后再返回
 
@@ -122,11 +122,17 @@ flowchart LR
 
 不再按旧检索分数覆盖 Select 顺序。最低 episode 展开来源原文一次，不同时重复展示整篇 episode 和相同原文；派生节点保留自身叙事，已完整出现的来源用前卡片引用复用。分配每张卡片的可用篇幅，优先保留完整消息；长消息片段和省略来源逐项记录。时间显示为明确的来源UTC时间，不能混同存储时间 `created_at`，也不擅自断言相对时间对应的事件日期。
 
-当前停止后仍从“Query有序候选 + 图新增候选”装箱，图候选追加在后；还没有按模型最终证据闭包重新组织结果。集合题、多跳题的互补证据可能仍被前面候选挤占。这是下一步方法设计问题，不在本轮增加未经讨论的答案分析器。后续可做受限 LLM 装箱对照：模型只选已有证据片段编号和顺序，系统确定性展开、去重、日期和预算校验；在同切片对照前不设为默认。
+当前停止后仍从“Query有序候选 + 图新增候选”装箱，但已增加确定性的来源覆盖投影：每张卡片保留逐来源 evidence units、shown range、完整/片段状态和省略原因。篇幅足够时展示全部来源原文，最终装箱不沿用 Reference 预览最多4片段的限制；篇幅不足时从多个来源分配互补片段。当前每次互补投影对同一来源仍最多取一个片段，不代表同一长消息中的多处证据都已覆盖。复用来源通过 `reused_from` 指向首次完整展示的卡片，缺失来源记为 `source_unavailable`，不能因列表为空就宣称闭合。这里的 complete 只表示已声明来源的展示完整，不保证回答所需证据已被找齐。
+
+受限 LLM 装箱仍只计划做离线对照：模型只能选择已有证据片段编号和顺序，系统负责展开、去重、日期和预算校验；尚未实施或验证。
 
 ## 验证与未完成事项
 
-确定性回归覆盖失败 Add 重放、分批与水位、完整消息预算、最低 episode 保护、派生节点嵌入、Select 分页/空集/顺序、Inspect/Backlink 交替、Workspace 保留和日期去重装箱；2026-10-13又覆盖Select页外位置、非法关系、自环/未知端点及错误根字段，当前60项通过。旧真实积压1445条在副本中用替身模型分48批消费完，最终代码最大模型输入74596字符；**这不是实际 Reflection 质量验证**。真实模型21个跨数据集锚点和完整100题运行都显示：Search已使用Inspect/Backlink，Reflection仍主要直接Mutation/Stop；结构数量增加不等于来源归属和导航质量提高。完整结果见[10月14日重跑复核](./docs/doing/2026-10-14-amlink-100-rerun-review.md)和[扩展验证报告](./docs/doing/2026-10-13-amlink-expanded-validation.md)。
+2026-10-23 提交前审查：修复了最终装箱的4来源上限、复用/缺失来源账本遗漏和风险门槛可由无关探索通过的问题。门槛先验证工具输出结构，再逐个检查被修改旧节点及旧关系端点是否在本批 `inspected_refs` 与实际 Inspect/Backlink 记录中；`new_information`/`no_prior_match` 不能绕过载荷中的风险。对全新人物/关系，仍只能证明模型执行过探索，尚不能判断其探索语义是否充分。当前方法、靶场、数据层和可视化联合测试100项通过；未进行新的真实模型实验。详情与提交范围见[提交前检查](./docs/doing/2026-10-23-commit-readiness.md)。
+
+2026-10-16 核验：无模型 l4 本地切片完成 5/5 Add、1/1 Search；top-5 evidence recall、hit rate、chain coverage 均为 1.0，5 张证据卡均为 complete，证明确定性证据闭合与观测接线。top-1 recall 为 0.428571，窄预算下的排序仍待优化。真实 l4 模型复验因 provider network 失败，不能评价新方法；模型语境投影现在也记录原文与实际展示覆盖。
+
+确定性回归覆盖失败 Add 重放、分批与水位、完整消息预算、最低 episode 保护、派生节点嵌入、Select 分页/空集/顺序、Inspect/Backlink 交替、Workspace 保留、日期去重装箱、互补片段范围和 Reflection 先看再写门槛；2026-10-15 当前 `amlink/tests benchmark/tests` 共64项通过，`py_compile`通过。旧真实积压1445条在副本中用替身模型分48批消费完，最终代码最大模型输入74596字符；**这不是实际 Reflection 质量验证**。真实模型21个跨数据集锚点和完整100题运行显示：Search已使用Inspect/Backlink，Reflection仍需要新的真实切片验证是否会响应门槛并形成探索路径；结构数量增加不等于来源归属和导航质量提高。完整结果见[10月14日重跑复核](./docs/doing/2026-10-14-amlink-100-rerun-review.md)和[扩展验证报告](./docs/doing/2026-10-13-amlink-expanded-validation.md)。
 
 待讨论：会话边界与容量触发如何支持更完整视角；跨批维护后再 Mutation 的粒度；人物身份复用和有来源的稀疏导航图；复杂问题的互补证据需求；长节点 Inspect 的进一步披露。当前预算投影可能隐藏重要内容，完整 Workspace 也尚无自动容量回收策略。
 
