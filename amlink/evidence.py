@@ -5,20 +5,66 @@ from collections import Counter
 from datetime import datetime, timezone
 import re
 
-from .text import excerpt, terms
+from .text import digest, excerpt, terms
 
 
 def _excerpt_with_range(text, limit, query=""):
     """Return a bounded excerpt and the source character range it exposes."""
     if len(text) <= limit:
         return text, [0, len(text)], True
-    words = terms(query)
-    positions = [text.casefold().find(word) for word in words]
-    hit = min((position for position in positions if position >= 0), default=0)
+    positions = [match.start() for word in terms(query)
+                 if (match := re.search(re.escape(word), text, re.IGNORECASE))]
+    hit = min(positions, default=0)
     start = max(0, hit - limit // 4)
     width = max(1, limit - 20)
     selected = text[start:start + width]
     return ("…" if start else "") + selected + "… [片段截断]", [start, start + len(selected)], False
+
+
+def fragment(source, start, end, *, query=""):
+    """Immutable half-open Python codepoint range; labels never enter text."""
+    text = source["text"]
+    start, end = max(0, start), min(len(text), end)
+    version = digest(text)
+    return {"fragment_id": digest([source["ref"], version, start, end]),
+            "origin_ref": source["ref"], "source_ref": source["ref"],
+            "content_digest": version, "start": start, "end": end,
+            "text": text[start:end], "shown_range": [start, end],
+            "source_chars": len(text), "shown_chars": end - start,
+            "complete": start == 0 and end == len(text), "query": query,
+            "origin_kind": "raw" if source["ref"].startswith("raw:") else "item",
+            **{k: source[k] for k in ("role", "ordinal", "session_id", "source_time") if k in source}}
+
+
+def shrink_fragment(value, limit):
+    """Shrink a range itself, never re-excerpt a rendered header or ellipsis."""
+    if len(value["text"]) <= limit:
+        return dict(value)
+    end = value["start"] + max(0, limit)
+    return {**value, "end": end, "text": value["text"][:limit],
+            "fragment_id": digest([value["origin_ref"], value["content_digest"], value["start"], end]),
+            "shown_range": [value["start"], end], "shown_chars": max(0, limit), "complete": False}
+
+
+def render_fragment(value):
+    label = (f"[{value['origin_ref']} {value['start']}:{value['end']}/{value['source_chars']}]"
+             f"[source_time={source_date(value.get('source_time')) or 'unknown'}]")
+    if value.get("role"):
+        label += f"[role={value['role']}][ordinal={value.get('ordinal', '?')}]"
+    return label + " " + value["text"]
+
+
+def ranges_complete(values, length):
+    end = 0
+    for start, stop in sorted((v["start"], v["end"]) for v in values):
+        if start > end:
+            return False
+        end = max(end, stop)
+    return end >= length
+
+
+def pages(source, width=1800):
+    return [fragment(source, start, start + width) for start in range(0, len(source["text"]), width)]
 
 
 def source_date(timestamp):
@@ -57,7 +103,7 @@ def episode_text(sources):
 
 
 def source_header(source):
-    return (f"[source={source['ref']}][role={source['role']}][ordinal={source['ordinal']}]"
+    return (f"[source={source['ref']}][role={source.get('role', 'derived')}][ordinal={source.get('ordinal', 'unknown')}]"
             f"[source_time={source_date(source.get('source_time')) or 'unknown'}]")
 
 
@@ -102,43 +148,50 @@ def complementary_passages(sources, queries, limit, max_fragments=4):
     deliberately reports omitted sources so Select can request Inspect later.
     """
     queries = list(dict.fromkeys(str(query).strip() for query in queries if str(query).strip())) or [""]
-    pairs = []
+    ranked = []
     for query in queries:
         query_terms = set(terms(query))
+        pairs = []
         for index, source in enumerate(sources):
             source_terms = set(terms(source["text"]))
             pairs.append((-(len(query_terms & source_terms)), index, query))
-    pairs.sort()
-    chosen, used_sources, fragments, used = [], set(), [], 0
+        ranked.append(sorted(pairs))
+    # One proposal per query before taking a second from the same query.
+    pairs = [group[i] for i in range(len(sources)) for group in ranked if i < len(group)]
+    fragments, used = [], 0
     per_fragment = max(100, limit // max(1, max_fragments))
     for _, index, query in pairs:
         source = sources[index]
-        if source["ref"] in used_sources or len(fragments) >= max_fragments:
+        if len(fragments) >= max_fragments:
             continue
         header = source_header(source) + f" [query={excerpt(query, 120)}] "
         room = limit - used - len(header) - 1
         if room < 80:
             continue
         size = min(per_fragment, room)
-        text, shown_range, complete = _excerpt_with_range(source["text"], size, query)
-        rendered = header + text
-        fragments.append({"source_ref": source["ref"], "query": excerpt(query, 160),
-                          "text": rendered, "complete": complete,
-                          "shown_range": shown_range, "source_chars": len(source["text"]),
-                          "shown_chars": len(text), "role": source.get("role"),
-                          "ordinal": source.get("ordinal"),
-                          "source_time": source.get("source_time")})
-        chosen.append(source["ref"])
-        used_sources.add(source["ref"])
-        used += len(rendered) + 1
+        _, shown_range, _ = _excerpt_with_range(source["text"], size, query)
+        start, end = shown_range
+        overlapping = [f for f in fragments if f["origin_ref"] == source["ref"]
+                       and f["start"] <= end and start <= f["end"]]
+        if overlapping:
+            start = min(start, *(f["start"] for f in overlapping))
+            end = max(end, *(f["end"] for f in overlapping))
+            if any(f["start"] <= start and end <= f["end"] for f in overlapping):
+                continue
+        value = fragment(source, start, end, query=excerpt(query, 160))
+        new_used = used - sum(len(render_fragment(f)) + 1 for f in overlapping) + len(render_fragment(value)) + 1
+        if new_used > limit:
+            continue
+        fragments = [f for f in fragments if f not in overlapping] + [value]
+        used = new_used
     coverage = []
     for source in sources:
-        match = next((fragment for fragment in fragments if fragment["source_ref"] == source["ref"]), None)
-        coverage.append({"ref": source["ref"], "included": bool(match),
-                         "complete": bool(match and match["complete"]),
+        matches = [f for f in fragments if f["source_ref"] == source["ref"]]
+        coverage.append({"ref": source["ref"], "included": bool(matches),
+                         "complete": ranges_complete(matches, len(source["text"])),
                          "source_chars": len(source["text"]),
-                         "shown_chars": match["shown_chars"] if match else 0,
-                         "shown_range": match["shown_range"] if match else None,
-                         "shown_ranges": [match["shown_range"]] if match else [],
-                         "reason": "complementary_fragment" if match else "source_content_budget"})
+                         "shown_chars": sum(f["shown_chars"] for f in matches),
+                         "shown_range": matches[0]["shown_range"] if matches else None,
+                         "shown_ranges": [f["shown_range"] for f in matches],
+                         "reason": "complementary_fragment" if matches else "source_content_budget"})
     return fragments, coverage

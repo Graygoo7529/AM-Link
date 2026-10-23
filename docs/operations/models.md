@@ -30,6 +30,8 @@
 
 ## 一期调用方式（历史）
 
+2026-10-23补充核验：当前调用器在受限进程中仍为`provider_network`；使用已授权的网络权限复核后，embedding-3返回512维（约0.65秒），gpt-4o-mini成功工具调用`check(ok=true)`（约1.12秒）。随后公开LoCoMo、BEAM、PerLTQA切片已取得真实调用轨迹，说明模型和现有Key在本次检查时可用；不能推断持续配额。见[实施核对](../doing/2026-10-23-evidence-loop-implementation.md)。真实模型仍可能返回不符合工具定义的参数，方法保持显式校验失败、无内部重试。
+
 一期使用 HTTPX 直接发送兼容请求，不使用 pi SDK，也不要求安装 OpenAI SDK。两种模型分别启用：`AML_LLM_ENABLED=true`、`AML_EMBEDDING_ENABLED=true`；`AML_ENRICHMENT_MODE=sync`。配置模板在 [归档 .env.example](../../archive/phase-1/.env.example)，模板和旧默认值不是二期推荐值。
 
 LLM 使用 Bearer 鉴权，发送 model/messages、温度 0 和 JSON 对象输出要求；结构化整理和查询计划采用不同提示。响应仍要做结构、来源与用户范围校验，JSON 模式不能保证业务正确。旧代理曾返回错误层级或 null 字段，等价空值可规范化，未知非空字段应拒绝。

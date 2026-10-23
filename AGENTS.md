@@ -1,5 +1,7 @@
 # 项目记忆
 
+- 2026-10-23最新状态见`docs/doing/2026-10-23-evidence-loop-implementation.md`：已按P0/P1计划接入可见引用位置、同源多范围/Inspect续页与回放保护、路径证据组、逐项Reflection依据及跨Add稳定前缀，126项本地回归通过。8次LoCoMo/BEAM/PerLTQA真实调试运行共265次模型调用；网络权限复核后现有embedding/gpt-4o-mini可用。真实Reflection仍有参数不合协议、相关旧目标/来源未补齐、轮数耗尽，所有真实图仍0边，整体方法未验收；未扩大20/100题、未部署。受限LLM装箱两次诊断均无效选择，默认仍确定性装箱。后续先读此报告和根DESIGN；下列10月11日经验为历史。
+
 - AM-Link 是 Graygoo7529 参加 Agent Memory Leaderboard 的原创记忆系统。我们只提供 Add/Search，主办方负责 Answer/Eval。TinySoul-Agent 也是同一作者的个人原创项目，是设计灵感来源。
 - 截至 2026-09-23：一期 Smoke 通过、Full completed，在 [AM-Link 排行榜开源榜文本赛道](https://agentmemories.ai/leaderboard/academic/textual)排名第 21 名；一期公网 API、部署代码、数据库数据和专用证书均已清理。服务器现保留与项目无关的通用 Nginx、Certbot renewal 基础和 `/hello` 示例。二期初版已归档到 `archive/phase-2/amlink-0.1.0/`；当前 `amlink/` 是 0.2.1，2026-10-11已实施核心工程修复并完成有限真实诊断；方法质量和完整协调器仍待验收，尚未部署或参加官方 Smoke。具体收尾状态见 `docs/phase-1/closeout.md`。
 - 一期代码在 `archive/phase-1/`，版本 0.3.0；代码基线 `1881abe`，归档前 HEAD `447608a`。保持归档作为历史参考，二期代码应另建目录。

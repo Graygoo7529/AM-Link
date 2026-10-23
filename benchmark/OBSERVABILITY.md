@@ -71,6 +71,8 @@ links 的方向固定为 `from_id` 指向 `to_id`：memory derived_from source�
 
 ## 建议验收门槛
 
+2026-10-23新增内部artifact（不扩展span顶层）：`format_version=1`的引用可见清单、`evidence disclosure receipt`、`reflection prefix policy`、证据组装箱。范围使用原文Unicode字符半开区间与正文digest；`call_returned`表示相同主决策输入已送出并成功返回，不代表模型理解。Select不会解除Inspect页面的回放保护。装箱同时保存冻结输入，供受限LLM离线对照；`packing_unit=evidence_group`需与旧单节点卡分开解释@k。网页最多展示20行范围/组决策，裁剪显示预览及完整artifact路径；旧数据缺字段保持未知。
+
 1. 原文片段可以追到 Add、派生记忆、返回结果、最终上下文；缺一段报告断链。
 2. 未记录用量是未知，实际零模型调用需在完整 trace 下计数确认；token/费用仅汇总 model span。
 3. 错误、无结果、跳过、缓存重放可区分；失败尝试不会从耗时/费用中消失。

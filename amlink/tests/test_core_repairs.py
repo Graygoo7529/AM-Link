@@ -36,7 +36,15 @@ class Scripted:
         if purpose == "select":
             positions = [row["position"] for row in payload["candidates"]]
             assert tools[0]["parameters"]["properties"]["positions"]["items"]["enum"] == positions
-        return self.decide(purpose, payload)
+        name, args = self.decide(purpose, payload)
+        if purpose == "bfs" and name == "bfs_action":
+            name = "bfs_" + args["action"]
+        if name in {"bfs_inspect", "reflection_inspect"} and "target" not in args:
+            args = dict(args)
+            key = "frontier_position" if name == "bfs_inspect" else "reference_position"
+            target = {key: args.pop(key, None), "page_position": args.pop("page_position", None)}
+            args["target"] = target
+        return name, args
 
 
 @pytest.fixture
@@ -44,7 +52,7 @@ def make():
     stores = []
 
     def create(**kwargs):
-        config = replace(Config(embedding_enabled=False, search_model=False), **kwargs)
+        config = replace(Config(embedding_enabled=False, search_model=False, reflection_min_adds=1), **kwargs)
         store = Store(":memory:")
         stores.append(store)
         provider = Scripted()
@@ -153,7 +161,8 @@ def test_derived_episode_also_gets_vector_and_workspace_survives(make):
     nodes = engine.store.nodes("u")
     vectors = list(engine.store.vector_rows("u", provider.embedding_fingerprint))
     assert len(nodes) == len(vectors) == 2
-    assert len(engine.store.state("u")["context"]["items"]) == 2
+    # The current batch's minimum episode is no longer an OLD orientation match.
+    assert len(engine.store.state("u")["context"]["items"]) == 1
 
 
 def test_select_pages_visit_all_candidates_and_global_order_is_preserved(make):
@@ -182,20 +191,20 @@ def test_select_empty_is_valid_and_unknown_tool_is_error(make):
     provider.decide = lambda *args: ("select", {"positions": []})
     assert engine._select_refs("u", "B", [row], {}, time.monotonic() + 10, reason="query") == []
     provider.decide = lambda *args: ("select", {"refs": ["memory:fact-typo"]})
-    with pytest.raises(MemoryError, match="selection_unknown_ref"):
+    with pytest.raises(MemoryError, match="selection_invalid_position"):
         engine._select_refs("u", "B", [row], {}, time.monotonic() + 10, reason="query")
     provider.decide = lambda *args: ("other_tool", {"refs": []})
     with pytest.raises(MemoryError, match="model_unknown_tool"):
         engine._select_refs("u", "B", [row], {}, time.monotonic() + 10, reason="query")
 
 
-def test_select_keeps_valid_positions_when_provider_adds_one_out_of_page(make):
+def test_select_rejects_mixed_valid_and_invalid_positions(make):
     engine, provider = make()
     rows = [{"ref": f"memory:fact-{i}", "kind": "fact", "text": f"Fact {i}", "source_refs": []}
             for i in range(3)]
     provider.decide = lambda purpose, payload: ("select", {"positions": [1, 20]})
-    selected = engine._select_refs("u", "facts", rows, {}, time.monotonic() + 10, reason="query")
-    assert [row["ref"] for row in selected] == [rows[1]["ref"]]
+    with pytest.raises(MemoryError, match="selection_invalid_position"):
+        engine._select_refs("u", "facts", rows, {}, time.monotonic() + 10, reason="query")
 
 
 def test_invalid_relation_is_filtered_without_dropping_grounded_items(make):
@@ -338,14 +347,15 @@ def test_search_inspect_then_backlink_same_ref_and_follow_new_ref(make):
     def decide(purpose, payload):
         seen.append(payload["context"])
         action, ref = next(decisions)
-        return "bfs_action", {"action": action, **({"ref": ref} if ref else {})}
+        position = next((row["position"] for row in payload["context"]["choices"] if row["ref"] == ref), None)
+        return "bfs_action", {"action": action, "frontier_position": position}
 
     provider.decide = decide
     result = engine.search(SearchRequest(user_id="u", query="Caroline", top_k=5))
     assert seen[1]["items"][items[0]["ref"]]["text"] == items[0]["text"]
     assert items[1]["ref"] in seen[2]["references"]
     assert any("Sweden" in edge.get("narrative", "") for edge in seen[3]["edges"])
-    assert any(row["id"] == items[1]["ref"] for row in result["data"])
+    assert any(items[1]["ref"] in row["content"] for row in result["data"])
     assert any("--about-->" in row["content"] for row in result["data"])
 
 
@@ -361,14 +371,18 @@ def test_reflection_can_inspect_backlink_and_validate_newly_loaded_old_node(make
 
     def decide(purpose, payload):
         contexts.append(payload["context"])
-        return next(actions)
+        name, arguments = next(actions)
+        ref = arguments.pop("ref", None)
+        if ref:
+            arguments["reference_position"] = next(row["position"] for row in payload["context"]["choices"] if row["ref"] == ref)
+        return name, arguments
 
     provider.decide = decide
     assert engine.add(request("new", ["Caroline remembers that move."]))["success"]
     assert items[1]["ref"] in contexts[-1]["items"]
     persisted = engine.store.state("u")["context"]
     assert items[1]["ref"] in persisted["items"]
-    assert any(item["ref"] == items[1]["ref"] for item in persisted["memories"])
+    assert items[1]["ref"] in persisted["items"]
 
 
 def test_pack_preserves_input_order_propagates_date_and_deduplicates_source(make):

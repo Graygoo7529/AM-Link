@@ -20,9 +20,9 @@
 | 14 | [AM-Link 二期方法实现](../amlink/README.md) | 本地服务、引用图、native 观测与[实施验证](./doing/2026-10-08-amlink-implementation.md) |
 | 15 | [Answer 靶场与真实案例复核](./doing/2026-10-08-amlink-answer-research.md) | gpt-5.6-luna 诊断 Answer、逐题后验复核、Add/Search 真实失败位置 |
 | 16 | [AM-Link 二期方法改进计划](./phase-2/method-improvement-plan.md) | 结合 TinySoul、案例与当前实现的重构计划；每个 Add 先生成可检索最小 episode，工作区跨请求累积，Search/Reflection 分开 |
-| 17 | [P0/P1证据链与Reflection执行细则](./phase-2/evidence-loop-execution-plan.md) | 两项P0、三项P1的工具/范围协议、证据组合、整理水位、实施依赖与验收；设计检查完成，尚未实施 |
+| 17 | [P0/P1证据链与Reflection执行细则](./phase-2/evidence-loop-execution-plan.md) | 五包已接入；[实施核对](./doing/2026-10-23-evidence-loop-implementation.md)记录回归、真实切片、失败与尚未达成的质量验收 |
 
-2026-10-23 最新先读[当前实施与设计缺口核查](./doing/2026-10-23-design-status-audit.md)：代码已提交到 `afe8c8d`，100项回归通过；新复现引用位置错位、同源多片段缺口和图新增证据装箱丢失，尚未修复。真实模型验收未更新。[提交前检查与测试产物隔离](./doing/2026-10-23-commit-readiness.md)保留此前修复及检查过程；历史测试产物仍有8项跟踪清理待处理。
+2026-10-23 最新先读[P0/P1实施核对](./doing/2026-10-23-evidence-loop-implementation.md)：引用/范围、路径装箱、Reflection依据和跨Add缓冲已接入；真实LoCoMo、BEAM、PerLTQA小切片保留了成功与失败，尚未达到扩大20/100题的门槛。模型经网络权限复核已可调用。[设计缺口核查](./doing/2026-10-23-design-status-audit.md)是修复前基线；[提交前检查](./doing/2026-10-23-commit-readiness.md)保留历史清理记录，8项旧跟踪测试产物仍待处理。
 
 最新状态先读[10月14日100题重跑复核](./doing/2026-10-14-amlink-100-rerun-review.md)和[10月15日证据链修复记录](./doing/2026-10-15-evidence-chain-repair.md)：完整修复版为128/145 Add、100/100 Search；目标Add均成功的94道题上，top-5证据召回约55.3%、完整链约59.6%。Search实测338次Inspect、72次Backlink和787次Select；新的 Reference 互补片段、证据闭合和 Reflection 先看再写门槛已完成本地实现，模型语境投影现在也记录实际展示覆盖。10月16日 l4 真实切片再次因模型端点网络错误未形成可评价样本，不能据此评价新方法；无模型本地 l4 切片完成5/5 Add、1/1 Search，top-5召回与闭合链均为1.0，只证明确定性装箱和观测接线。64项当前 amlink/benchmark 回归通过。跨数据集锚点和定向复验见[10月13日扩展验证](./doing/2026-10-13-amlink-expanded-validation.md)。历史完整基线Add 68/145、Search 99/100及旧0.2.0审计分别见[100题诊断](./doing/2026-10-11-amlink-100-rerun-analysis.md)和[核心审计](./doing/2026-10-11-amlink-core-audit.md)。
 

@@ -6,6 +6,8 @@
 
 AM-Link 和设计灵感来源 **TinySoul-Agent** 都是 Graygoo7529 的个人原创项目。一期借鉴自己的记忆设计思想，独立实现比赛接口，未直接移植 TinySoul-Agent 代码。
 
+2026-10-23：[P0/P1证据链实施核对](./docs/doing/2026-10-23-evidence-loop-implementation.md)记录本轮引用位置、多窗口披露、证据组装箱、Reflection依据及跨Add缓冲改进。工程回归与真实小切片分开报告；复杂图质量尚未验收，尚未扩大新一轮100题。
+
 | 入口 | 内容 |
 | --- | --- |
 | [AGENTS.md](./AGENTS.md) | 给后续 agent 的项目背景、环境和简要规约 |

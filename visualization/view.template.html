@@ -343,7 +343,7 @@
     const previews=q.span_previews?.[s.span_id]||[];hide('span-preview-label',!previews.length);options('span-preview-select',previews.map((p,i)=>({value:p.id,label:`${i+1}. ${p.summary.slice(0,44)}${p.summary.length>44?'…':''}`})),el('span-preview-select').value);drawSpanPreview();
     txt('span-data',JSON.stringify({inputs:s.inputs,outputs:s.outputs,candidates:s.candidates,model:s.model,error:s.error},null,2));
   }
-  function drawSpanPreview(){const q=currentQuery(),previews=q?.span_previews?.[el('span').value]||[];const p=previews.find(p=>p.id===el('span-preview-select').value);txt('span-preview',p?p.summary+'\n'+p.content.text:'此产物未嵌入正文；原始引用可用于本地核查。');}
+  function drawSpanPreview(){const q=currentQuery(),previews=q?.span_previews?.[el('span').value]||[];const p=previews.find(p=>p.id===el('span-preview-select').value);if(!p){txt('span-preview','此产物未嵌入正文；原始引用可用于本地核查。');return;}const panel=p.evidence_panel;txt('span-preview',p.summary+'\n'+(panel?panel.title+'（展示预览 '+panel.shown+'/'+panel.total+'）\n'+JSON.stringify(panel.rows,null,2)+'\n':'')+p.content.text+(p.preview_only?'\n[展示预览；完整范围和正文请查原始产物]':'')+'\n产物：'+(p.artifact||'未知'));}
   function drawNotes(r,q){const key=r.run_id+'|'+q.search_id;if(key!==draftKey){draftKey=key;el('note-text').value='';['note-status','note-command','note-json'].forEach(id=>txt(id,''));}
     el('notes').replaceChildren();const notes=q.notes||[];const replaced=new Set(notes.map(n=>n.supersedes).filter(Boolean));
     if(!notes.length)txt('notes','尚无持久评注；未评价不等于通过。');

@@ -28,7 +28,7 @@ class FakeProviders:
                 return "reflection_mutation", self.reflection(payload)
             return "reflection_stop", {}
         if purpose == "bfs":
-            return "bfs_action", {"action": "stop"}
+            return "bfs_stop", {"action": "stop"}
         raise AssertionError(f"unexpected tool {purpose}")
 
     def close(self):
@@ -40,7 +40,7 @@ def make_engine(tmp_path):
     stores = []
 
     def make(**overrides):
-        config = replace(Config(mode="graph", embedding_enabled=False, reflection_threshold=2,
+        config = replace(Config(mode="graph", embedding_enabled=False, reflection_threshold=2, reflection_min_adds=1,
                                 search_model=False), **overrides)
         store = Store(tmp_path / f"memory-{len(stores)}.sqlite3")
         stores.append(store)

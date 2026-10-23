@@ -5,11 +5,14 @@ import json
 import re
 import sqlite3
 import threading
+import math
+from collections import Counter
 from contextlib import contextmanager
 from pathlib import Path
 
 from .errors import MemoryError
 from .text import digest, dumps, indexed, now, terms
+from .evidence import episode_text
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
@@ -265,13 +268,43 @@ class Store:
                 visible.append(edge); seen.add(key)
         return visible
 
-    def lexical(self, user, query, limit):
+    def lexical(self, user, query, limit, *, before=None):
         tokens = list(dict.fromkeys(terms(query)))[:64]
         if not tokens:
             return []
         match = " OR ".join('"' + token.replace('"', '""') + '"' for token in tokens)
-        rows = self.rows("SELECT ref,bm25(lexical) AS rank FROM lexical WHERE lexical MATCH ? AND user_id=? AND ref LIKE 'memory:%' ORDER BY rank,ref LIMIT ?",
-                         (match, user, limit))
+        eligible = "" if before is None else " AND ref IN (SELECT n.ref FROM nodes n,json_each(n.sources) s JOIN raw_events r ON r.ref=s.value AND r.user_id=n.user_id WHERE n.user_id=? AND r.ordinal<? AND r.blocked=0)"
+        args = (match, user, limit) if before is None else (match, user, user, before, -1)
+        rows = self.rows("SELECT ref,bm25(lexical) AS rank FROM lexical WHERE lexical MATCH ? AND user_id=? AND ref LIKE 'memory:%'" + eligible + " ORDER BY rank,ref LIMIT ?", args)
+        if before is not None:
+            scoped = []
+            for row in rows:
+                node = self.get(user, row["ref"])
+                if not node:
+                    continue
+                sources = self.raw(user, node["source_refs"])
+                old = [source for source in sources if source["ordinal"] < before]
+                if len(old) != len(sources):
+                    if not self.is_minimum_episode(user, node["ref"]):
+                        continue
+                    node = {**node, "text": episode_text(old), "source_refs": [source["ref"] for source in old]}
+                words = Counter(terms(node["text"]))
+                if set(tokens).intersection(words):
+                    scoped.append((node, words))
+            # Mixed episodes must be ranked using only their old projection;
+            # future keyword frequency must not influence old-memory top-N.
+            count = len(scoped)
+            avg = sum(sum(words.values()) for _, words in scoped) / max(1, count)
+            frequency = Counter(word for _, words in scoped for word in set(words))
+            def score(pair):
+                node, words = pair
+                length = sum(words.values())
+                return sum(math.log(1 + (count - frequency[word] + .5) / (frequency[word] + .5)) *
+                    (words[word] * 2.2) / (words[word] + 1.2 * (.25 + .75 * length / max(1, avg)))
+                    for word in tokens if words[word])
+            ordered = sorted(scoped, key=lambda pair: (-score(pair), pair[0]["ref"]))[:limit]
+            return [{**node, "score": 1 / (60 + rank), "lexical_rank": rank, "scope_before": before}
+                    for rank, (node, _) in enumerate(ordered, 1)]
         result = []
         for rank, row in enumerate(rows, 1):
             node = self.get(user, row["ref"])
@@ -279,10 +312,10 @@ class Store:
                 result.append({**node, "score": 1 / (60 + rank), "lexical_rank": rank})
         return result
 
-    def vector_rows(self, user, fingerprint):
+    def vector_rows(self, user, fingerprint, *, before=None):
         for row in self.rows("SELECT ref,vector FROM vectors WHERE user_id=? AND fingerprint=?", (user, fingerprint)):
             node = self.get(user, row["ref"])
-            if node:
+            if node and (before is None or (sources := self.raw(user, node["source_refs"])) and all(source["ordinal"] < before for source in sources)):
                 yield node, json.loads(row["vector"])
 
     def source_states(self, user, source_ref):

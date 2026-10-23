@@ -5,7 +5,8 @@ import pytest
 
 from amlink.config import Config
 from amlink.engine import Engine
-from amlink.evidence import complementary_passages, passages
+from amlink.evidence import complementary_passages, passages, fragment
+from amlink.text import digest
 from amlink.errors import MemoryError
 from amlink.observation import Observer
 from amlink.store import Store
@@ -35,19 +36,14 @@ def test_passages_keeps_partial_ranges_for_each_source():
     assert all("shown_range" in entry for entry in coverage if entry["included"])
 
 
-def test_reflection_basis_requires_exploration_for_risky_mutation(tmp_path):
+def test_empty_mutation_is_not_risky_just_because_of_basis_label(tmp_path):
     engine = Engine(replace(Config(mode="graph", embedding_enabled=False),
                             db_path=str(tmp_path / "memory.sqlite3")),
                     Store(tmp_path / "memory.sqlite3"), object(), Observer())
     try:
         context = {"items": {}, "explored": []}
-        try:
-            engine._check_reflection_basis({"basis": "add_relation", "links": [],
-                                            "items": [], "inspected_refs": []}, context)
-        except MemoryError as error:
-            assert error.code == "reflection_orientation_required"
-        else:
-            raise AssertionError("risky mutation without exploration was accepted")
+        engine._check_reflection_basis({"basis": "add_relation", "links": [],
+                                       "items": [], "inspected_refs": []}, context)
         context["explored"] = [["memory:fact-old", "inspect"]]
         engine._check_reflection_basis({"basis": "add_relation", "links": [],
                                         "items": [], "inspected_refs": ["memory:fact-old"]}, context)
@@ -73,13 +69,12 @@ def test_reference_projection_carries_fragments_into_context(tmp_path):
         assert reference["coverage"]
         assert all("source_ref" in fragment for fragment in reference["evidence_fragments"])
         projected = engine._model_context({"question": "Friday", "references": {
-            reference["ref"]: {**reference, "evidence_fragments": [{
-                **reference["evidence_fragments"][0], "text": "x" * 900
-            }]},
+            reference["ref"]: {**reference, "evidence_fragments": [fragment(source("raw:long", "x" * 900, 1), 0, 900)]},
         }, "items": {}, "sources": [], "edges": []})
-        fragment = projected["references"][reference["ref"]]["evidence_fragments"][0]
-        assert fragment["model_projection"]["shown_chars"] < fragment["model_projection"]["source_text_chars"]
-        assert fragment["model_projection"]["complete"] is False
+        shown = projected["references"][reference["ref"]]["evidence_fragments"][0]
+        assert shown["model_projection"]["shown_chars"] < shown["model_projection"]["source_text_chars"]
+        assert shown["model_projection"]["complete"] is False
+        assert shown["end"] - shown["start"] == len(shown["text"])
     finally:
         store.close()
 
@@ -152,6 +147,12 @@ def test_reflection_gate_rejects_an_unrelated_explored_ref_for_an_update():
         Engine._check_reflection_basis(change, context)
     change["inspected_refs"] = ["memory:target"]
     context["explored"].append(["memory:target", "backlinks"])
+    with pytest.raises(MemoryError, match="reflection_orientation_required"):
+        Engine._check_reflection_basis(change, context)
+    node = {"ref": "memory:target", "text": "Original description", "source_refs": ["raw:a"]}
+    context["items"][node["ref"]] = node
+    context["inspections"] = {node["ref"]: digest(node["text"])}
+    context["last_visible"] = [fragment(node, 0, len(node["text"]))]
     Engine._check_reflection_basis(change, context)
 
 
@@ -165,6 +166,14 @@ def test_reflection_gate_requires_each_existing_relation_endpoint():
         Engine._check_reflection_basis(change, context)
     change["inspected_refs"].append("memory:right")
     context["explored"].append(["memory:right", "backlinks"])
+    with pytest.raises(MemoryError, match="reflection_orientation_required"):
+        Engine._check_reflection_basis(change, context)
+    context["inspections"], context["last_visible"] = {}, []
+    for ref in context["items"]:
+        node = {"ref": ref, "text": "A grounded claim", "source_refs": ["raw:a"]}
+        context["items"][ref] = node
+        context["inspections"][ref] = digest(node["text"])
+        context["last_visible"].append(fragment(node, 0, len(node["text"])))
     Engine._check_reflection_basis(change, context)
 
 

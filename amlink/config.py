@@ -12,6 +12,7 @@ class Config:
     db_path: str = "amlink/data/memory.sqlite3"
     mode: str = "graph"
     reflection_threshold: int = 8
+    reflection_min_adds: int = 2
     reflection_chars: int = 6000
     batch_chars: int = 18000
     batch_messages: int = 32
@@ -33,7 +34,7 @@ class Config:
     model_timeout: float = 120.0
     model_max_tokens: int = 5000
     search_model: bool = True
-    reflection_steps: int = 8
+    reflection_steps: int = 16
     search_steps: int = 8
     llm_base_url: str = "https://api.zhizengzeng.com/v1"
     llm_api_key: str = ""

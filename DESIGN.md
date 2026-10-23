@@ -1,147 +1,108 @@
-# AM-Link Add/Search 设计总览
+# AM-Link Add/Search 当前设计
 
-更新：2026-10-23，当前实现 **0.2.1，证据覆盖账本与 Reflection 风险门槛已实施，引用选择与证据组合仍有缺口，方法质量继续验证**。只提供 Add/Search，主办方负责 Answer/Eval；未部署或参加官方 Smoke。代码基线为 `afe8c8d`，本轮100项回归通过，未进行新真实模型实验。[实时设计核查](./docs/doing/2026-10-23-design-status-audit.md)复现了裁剪/排序导致的引用位置错位、同源多片段缺口和图新增证据装箱丢失，均待修复。历史[100题重跑复核](./docs/doing/2026-10-14-amlink-100-rerun-review.md)为128/145 Add、100/100 Search，不能作为当前修复版效果。
+更新：2026-10-23。当前为0.2.1上的P0/P1实施分支，未部署、未参加官方Smoke。五个工作包已接入，正在按[执行计划](docs/phase-2/evidence-loop-execution-plan.md)进行工程及真实切片验收；以[实施核对报告](docs/doing/2026-10-23-evidence-loop-implementation.md)中的逐项结论为准，不以工具存在或HTTP200代替方法效果。
 
-入口：[实现与配置](./amlink/README.md)、[协议](./amlink/PROTOCOL.md)、[执行计划](./docs/phase-2/method-improvement-plan.md)。[0.2.0 核心审计](./docs/doing/2026-10-11-amlink-core-audit.md)保存失败基线；[0.2.1 修复与方法议题](./docs/doing/2026-10-11-amlink-core-repairs.md)记录本轮改变及验证。旧实验不自动变成新版本成绩。
+## 边界和对象
 
-下一阶段的[P0/P1完整执行细则](./docs/phase-2/evidence-loop-execution-plan.md)已完成设计检查，**尚未实施**：先统一可见引用与工具解码，再实现同源多窗口/Inspect续页，随后分别改进最终证据组合、Reflection相关依据与探索预算、跨Add积累及会话前缀。计划中的证据组仅用于输出，位置/范围仅用于调用与观测，不新增MemoryItem类型。下文流程图继续描述当前代码，不把目标方案冒充现状。
+只提供Add/Search，主办方负责Answer/Eval。公开接口不变；同用户锁内同步执行，没有内部模型重试、后台补偿、自动重建或静默降级。默认开启embedding及模型Select。
 
-## 不变的边界
+MemoryItem包含episode/person/entity/concept/event/fact，MemoryRelation保留about/contains/supersedes/contradicts/same_event_as。最低episode是不可变原文投影，RawEvent保存原始角色、会话、顺序及来源时间。user_id是隔离空间，不等于真实speaker；角色也不能代替人物姓名。
 
-- RawEvent 原文可追溯，按 user_id 隔离；成功 Add 幂等且立即可检索。
-- **Add 的停止不等于清空缓冲。** 未触发整理时，完成最低 episode 与索引即可停止；已经触发 Reflection，则本请求要求的处理水位必须终结后才返回200。
-- 标准 Search 每次创建独立语境，只检索已提交 MemoryItem，不读取或排空 WorkingMemory，不与 Reflection 共享 loop，不代答。
-- 依赖失败和真正无结果分开；无内部模型重试、后台补偿或静默降级。
+References始终是语义ref加可读叙事。MemoryWorking保留尚未整理的原文，Workspace是跨Add保留的有界活跃语境。位置清单、原文片段和证据组都是内部调用/输出组织，不新增长期记忆类型。
 
-## 对象及当前实现
-
-| 对象 | 含义与实现 |
-| --- | --- |
-| RawEvent | 不可变消息，保留角色、原文、会话、接收顺序和可选来源时间；不作为独立 Query 候选 |
-| MemoryWorking / WorkingMemory | accepted/settled 水位之间尚未整理的消息；可跨 Add 积累，触发后按完整消息有界分批 |
-| MemoryItem | episode/person/entity/concept/event/fact；最低 episode 是原文投影，更高层归纳另建节点 |
-| MemoryRelation | about/contains/supersedes/contradicts/same_event_as；有端点和来源校验，有被过滤关系及原因记录；语义正确性仍须案例复核 |
-| References | 带语义和短区分后缀的稳定 ref + 类型、可读标签、片段、来源、关系说明；不是孤立编码 |
-| MemoryContext | 当前活跃节点、引用、关系和来源；送模型前对完整序列化请求作预算检查，裁剪投影不改底层原文 |
-| Reflection Workspace | 跨 Add、跨批次保留已加载结构；提交不再清空，下一批刷新节点/来源；模型可以 Evict 活跃内容 |
-
-最低 episode 禁止被 Mutation 改写成摘要。所有新增/改变的节点（含派生 episode）先嵌入，再事务提交正文、词法/向量索引和关系。旧实验里已损坏的 episode/向量不会自动重建；新实验使用独立数据库。Reference 的来源片段带原文范围；模型语境二次投影记录输入片段与实际展示文字的字符数和 `complete`，但尚未将二次裁剪换算为原文坐标。Item正文和来源预览也未统一到同一范围账本，不能仅凭这些标记认定模型看到了关键原句。
-
-## Add：有界整理完成后再返回
+## Add：先保证可查，再按稳定前缀整理
 
 ```mermaid
 flowchart TD
-  A[Add：user/session/request_id/messages] --> B[从请求入口计时，等待同 user 锁]
-  B --> C{逐请求幂等检查}
-  C -->|已成功| Z[返回200，不调用模型]
-  C -->|新请求或失败重放| D[不可变 RawEvent + MemoryWorking + 接收水位]
-  D --> E[最低 episode：原文/角色/会话/顺序/来源日期]
-  E --> F[BM25 + Embedding 完成]
-  F --> G{积累阈值、硬信号、会话边界或未完成目标？}
-  G -->|否| H[逐请求检查 episode/索引，保留缓冲]
-  H --> Z
-  G -->|是| I[记录本请求目标水位]
-  I --> J[取最早未处理完整消息批次]
-  J --> K[保留的 Workspace + 本批 WorkingMemory]
-  K --> O[有界 orientation：BM25/Embedding，必要时 Select]
-  O --> L{LLM：下一步工具调用}
-  L -->|Query 发现| Q[reflection_search：Query，必要时 Select]
-  Q --> K1[立即加入 Context]
-  L -->|Inspect ref| N[正文/来源/正向关系]
-  L -->|Backlink ref| R[反向 References；过多时 Select]
-  N --> K1
-  R --> K1
-  K1 --> L
-  L -->|Evict refs| V[逐出活跃节点及关联语境，保护本批原文]
-  V --> L
-  L -->|Mutation| M[校验节点/关系/来源 + Embedding]
-  L -->|真正 no-op| S[空 Mutation]
-  M --> T[事务提交，推进本批水位，保留 Workspace]
-  S --> T
-  T --> U{目标水位内还有未处理消息？}
-  U -->|有| J
-  U -->|无| H
-  L -.依赖/校验/预算失败.-> X[显式错误；已提交前缀保留，未完成尾部留待官方重放]
-  M -.失败.-> X
-  classDef llm fill:#fff3cd,stroke:#b8860b,color:#000
-  class L llm
+ A[Add messages/user/session/request_id] --> B[同用户锁；逐请求幂等]
+ B --> C[RawEvent + MemoryWorking + 接收水位]
+ C --> D[最低episode原文投影]
+ D --> E[BM25索引 + Embedding模型]
+ E --> F{触发策略：积累/容量/明确变化/会话切换/失败重放}
+ F -->|未触发| Z[保留缓冲；验证本请求索引；返回200]
+ F -->|触发| G[冻结请求处理前缀；重放不扩大目标]
+ G --> H[本批完整原文 + 全前缀有界概览 + 保留Workspace]
+ H --> I[旧记忆Query：先按批次起点筛资格，再BM25/Embedding；过多时LLM Select]
+ I --> J{LLM工具决策}
+ J -->|Query；人物可绑定new ref| Q[旧候选References]
+ J -->|Inspect：可见位置/可选页| R[精确原文或Item范围 + 正向引用]
+ J -->|Backlink：可见位置| K[反向References；过多时LLM Select]
+ Q --> X[立即补入语境；新读页保护到下一次主决策]
+ R --> X
+ K --> X
+ X --> J
+ J -->|Evict| V[仅逐出非保护活跃内容，不消费WorkingMemory]
+ V --> J
+ J -->|Mutation| M[逐项依据检查；旧目标同版本全文已读且本次可见]
+ M --> N[新增/修改节点Embedding；原子提交节点/边/水位]
+ J -->|真正no-op| N
+ N --> O{冻结前缀仍有消息？}
+ O -->|有| H
+ O -->|无| Z
+ M -->|缺依据| J
+ J -.依赖/预算/未解决门槛失败.-> ER[显式错误；保留已提交前缀，交给调用方重放]
+ classDef llm fill:#fff3cd,stroke:#b8860b,color:#000
+ class J llm
 ```
 
-黄色节点是 LLM 决策。Query/Backlink 的候选过多时另调用 LLM Select；Embedding 单独记录为模型调用。
+普通触发要求至少2个不同Add，并达到8条消息或6000正文字符；单Add达到64条或约36000序列化字符可以容量触发。普通now/never或“忘带伞”不触发；明确更新/删除只是触发信号，仍要通过来源与遗忘授权校验。会话切换仅整理此前连续前缀；新会话首条保留在缓冲，若本次同时满足积累/容量/明确变更条件，则处理到本请求末端。A→B→A按连续段处理，不按相同session_id合并。
 
-本地总期限默认 **1740秒（29分钟）**，包含 Add 排队；单次模型等待最多120秒且受剩余总期限约束。不为空耗时而等待。触发后默认每批最多32条完整消息、约18000字符，最多64批；对整包工具定义、提示词、语境和原文按80000字符检查。单条消息本身无法容纳时显式失败，不通过截短全部原文假装完成。
+最低episode索引成功不等于每次Reflection。触发后Add等待冻结目标完成才返回200；未触发则保留缓冲。标准Search不排空WorkingMemory，最后一次Add没有触发也能通过最低episode检索。
 
-目前仍是**同用户锁内同步处理**，尚未实现计划中的“并发先追加、短窗口合并、单全局协调器”。延长期限不能代替吞吐验证。默认8条/6000字符以及现有更新关键词触发规则暂未调整；真实主实验曾过早触发，下一步需要改进触发的语义。2026-10-12 的100题基线还发现 Select 分页将全集位置误当页内位置，已改为页内位置并保留 `candidate_position` 观测；代码回归通过，2026-10-13n 真实复跑已完成，结果与缺口见[100题重跑复核](./docs/doing/2026-10-14-amlink-100-rerun-review.md)。
+默认总期限1740秒，包含排队；模型单次120秒。批次32条/18000字符，最多64批；Reflection16轮，最后一轮只允许提交或真正no-op。单轮工具定义、正文、语境共计80000字符。未解决的缺材料提案不能改成空Mutation/no-op推进水位。完整并发追加协调器仍属于P2。
 
-内部工具名 `reflection_search` 目前实际是 Query/Select；后续 Inspect/Backlink 由同一 Reflection loop 决策。这已补上探索能力，但还不是“一次调用完整复用标准 Search”的嵌套实现，需避免术语误导。
-
-## Search：候选发现、按引用探索、证据输出
+## Search：独立语境，沿引用读取证据
 
 ```mermaid
 flowchart TD
-  A[question + 新建独立 Context] --> B{复杂问题触发查询扩展？}
-  B -->|是| C[LLM：原问题 + 若干查询表达]
-  B -->|否| D[原问题]
-  C --> E[各分支 BM25 + Embedding]
-  D --> E
-  E --> F[按 ref 合并，保留命中片段/分支来源]
-  F --> G{候选过多？}
-  G -->|是| S[LLM Select：question + References，有序子集]
-  G -->|否| H[References 进入本次 Context]
-  S --> H
-  H --> I{LLM：Inspect / Backlink / Stop}
-  I -->|Inspect ref| J[Item 正文/来源 + 正向 References 与关系说明]
-  J --> H
-  I -->|Backlink ref| K[反向 References 与关系说明]
-  K --> L[过多时 LLM Select]
-  L --> H
-  I -->|Stop 或步数预算| M[按候选顺序装箱：状态/来源/时间/关系/字符预算]
-  M --> N[返回证据卡片；不生成答案]
-  classDef llm fill:#fff3cd,stroke:#b8860b,color:#000
-  class C,S,I,L llm
+ A[question + 每次新Context] --> B{复杂查询？}
+ B -->|是| C[LLM生成多个具体查询表达]
+ B -->|否| D[原问题]
+ C --> Q[各分支BM25 + Embedding]
+ D --> Q
+ Q --> U[按ref合并，保留分支与命中范围]
+ U --> S[候选多时LLM Select：question + References]
+ S --> L{LLM：Inspect / Backlink / Stop}
+ L -->|Inspect：本次可见位置和页| I[Item或原文范围 + 正向References]
+ L -->|Backlink：本次可见位置| K[反向References；过多时LLM Select]
+ I --> P[立即加入Context；新页必须回放到下次主决策]
+ K --> P
+ P --> L
+ L -->|Stop；末轮保留停止决策| G[按本次实际探索路径形成证据组]
+ G --> F[确定性两遍装箱：先保留每组支持，再补互补窗口]
+ F --> O[证据卡片：来源/日期/关系/范围；不生成答案]
+ classDef llm fill:#fff3cd,stroke:#b8860b,color:#000
+ class C,S,L,K llm
 ```
 
-Inspect 不做 Select。同一 ref 可以先 Inspect 再 Backlink；去重单位是“ref + 操作”。工具结果立即影响下一次决策，可以走 `Inspect A → 新引用 B → Inspect B` 或 `Inspect A → Backlink A → Inspect C`。默认最多3跳、8步；跳数只是上限。当前模型可以在不同深度已知引用中选择，属于有深度约束的引用探索，并非严格逐层清空队列的经典 BFS。
+Search近似于Query＋有深度上限的Inspect/Backlink多跳＋候选过多时Select。默认最多3跳、8次主决策；模型可从不同深度已知引用选择，并非逐层清空队列的经典BFS。续页不新增节点/跳数，但消耗决策步数。Inspect不做Select；Backlink返回带叙事引用，正文按需Inspect。
 
-**10月23日发现，尚未修复：**Search 将裁剪后的 frontier 提供给模型，却按完整 frontier 解析位置；Reflection 的引用字典又会在模型请求中按键排序，工具位置仍按内部顺序解释。两者均可能读错ref。目标修复是先投影，再生成显式“位置 + 语义ref + 叙事”清单，工具定义与执行共用该清单。已有真实BFS次数只证明发生过操作，不能证明这些情况下正确执行了模型的选择。
+## 引用位置和模型实际可见范围
 
-Query 候选数量不再耗尽图扩展名额。节点扩展、深度、操作去重、模型语境投影分别记录，便于判断“有边没走”“没看到正文”和“候选被裁剪”。
+每次先投影，再冻结显式编号清单；工具枚举、模型输入与解码共用这一清单。字典排序不能改变工具位置。Inspect/Backlink/Evict仅提供本次实际允许的位置，空清单不会生成空整数枚举。Select使用同样的页内位置规则，合法空集、去重并保持顺序；混入无效位置会显式失败。
 
-### Select 的当前语义
+内部片段记录origin_ref、正文digest、Python Unicode字符半开区间[start,end)及原文text。标签、来源时间和省略说明放在范围外。Reference能保留同源多个分支命中窗口；重叠合并，二次裁剪同步收缩范围。
 
-输入是 **question + 候选 References**，不再复制整个调用方 Context。每条候选带类型、语义引用、标签、命中片段及其覆盖情况、来源和命中分支；最低 episode 预览优先展示问题相关的完整消息及日期。
+Inspect按已有Item及其合法sources分页。模型选择可读页编号，不直接提供任意偏移；每次最多展示8个续页选项，后续调用可继续披露。新页先占预算，再填自动预览；页的保护在下一次成功主决策实际包含该页后解除，Select/embedding不解除。实际输入范围进入receipt：它证明材料送达并返回，不证明模型理解。遗忘、删除或版本变化使缓存范围及阅读依据失效。
 
-```mermaid
-flowchart LR
-  A[Query 合并候选或 Backlink 候选] --> B[按候选条数和序列化体积分页]
-  B --> C[LLM：每页 Select]
-  C --> D[合并全部页的保留候选]
-  D --> E[多页时 LLM：统一 Select 和排序]
-  E --> F[有序子集：包括合法空集合]
-```
+## Reflection依据与Workspace
 
-默认每页最多24条。全局选择装不下时缩短候选预览并标明覆盖，仍保留全部已选候选；极端身份信息本身超预算则明确失败。分页能降低单次输入，却可能在页内阶段错删互补证据，需要后续同切片对照；不把分页本身当成召回改进的证明。
+旧候选资格先于词法/向量候选上限检查；本批及未来最低episode不能冒充旧身份匹配。更新旧目标、改旧关系端点需要同版本Inspect，且所需正文在最终Mutation调用可见。冲突/替代两侧需要可见来源；新引用来源必须是已展示来源，继承来源不被冒充新增支持。
 
-### 最终证据装箱
+每个新person需要绑定new ref的定向旧身份Query：成功空结果允许no_prior_match；有候选需读相关候选。全新端点之间的关系可由本批原文直接支持，不强迫无关旧检索。程序校验的是材料与过程，人物语义是否正确仍需实测。
 
-不再按旧检索分数覆盖 Select 顺序。最低 episode 展开来源原文一次，不同时重复展示整篇 episode 和相同原文；派生节点保留自身叙事，已完整出现的来源用前卡片引用复用。分配每张卡片的可用篇幅，优先保留完整消息；长消息片段和省略来源逐项记录。时间显示为明确的来源UTC时间，不能混同存储时间 `created_at`，也不擅自断言相对时间对应的事件日期。
+Workspace格式v1，有界至2×context_chars，节点和引用受现有预算限制。先折叠非保护正文，再逐出低优先级引用；保护新读页与未解决变更依据，全部受保护仍超限则失败。旧格式仅恢复有效引用，不虚构旧阅读凭据；未知格式显式拒绝。原文始终留在数据库。
 
-当前停止后仍从“Query有序候选 + 图新增候选”装箱，但已增加确定性的来源覆盖投影：每张卡片保留逐来源 evidence units、shown range、完整/片段状态和省略原因。篇幅足够时展示全部来源原文，最终装箱不沿用 Reference 预览最多4片段的限制；篇幅不足时从多个来源分配互补片段。当前每次互补投影对同一来源仍最多取一个片段，不代表同一长消息中的多处证据都已覆盖。复用来源通过 `reused_from` 指向首次完整展示的卡片，缺失来源记为 `source_unavailable`，不能因列表为空就宣称闭合。这里的 complete 只表示已声明来源的展示完整，不保证回答所需证据已被找齐。
+## 最终证据组合与研究对照
 
-受限 LLM 装箱仍只计划做离线对照：模型只能选择已有证据片段编号和顺序，系统负责展开、去重、日期和预算校验；尚未实施或验证。
+保持Query/Select根引用顺序，把实际探索且有用的图补充、连接节点、关系及其来源放入较早根引用的证据组。A→C的有效补充不再默认排在所有初始候选之后。supersedes/contradicts两侧不提前过滤。卡片id仍是已有根ref，score表达返回顺序；证据组不是存储节点。
 
-10月23日合成反例进一步确认：Query候选A、B排在前面，Inspect A发现关键C后，`top_k=2`仍装入A、B，C正文没有输出。下一步需对Query与图候选的整个集合做确定性证据组合；保持Select顺序不等于把所有后发现证据永久放在尾部。先修默认确定性路径，再按已确认方案离线对照受限LLM。
+两遍分配先给各组支持窗口，再补剩余材料；最终入选后才按来源版本/范围去重，共享标记只指向前面已经返回的卡片。逐项记录来源缺失或预算裁剪。声明来源完整、路径闭合、答案证据充分是三件事，最后一项默认unknown。
 
-## 验证与未完成事项
+`amlink.packing_experiment.compare`用于离线受限LLM对照：冻结相同候选/范围/路径/字符预算，只调用一次模型选择已有组和片段位置，拒绝新写证据或答案，失败不回退成成功。默认Search不调用这个阶段。组卡改变@k含义，实验必须注明packing_unit，并同时报告字符预算覆盖，不能与旧独立节点卡直接混算。
 
-2026-10-23 提交前审查：修复了最终装箱的4来源上限、复用/缺失来源账本遗漏和风险门槛可由无关探索通过的问题。门槛先验证工具输出结构，再逐个检查被修改旧节点及旧关系端点是否在本批 `inspected_refs` 与实际 Inspect/Backlink 记录中；`new_information`/`no_prior_match` 不能绕过载荷中的风险。对全新人物/关系，仍只能证明模型执行过探索，尚不能判断其探索语义是否充分。当前方法、靶场、数据层和可视化联合测试100项通过；未进行新的真实模型实验。详情与提交范围见[提交前检查](./docs/doing/2026-10-23-commit-readiness.md)。
+## 观测及验证
 
-2026-10-16 核验：无模型 l4 本地切片完成 5/5 Add、1/1 Search；top-5 evidence recall、hit rate、chain coverage 均为 1.0，5 张证据卡均为 complete，证明确定性证据闭合与观测接线。top-1 recall 为 0.428571，窄预算下的排序仍待优化。真实 l4 模型复验因 provider network 失败，不能评价新方法；模型语境投影现在也记录原文与实际展示覆盖。
+[观测标准](benchmark/OBSERVABILITY.md)沿用span及artifact协议。当前记录引用清单、工具参数、原文范围回执、Reflection门槛缺项、缓冲目标及证据组决策；网页显示有界预览和原始artifact路径，旧记录缺项显示未知。HTTP默认不开内部轨迹。
 
-确定性回归覆盖失败 Add 重放、分批与水位、完整消息预算、最低 episode 保护、派生节点嵌入、Select 分页/空集/顺序、Inspect/Backlink 交替、Workspace 保留、日期去重装箱、互补片段范围和 Reflection 先看再写门槛；2026-10-15 当前 `amlink/tests benchmark/tests` 共64项通过，`py_compile`通过。旧真实积压1445条在副本中用替身模型分48批消费完，最终代码最大模型输入74596字符；**这不是实际 Reflection 质量验证**。真实模型21个跨数据集锚点和完整100题运行显示：Search已使用Inspect/Backlink，Reflection仍需要新的真实切片验证是否会响应门槛并形成探索路径；结构数量增加不等于来源归属和导航质量提高。完整结果见[10月14日重跑复核](./docs/doing/2026-10-14-amlink-100-rerun-review.md)和[扩展验证报告](./docs/doing/2026-10-13-amlink-expanded-validation.md)。
-
-待讨论：会话边界与容量触发如何支持更完整视角；跨批维护后再 Mutation 的粒度；人物身份复用和有来源的稀疏导航图；复杂问题的互补证据需求；长节点 Inspect 的进一步披露。当前预算投影可能隐藏重要内容，完整 Workspace 也尚无自动容量回收策略。
-
-0.2.0失败基线仍为：主实验148 episode/4 event/0关系，Add41/145、Search92/100。时间题缺来源日期，多跳题选中证据在装箱丢失，29个最低 episode 被摘要覆盖。新代码修复不追溯改写这些历史事实，也不能从小样本推算完整比赛得分。
-
-埋点遵循[可观测标准](./benchmark/OBSERVABILITY.md)。新增批次/水位、整包预算、分页/合并 Select、关系过滤、图上下文增量和逐项装箱决策；HTTP默认不采集内部轨迹。网页是观测投影，未采集/被浏览器投影截断均应标为未知，不能推断模型没有执行。
+[本轮实施报告](docs/doing/2026-10-23-evidence-loop-implementation.md)保存测试、真实失败/复跑和执行计划核对。历史[0.2.0审计](docs/doing/2026-10-11-amlink-core-audit.md)、[100题重跑](docs/doing/2026-10-14-amlink-100-rerun-review.md)保留原貌，不能当作当前代码成绩。

@@ -127,7 +127,18 @@ def attach_spans(run: dict, path: Path, request_scope: dict) -> None:
                 else:
                     summary = f"候选第 {value['rank']} 名；分数 {value['score']:.4f}；{'返回' if value['selected'] else '未返回'}；{value['corpus_size']} 条存储消息中 {value['positive_candidates']} 条正分。"
                     content = value["content"]
-                projected.append({"id": ref["id"], "summary": summary, "content": excerpt(content, 350)})
+                preview = {"id": ref["id"], "summary": summary, "content": excerpt(content, 350),
+                           "artifact": ref["artifact"], "preview_only": len(content) > 350}
+                if native:
+                    try:
+                        detail = json.loads(content)
+                    except (ValueError, TypeError):
+                        detail = None
+                    if isinstance(detail, dict) and detail.get("format_version") == 1:
+                        panel = evidence_panel(detail)
+                        if panel:
+                            preview["evidence_panel"] = panel
+                projected.append(preview)
             previews[event["span_id"]] = projected
     for query in run["queries"]:
         requests = {query["search_id"]} | {a["id"] for a in query["adds"]}
@@ -139,3 +150,25 @@ def attach_spans(run: dict, path: Path, request_scope: dict) -> None:
                     for ref in e["outputs"] if ref["kind"] == "memory"]
                 if len(outputs) == 1:
                     add["memory_snapshot"] = read_memory_snapshot(path, outputs[0])
+
+
+def evidence_panel(value):
+    """Versioned bounded display, only after artifact path/hash/shape validation."""
+    if "disclosures" in value:
+        return {"title": "模型实际可见范围", "status": value.get("status", "unknown"),
+                "rows": [{"type": "引用清单", "position": row.get("position"), "ref": row.get("ref"),
+                          "actions": row.get("allowed_actions"), "narrative": row.get("narrative", "")[:180]}
+                         for row in value.get("choices", [])[:20]] +
+                        [{"type": "原文范围", "ref": row.get("origin_ref"), "range": row.get("shown_range"),
+                          "version": row.get("content_digest"), "text": row.get("text", "")[:350]}
+                         for row in value["disclosures"][:20]],
+                "shown": min(20, len(value["disclosures"])), "total": len(value["disclosures"])}
+    if value.get("packing_unit") == "evidence_group" and "decisions" in value:
+        return {"title": "路径证据组装箱", "rows": [{key: row.get(key, "unknown") for key in
+                ("ref", "members", "included", "reason", "closure", "path_closed", "answer_evidence_complete")}
+                for row in value["decisions"][:20]], "shown": min(20,len(value["decisions"])), "total": len(value["decisions"])}
+    if "target" in value and "trigger" in value:
+        return {"title": "缓冲与稳定处理前缀", "rows": [value], "shown": 1, "total": 1}
+    if "accepted" in value and ("required" in value or "actual_inspections" in value):
+        return {"title": "Reflection变更依据", "rows": [value], "shown": 1, "total": 1}
+    return None
