@@ -2,6 +2,7 @@
 from .evidence import ranges_complete
 from .reflection import parse_mutation
 from .text import digest
+from .projection import range_is_visible
 
 
 def missing_material(arguments, context):
@@ -18,18 +19,25 @@ def missing_material(arguments, context):
         node = items.get(ref)
         version = node.get("content_digest") or digest(node["text"]) if node and "text" in node else None
         body = [v for v in shown if v["origin_ref"] == ref and v["content_digest"] == version]
-        if not version or inspected.get(ref) != version or not ranges_complete(body, node.get("body_chars", len(node["text"]))):
+        read = [v for v in context.get("read_ranges", []) if v["origin_ref"] == ref and v["content_digest"] == version]
+        length = node.get("body_chars", len(node["text"])) if node else 0
+        read_ok = ranges_complete(read, length) if "read_ranges" in context else inspected.get(ref) == version
+        if not version or not read_ok or not ranges_complete(body, length):
             missing.append({"ref": ref, "need": "same_version_inspect_full_body_in_final_call"})
     for item in mutation.items:
         if item.kind != "person" or item.ref in known:
             continue
+        if context.get("old_scope", {}).get("empty") is True:
+            continue  # Database scope receipt; not a fabricated query receipt.
         query = context.get("identity_queries", {}).get(item.ref)
         if not query:
             missing.append({"ref": item.ref, "need": "targeted_old_identity_query"})
         elif not query["refs"]:
             if not mutation.no_prior_match:
                 missing.append({"ref": item.ref, "need": "declare_no_prior_match"})
-        elif not any(ref in inspected and any(v.get("item_ref") == ref for v in shown) for ref in query["refs"]):
+        elif not any(ref in inspected and any(v.get("item_ref") == ref and
+                    ("read_ranges" not in context or range_is_visible(v, context["read_ranges"]))
+                    for v in shown) for ref in query["refs"]):
             missing.append({"ref": item.ref, "need": "inspect_targeted_identity_candidate"})
     visible_sources = set(context.get("visible_source_refs", []))
     if "visible_source_refs" in context:

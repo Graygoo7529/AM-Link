@@ -8,6 +8,8 @@ AM-Link 只提供官方要求的 Add/Search，Search 返回证据，不生成最
 
 2026-10-23接入P0/P1：显式可见位置、精确多窗口、Inspect续页与回放保护、路径证据组、逐项Reflection依据、跨Add积累与冻结会话前缀。当前实现总览以[DESIGN](../DESIGN.md)为准；[实施核对](../docs/doing/2026-10-23-evidence-loop-implementation.md)保留工程测试、真实失败和方法限制。新工具接口不等于质量验收完成。
 
+同日后续[闭环实施报告](../docs/doing/2026-10-23-reflection-convergence-implementation.md)：统一最终投影范围、恢复隐藏页读取、保留必要旧正文；数据库空旧范围可替代人物空Query，非法关系阻止整批提交，反馈随材料补齐更新。140项回归通过、220次新增真实调用；当前仍有Reflection协议/探索失败，未通过整体方法验收。Workspace内部格式v2，旧阅读凭据需重新取得；公开API和数据库版本不变。默认确定性装箱，离线LLM对照虽输出合法但漏掉一个来源。
+
 ## 核心边界
 
 - 每个成功 Add 先保存不可变 `RawEvent`，再生成保留角色、会话、顺序、来源日期和原文的最小 `episode`，完成 BM25 与 embedding 索引。触发 Reflection 时，还要等待本请求目标水位内的全部批次终结才返回200；其他请求推进水位不能替代该请求的episode/索引检查。

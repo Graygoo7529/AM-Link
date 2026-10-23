@@ -11,7 +11,7 @@ from .errors import MemoryError
 from .evidence import (complementary_passages, episode_label, episode_text, passages, slug,
                        source_date, fragment, pages, ranges_complete, shrink_fragment)
 from .evidence import _excerpt_with_range
-from .projection import Choices
+from .projection import Choices, visible_fragments, range_receipt, range_is_visible
 from .reflection_policy import plan_prefix, prefix_overview
 from .grounding import missing_material
 from .packing import freeze_pack, pack_frozen
@@ -68,9 +68,16 @@ class Engine:
         """Make a bounded, still-readable narrative view for one model call."""
         value = Engine._view(row)
         if isinstance(value.get("text"), str):
-            _, (start, end), _ = _excerpt_with_range(value["text"], text_limit, query)
-            value["text"] = row["text"][start:end]
-            value["text_fragment"] = fragment(row, start, end, query=query)
+            if row.get("text_fragment"):
+                shown = shrink_fragment({**row["text_fragment"], "text": row["text"]}, text_limit)
+            else:
+                _, (start, end), _ = _excerpt_with_range(value["text"], text_limit, query)
+                shown = fragment(row, start, end, query=query)
+            # The full maintenance question already appears once in context.
+            # Repeating it in every source receipt can outweigh all body text.
+            shown["query"] = excerpt(str(shown.get("query", "")), 160)
+            value["text"] = shown["text"]
+            value["text_fragment"] = {k: v for k, v in shown.items() if k != "text"}
         if isinstance(value.get("source_refs"), list):
             value["source_refs"] = value["source_refs"][:64]
         return value
@@ -81,10 +88,17 @@ class Engine:
         result = {"question": excerpt(str(context.get("question", "")), 1200),
                   "references": {}, "items": {}, "sources": [], "edges": [], "disclosures": []}
         pinned = set(context.get("pinned", []))
-        protected = set(context.get("protected_refs", []))
+        protected = set(context.get("protected_refs", [])) | set(context.get("protected_bodies", []))
         disclosed = context.get("disclosures", [])
-        mandatory = [v for v in disclosed if v["fragment_id"] in pinned or v.get("item_ref") in protected]
+        mandatory = [v for v in disclosed if v["fragment_id"] in pinned or v["origin_ref"] in protected
+                     or v["origin_ref"] in context.get("protected_sources", [])]
         result["disclosures"] = list(mandatory)
+        if context.get("old_before"):
+            result["reflection_control"] = {
+                "old_scope": context.get("old_scope"), "last_gate_error": context.get("last_gate_error"),
+                "recent_actions": context.get("action_log", [])[-6:],
+                "identity_queries": {key: {**v, "refs": v["refs"][:8], "candidate_count": len(v["refs"])}
+                    for key, v in list(context.get("identity_queries", {}).items())[-8:]}}
         # Metadata/navigation are part of the same budget. A required page is
         # indivisible and cannot disappear during a second projection.
         if len(dumps(result)) > max(0, limit - 600):
@@ -100,7 +114,7 @@ class Engine:
         refs, items = context.get("references", {}), context.get("items", {})
         priority = [v.get("item_ref") for v in result["disclosures"] if v.get("item_ref")]
         omitted = []
-        for ref in dict.fromkeys([*priority, *reversed(items), *refs]):
+        for ref in dict.fromkeys([*sorted(protected), *priority, *reversed(items), *refs]):
             reference = dict(refs.get(ref, {}))
             if not reference and ref in items:
                 reference = self._reference(items[ref], result["question"], "context")
@@ -124,7 +138,7 @@ class Engine:
                     result["references"].pop(ref)
                     omitted.append(ref)
                     continue
-            if ref in items and not items[ref].get("scope_omit_body"):
+            if ref in items and not items[ref].get("scope_omit_body") and not any(v["origin_ref"] == ref for v in result["disclosures"]):
                 result["items"][ref] = self._model_row(items[ref], result["question"], 1200)
                 if len(dumps(result)) > limit - 1000:
                     result["items"].pop(ref)
@@ -144,9 +158,6 @@ class Engine:
         result["depths"] = {ref: depth for ref, depth in context.get("depths", {}).items() if ref in visible}
         result["explored"] = [entry for entry in context.get("explored", []) if entry[0] in visible]
         result["projection"] = {"omitted_refs": omitted, "reason": "context_budget"}
-        if context.get("last_gate_error") or context.get("identity_queries"):
-            result["reflection_control"] = {"last_gate_error": context.get("last_gate_error"),
-                "identity_queries": context.get("identity_queries", {})}
         # Optional navigation metadata may be folded, but required material never is.
         for key in ("explored", "depths", "frontier"):
             if len(dumps(result)) > limit:
@@ -259,6 +270,16 @@ class Engine:
                            [row["ref"] for row in context.get("sources", [])])
         definitions = schema.get("$defs", {})
         item_properties = definitions.get("ItemChange", {}).get("properties", {})
+        item_properties["ref"] = {"type": "string", "pattern": "^(new:.+|memory:.+)$",
+            "description": "Node identifier, NEVER a raw: source identifier. For a new node invent a meaningful new: label, e.g. new:daily-api-quota. For an existing node copy an exact loaded memory: ref."}
+        link_properties = definitions.get("LinkChange", {}).get("properties", {})
+        for endpoint in ("from_ref", "to_ref"):
+            link_properties[endpoint] = {"type": "string", "pattern": "^(new:.+|memory:.+)$",
+                "description": "Exact new: item placeholder from this proposal or a loaded memory: ref. Never raw:."}
+        link_properties["relation"]["description"] = (
+            "Direction: about is fact/event -> person/entity/concept/event; contains is episode -> fact/event; "
+            "supersedes/contradicts connect same-type fact/event; same_event_as connects events. "
+            "A person is the TO endpoint of about, never its FROM endpoint.")
         if "kind" in item_properties:
             item_properties["kind"]["enum"] = ["episode", "person", "entity", "concept", "event", "fact"]
             item_properties["kind"]["description"] = (
@@ -292,13 +313,13 @@ class Engine:
             "type": "string",
             "enum": ["new_information", "update_existing", "resolve_conflict",
                       "identify_person", "add_relation"],
-            "description": "Updates, conflicts, person identity and relation changes require a prior Inspect or Backlink."}
+            "description": "Old targets require Inspect body evidence. Backlinks alone never authorizes a change."}
         properties["inspected_refs"] = {
             "type": "array", "items": {"type": "string"}, "maxItems": 64,
             "description": "Exact loaded memory refs examined before this mutation."}
         properties["no_prior_match"] = {
             "type": "boolean",
-            "description": "True only when orientation found no old match for genuinely new information."}
+            "description": "True after a successful empty identity query or the supplied database old_scope.empty receipt."}
         return schema
 
     def _ensure_episode(self, request, row, raw_refs, started):
@@ -358,15 +379,18 @@ class Engine:
                         continue
                     positions = {"type": "integer", "enum": allowed}
                     properties = ({"reference_positions": {"type": "array", "items": positions, "maxItems": len(allowed)}}
-                                  if action == "evict" else {"reference_position": positions,
-                                      "page_position": {"anyOf": [{"type": "integer", "minimum": 0, "maximum": 7}, {"type": "null"}]}})
+                                  if action == "evict" else {"reference_position": positions})
                     if action == "inspect":
                         properties = {"target": choices.inspect_target_schema("reference_position")}
                     tools.insert(1, _tool("reflection_" + action,
                         {"evict": "Evict allowed active references only; never delete stored memory.",
                          "inspect": "Read an unread page of a supplied reference. Use null for next relevant page, or exactly a page offered for that reference.",
-                         "backlinks": "Discover references pointing to this supplied reference; Select when numerous. Use page_position=null."}[action],
+                         "backlinks": "Discover references pointing to this supplied reference; Select when numerous."}[action],
                         {"type": "object", "properties": properties, "additionalProperties": False}))
+            if context.get("old_scope", {}).get("empty"):
+                tools = [t for t in tools if t["name"] != "reflection_search"]
+            if context.get("last_gate_error"):
+                tools = [t for t in tools if t["name"] != "reflection_stop"]
             return [tool for tool in tools if tool["name"] in {"reflection_mutation", "reflection_stop"}] if terminal else tools
         for step in range(self.config.reflection_steps):
             if time.monotonic() >= deadline:
@@ -382,8 +406,7 @@ class Engine:
                 choices = self._visible_choices(user, context, payload["context"],
                                                 payload["context"].get("references", {}), evict=True)
                 visible_sources = {row["ref"] for row in pending}
-                visible_sources.update(row["ref"] for row in payload["context"].get("sources", []))
-                visible_sources.update(value["origin_ref"] for value in payload["context"].get("disclosures", [])
+                visible_sources.update(value["origin_ref"] for value in visible_fragments(payload["context"])
                                        if value["origin_ref"].startswith("raw:"))
                 visible_sources = {ref for ref in visible_sources if (source := self.store.get(user, ref))
                                    and source.get("ordinal", watermark + 1) <= watermark}
@@ -396,13 +419,18 @@ class Engine:
                 raise MemoryError("reflection_message_budget", 413)
             with self.observer.span("reflection", "reflection tool decision", inputs=payload) as event:
                 name, arguments = self._call_tool("reflection", prompt(), payload, tools, deadline)
-                self._record_visible(context, payload["context"], "reflection")
+                self._record_visible(context, payload["context"], "reflection", payload["working"])
                 self.observer.output(event, {"tool": name, "arguments": arguments}, kind="context", title="Reflection 工具调用")
             if name == "reflection_search":
                 question = str(arguments.get("question", "")).strip()
                 if not question:
                     raise MemoryError("reflection_search_invalid", 502)
+                key = digest([question.casefold().strip(), context.get("old_before")])
+                if key in context.get("completed_queries", []):
+                    raise MemoryError("reflection_no_query_progress", 409)
                 refs = self._search_refs(user, question, context, deadline, mode="reflection")
+                context.setdefault("completed_queries", []).append(key)
+                self._reflection_action(context, "query", question=excerpt(question, 160), candidates=len(refs))
                 if arguments.get("for_new_ref"):
                     context.setdefault("identity_queries", {})[arguments["for_new_ref"]] = {
                         "question": question, "refs": [row["ref"] for row in refs]}
@@ -416,6 +444,7 @@ class Engine:
                 action = "inspect" if name == "reflection_inspect" else "backlinks"
                 ref = choices.resolve(position, action)
                 self._explore(user, ref, action, context, context["question"], deadline, arguments.get("page_position"))
+                self._reflection_action(context, action, ref=ref)
                 self._refresh_context(user, context, pending)
                 self._save_workspace(user, state="maintenance", context=context)
                 continue
@@ -433,6 +462,7 @@ class Engine:
                 self._refresh_context(user, context, pending)
                 with self.observer.span("reflection", "reflection evict", inputs={"refs": evicted_refs}) as event:
                     self.observer.output(event, {"evicted": [ref for ref in evicted_refs if ref in allowed]}, kind="context", title="Reflection Evict")
+                self._reflection_action(context, "evict", refs=evicted_refs)
                 self._save_workspace(user, state="maintenance", context=context)
                 continue
             if name == "reflection_mutation":
@@ -441,23 +471,23 @@ class Engine:
                         raise MemoryError("reflection_unresolved_evidence", 409)
                     try:
                         self._check_reflection_basis(arguments, context)
+                        prepared = prepare_mutation(arguments, user=user, request_id=request.request_id, number=watermark,
+                                                    context=context, store=self.store)
+                        if prepared["filtered_links"]:
+                            self._reflection_feedback(user, context, arguments, [], prepared["filtered_links"],
+                                                      event, step, "reflection_invalid_relations")
+                            continue
                     except MemoryError as error:
+                        if error.code in {"mutation_fact_overwrite", "minimum_episode_immutable", "mutation_invalid_identity"}:
+                            self._reflection_feedback(user, context, arguments, [], [{"reason": error.code,
+                                "instruction": "Reference unchanged old items without re-emitting them. New facts/events use new: refs; minimum episodes cannot be rewritten."}],
+                                event, step, error.code)
+                            continue
                         if error.code != "reflection_orientation_required":
                             raise
                         missing = missing_material(arguments, context)
-                        signature = digest([arguments, context.get("last_visible", []), context.get("identity_queries", {})])
-                        if signature == context.get("rejected_proposal"):
-                            raise MemoryError("reflection_no_evidence_progress", 409)
-                        context["rejected_proposal"] = signature
-                        context["last_gate_error"] = {"code": error.code, "missing": missing}
-                        context["protected_refs"] = [row["ref"] for row in missing if row["ref"].startswith("memory:")]
-                        self.observer.output(event, {"format_version": 1, "accepted": False, "reason": error.code,
-                                                     "required": missing}, kind="context",
-                                            title="Reflection 先看再写门槛")
-                        self._save_workspace(user, state="maintenance", context=context)
+                        self._reflection_feedback(user, context, arguments, missing, [], event, step, error.code)
                         continue
-                    prepared = prepare_mutation(arguments, user=user, request_id=request.request_id, number=watermark,
-                                                context=context, store=self.store)
                     self.observer.output(event, {"format_version": 1, "basis": arguments.get("basis", "new_information"),
                                                  "inspected_refs": arguments.get("inspected_refs", []),
                                                  "actual_inspections": context.get("inspections", {}),
@@ -475,7 +505,47 @@ class Engine:
             raise MemoryError("unknown_reflection_tool", 502)
         raise MemoryError("reflection_tool_budget", 504)
 
+    @staticmethod
+    def _reflection_action(context, action, **details):
+        context["action_log"] = [*context.get("action_log", []), {"action": action, **details}][-6:]
+
+    def _reflection_feedback(self, user, context, arguments, missing, invalid_links, event, step, code):
+        signature = digest([arguments, context.get("last_visible", []), context.get("read_ranges", []),
+                            context.get("identity_queries", {})])
+        problem = digest([missing, invalid_links, context.get("read_ranges", []),
+                          context.get("identity_queries", {})])
+        self.observer.output(event, {"format_version": 1, "accepted": False, "reason": code,
+            "required": missing, "invalid_links": invalid_links}, kind="context", title="Reflection 提交前反馈")
+        if signature == context.get("rejected_proposal") or problem == context.get("rejected_problem"):
+            raise MemoryError("reflection_no_evidence_progress", 409)
+        context["rejected_proposal"] = signature
+        context["rejected_problem"] = problem
+        context["last_gate_error"] = {"code": code, "missing": missing[:16], "invalid_links": invalid_links[:8]}
+        context["protected_refs"] = [v["ref"] for v in missing if v["ref"].startswith("memory:")]
+        context["protected_sources"] = [v["ref"] for v in missing if v["ref"].startswith("raw:")]
+        # Load only navigation for missing targets; this is not an implicit Inspect.
+        for ref in context["protected_refs"]:
+            if node := self.store.get(user, ref):
+                context.setdefault("references", {})[ref] = self._reference(node, context["question"], "required", user, context.get("old_before"))
+        for source_ref in context["protected_sources"]:
+            source = self.store.get(user, source_ref)
+            if source and (source["ordinal"] < context["old_before"] or source_ref in context.get("new_refs", [])):
+                for node in self.store.nodes(user):
+                    if source_ref in node.get("source_refs", []):
+                        context.setdefault("references", {}).setdefault(node["ref"],
+                            self._reference(node, context["question"], "required_source", user, context.get("old_before")))
+                        break
+        self._reflection_action(context, "proposal_feedback", code=code, missing=len(missing), invalid_relations=len(invalid_links))
+        self._save_workspace(user, state="maintenance", context=context)
+        remaining = self.config.reflection_steps - step - 1
+        # Every missing old body/source needs at least one read and one final call.
+        minimum = len({v["ref"] for v in missing if v["need"] != "declare_no_prior_match"}) + 1
+        if remaining < minimum:
+            raise MemoryError("reflection_material_budget", 409)
+
     def _commit_reflection(self, user, prepared, watermark, deadline, context=None):
+        if prepared.get("filtered_links"):
+            raise MemoryError("reflection_invalid_relations", 409)
         vectors = {}
         if self.config.embedding_enabled and prepared["items"]:
             missing = prepared["items"]
@@ -503,10 +573,10 @@ class Engine:
             blocked_items.update(ref for ref, item in retained.get("items", {}).items() if blocked_sources.intersection(item.get("source_refs", [])))
             for key in ("items", "references", "inspections"):
                 retained[key] = {ref: value for ref, value in retained.get(key, {}).items() if ref not in blocked_items}
-            for key in ("disclosures", "last_visible"):
+            for key in ("disclosures", "last_visible", "read_ranges"):
                 retained[key] = [v for v in retained.get(key, []) if v["origin_ref"] not in blocked_sources | blocked_items and v.get("item_ref") not in blocked_items]
             retained["edges"] = [e for e in retained.get("edges", []) if not blocked_items.intersection((e["from_ref"], e["to_ref"])) and not blocked_sources.intersection(e["source_refs"])]
-            for key in ("prefix_overview", "protected_refs", "last_gate_error", "rejected_proposal", "identity_queries", "visible_source_refs"):
+            for key in ("prefix_overview", "protected_refs", "protected_sources", "protected_bodies", "last_gate_error", "rejected_proposal", "rejected_problem", "identity_queries", "visible_source_refs", "completed_queries", "action_log", "_page_choices"):
                 retained.pop(key, None)
             self._bound_workspace(retained)
             self.store.commit_mutation(user, prepared, watermark=watermark,
@@ -517,14 +587,19 @@ class Engine:
         # Orientation is a bounded discovery expression, never the entire backlog.
         query = excerpt("\n".join(row["text"] for row in pending), min(4000, self.config.batch_chars))
         context = self.store.state(user).get("context") or {"references": {}, "items": {}, "edges": []}
-        if context.get("format_version", 0) not in (0, 1):
+        if context.get("format_version", 0) not in (0, 1, 2):
             raise MemoryError("workspace_version_unknown", 503)
-        if not context.get("format_version"):
-            for key in ("disclosures", "pinned", "inspections", "last_visible"):
+        if context.get("format_version", 0) < 2:
+            for key in ("disclosures", "pinned", "inspections", "last_visible", "read_ranges"):
                 context.pop(key, None)
-        context["format_version"] = 1
+        context["format_version"] = 2
+        context.setdefault("read_ranges", [])
         context["old_before"] = pending[0]["ordinal"]
+        context["old_scope"] = {"before": pending[0]["ordinal"], "empty": self.store.old_scope_empty(user, pending[0]["ordinal"]),
+                                "basis": "database_valid_old_sources", "query_performed": False}
         context.pop("last_gate_error", None)
+        for key in ("protected_refs", "protected_sources", "protected_bodies", "rejected_proposal", "rejected_problem", "completed_queries", "action_log"):
+            context.pop(key, None)
         context["identity_queries"] = {}
         context["question"] = query
         context["new_refs"] = [row["ref"] for row in pending]
@@ -532,9 +607,9 @@ class Engine:
         self._refresh_context(user, context, pending)
         with self.observer.span("reflection", "reflection orientation", inputs={
                 "question": query, "pending_refs": context["new_refs"]}) as event:
-            refs = self._search_refs(user, query, context, deadline, mode="reflection")
+            refs = [] if context["old_scope"]["empty"] else self._search_refs(user, query, context, deadline, mode="reflection")
             self.observer.output(event, {"references": [row["ref"] for row in refs],
-                                         "count": len(refs), "orientation_only": True}, kind="context",
+                                         "count": len(refs), "orientation_only": True, "old_scope": context["old_scope"]}, kind="context",
                                 title="Reflection Orientation 旧记忆候选")
         self._add_context_refs(user, context, refs[:self.config.old_candidates], deadline)
         context["orientation_refs"] = [row["ref"] for row in refs[:self.config.old_candidates]]
@@ -643,13 +718,17 @@ class Engine:
         context["disclosures"] = valid
         ids = {value["fragment_id"] for value in valid}
         context["pinned"] = [key for key in context.get("pinned", []) if key in ids]
-        context["last_visible"] = [value for value in context.get("last_visible", []) if value["fragment_id"] in ids]
+        for key in ("last_visible", "read_ranges"):
+            context[key] = [value for value in context.get(key, [])
+                if (origin := self.store.get(user, value["origin_ref"])) and digest(origin["text"]) == value["content_digest"]
+                and (not value.get("item_ref") or self.store.get(user, value["item_ref"]))]
         context["inspections"] = {ref: version for ref, version in context.get("inspections", {}).items()
                                    if ref in items and digest(items[ref]["text"]) == version}
         self._bound_workspace(context)
 
     def _bound_workspace(self, context):
         context["memories"] = []  # items is the authoritative map; do not serialize it twice.
+        context["read_ranges"] = context.get("read_ranges", [])[-self.config.max_nodes * 8:]
         # Immutable episode bodies can be much larger than a page. Reflection
         # reads their scoped raw pages; retaining the entire hidden episode is
         # not required by the page pin and must not create a false hard budget.
@@ -659,17 +738,38 @@ class Engine:
                     item["content_digest"] = digest(item["text"])
                     item["body_chars"] = len(item["text"])
                 item["text"] = ""
-        protected = set(context.get("protected_refs", []))
+        protected = set(context.get("protected_refs", [])) | set(context.get("protected_bodies", []))
         protected.update(value.get("item_ref") for value in context.get("disclosures", [])
                          if value["fragment_id"] in context.get("pinned", []))
+        # Old sources are reloadable. Keep exact short views rather than another
+        # copy of long code/source bodies; current working is a separate payload.
+        context["sources"] = [row if row["ref"] in context.get("new_refs", []) else
+            self._model_row(row, context.get("question", ""), 240) for row in context.get("sources", [])]
         limit = 2 * self.config.context_chars
         def serialized_size():
             # WorkingMemory is durable in raw_events, never duplicated in the
             # retained Workspace. In-memory sources still serve mutation checks.
-            return len(dumps({**context, "sources": [v for v in context.get("sources", [])
+            return len(dumps({**{k: v for k, v in context.items() if not k.startswith("_")}, "sources": [v for v in context.get("sources", [])
                 if v["ref"] not in context.get("new_refs", [])]}))
         while (serialized_size() > limit or len(context.get("items", {})) > self.config.max_nodes
                or len(context.get("references", {})) > self.config.candidate_limit):
+            # Protect the required body/range, not every old source page of its
+            # owner. Fold optional pages before evicting entire useful nodes.
+            optional = [v for v in context.get("disclosures", [])
+                        if v["fragment_id"] not in context.get("pinned", [])
+                        and v["origin_ref"] not in protected | set(context.get("protected_sources", []))]
+            if serialized_size() > limit and optional:
+                value = optional[0]
+                context["disclosures"].remove(value)
+                context["last_visible"] = [v for v in context.get("last_visible", []) if v["fragment_id"] != value["fragment_id"]]
+                continue
+            visible_origins = {v["origin_ref"] for v in visible_fragments({
+                "disclosures": context.get("disclosures", []), "references": context.get("references", {})})}
+            source_keep = visible_origins | set(context.get("new_refs", [])) | set(context.get("protected_sources", []))
+            optional_sources = [v for v in context.get("sources", []) if v["ref"] not in source_keep]
+            if serialized_size() > limit and optional_sources:
+                context["sources"].remove(optional_sources[0])
+                continue
             refs = [ref for ref in context.get("items", {}) if ref not in protected]
             if refs:
                 ref = refs[0]
@@ -689,7 +789,7 @@ class Engine:
     def _save_workspace(self, user, *, state=None, context=None):
         if context is not None:
             self._bound_workspace(context)
-            context = {**context, "sources": [v for v in context.get("sources", [])
+            context = {**{k: v for k, v in context.items() if not k.startswith("_")}, "sources": [v for v in context.get("sources", [])
                        if v["ref"] not in context.get("new_refs", [])]}
         self.store.save_workspace(user, state=state, context=context)
 
@@ -1045,13 +1145,11 @@ class Engine:
                     properties = {
                             "action": {"type": "string", "enum": [action]},
                             "frontier_position": {"type": "integer", "enum": allowed},
-                            "page_position": {"anyOf": [{"type": "integer", "minimum": 0, "maximum": 7}, {"type": "null"}]},
                             "reason": {"type": ["string", "null"]}}
                     if action == "inspect":
                         properties.pop("frontier_position")
-                        properties.pop("page_position")
                         properties["target"] = choices.inspect_target_schema("frontier_position")
-                    tools.append(_tool("bfs_" + action, "Choose one allowed reference position. Inspect target binds a reference to its offered pages; page_position=null reads next relevant unread page. Backlinks uses null.",
+                    tools.append(_tool("bfs_" + action, "Choose one allowed reference position. Inspect target binds a reference to its offered pages; page_position=null reads next relevant unread page. Backlinks takes only frontier_position and reason.",
                         {"type": "object", "properties": properties}))
         with self.observer.span("retrieve", "bfs action", inputs={"query": query, "context": context}) as event:
             name, data = self._call_tool("bfs", "Explore the supplied memory graph. Choose a numbered context.choices entry and an allowed action. Inspect page_position=null reads the next query-relevant unread page; other positions refer to that choice's pages. Read new links or further pages as needed. Stop when evidence is sufficient; the last decision must stop. Never answer.", {"query": query, "context": projected}, tools, deadline)
@@ -1247,18 +1345,20 @@ class Engine:
             }, kind="context")
         return result
 
-    def _record_visible(self, context, projected, purpose):
+    def _record_visible(self, context, projected, purpose, working=()):
         """Receipt after a successful main decision; Select cannot release pins."""
-        shown = projected.get("disclosures", [])
-        context["last_visible"] = shown
-        ids = {value["fragment_id"] for value in shown}
-        context["pinned"] = [key for key in context.get("pinned", []) if key not in ids]
+        shown = visible_fragments(projected, working)
+        context["last_visible"] = [range_receipt(v) for v in shown]
+        disclosed = {v["fragment_id"]: v for v in context.get("disclosures", [])}
+        context["pinned"] = [key for key in context.get("pinned", [])
+                             if key in disclosed and not range_is_visible(disclosed[key], shown)]
         with self.observer.span("context", "evidence disclosure receipt", inputs={"purpose": purpose}) as event:
             self.observer.output(event, {"format_version": 1, "status": "call_returned",
                 "disclosures": shown, "choices": projected.get("choices", []),
+                "coverage_basis": "all_serialized_fragments", "explicit_read_ranges": context.get("read_ranges", []),
                 "projection": projected.get("projection", {})}, kind="context")
 
-    def _page_options(self, user, ref, context):
+    def _page_options(self, user, ref, context, shown=None):
         node = self.store.get(user, ref)
         if not node:
             return []
@@ -1267,50 +1367,100 @@ class Engine:
         body = [] if mixed else [node]
         sources = body + [row for row in self.store.raw(user, node.get("source_refs", []))
                             if not context.get("old_before") or row["ordinal"] < context["old_before"] or row["ref"] in context.get("new_refs", [])]
-        seen = {value["fragment_id"] for value in context.get("disclosures", [])}
+        if shown is None:
+            shown = visible_fragments(self._model_context(context))
+        read = context.get("read_ranges", context.get("disclosures", []))
         width = min(1800, max(100, self.config.context_chars // 8))
         values = [value for source in sources for value in pages(source, width)
-                  if value["fragment_id"] not in seen]
+                  if not (range_is_visible(value, shown) and range_is_visible(value, read))]
         words = set(terms(context.get("question", "")))
-        values.sort(key=lambda value: (-len(words.intersection(terms(value["text"]))),
+        values.sort(key=lambda value: (value["origin_ref"] not in context.get("protected_sources", []),
+                                       (value["origin_ref"] != ref) if context.get("old_before") else 0,
+                                       -len(words.intersection(terms(value["text"]))),
                                        value["origin_ref"] != ref, value["start"]))
         return values
 
     def _read_page(self, user, ref, context, position=None):
-        values = self._page_options(user, ref, context)
+        offered = context.get("_page_choices", {}).get(ref)
+        if offered is None:
+            values = self._page_options(user, ref, context)
+        else:
+            values = []
+            for value in offered:
+                source = self.store.get(user, value["origin_ref"])
+                if not source or digest(source["text"]) != value["content_digest"]:
+                    raise MemoryError("inspect_stale_page", 502)
+                values.append(fragment(source, value["start"], value["end"]))
         if not values:
             raise MemoryError("repeated_graph_operation", 502)
         index = 0 if position is None else position
         if type(index) is not int or not 0 <= index < min(8, len(values)):
             raise MemoryError("inspect_invalid_page", 502)
         value = {**values[index], "item_ref": ref}
-        context.setdefault("disclosures", []).append(value)
+        context["disclosures"] = [v for v in context.get("disclosures", []) if v["fragment_id"] != value["fragment_id"]] + [value]
         context.setdefault("pinned", []).append(value["fragment_id"])
         # Decide capacity before exposing the tool result. Never silently crop it later.
         self._model_context(context)
         context.setdefault("inspections", {})[ref] = digest(self.store.get(user, ref)["text"])
+        reads = context.setdefault("read_ranges", [])
+        if not any(v["fragment_id"] == value["fragment_id"] and v.get("item_ref") == ref for v in reads):
+            reads.append(range_receipt(value))
+        if context.get("old_before") and value["origin_ref"] == ref and self.store.get(user, ref)["kind"] != "episode":
+            context["protected_bodies"] = list(dict.fromkeys([*context.get("protected_bodies", []), ref]))
 
     def _visible_choices(self, user, context, projected, refs, *, evict=False):
         rows, allowed = [], {}
+        shown = visible_fragments(projected)
+        context["_page_choices"] = {}
         done = {tuple(pair) for pair in context.get("explored", [])}
         for ref in refs:
             if ref not in projected.get("references", {}):
                 continue
-            options = self._page_options(user, ref, context)
+            options = self._page_options(user, ref, context, shown)
+            context["_page_choices"][ref] = [range_receipt(v) for v in options[:8]]
             reference = projected["references"][ref]
             row = {"ref": ref, "kind": reference["kind"], "label": reference.get("label", ""),
                    "narrative": excerpt(reference.get("narrative", ""), 180), "unread_page_count": len(options)}
             row["pages"] = [{"position": i, "origin_ref": value["origin_ref"],
-                             "content_digest": value["content_digest"], "range": value["shown_range"]}
+                             "range": value["shown_range"], "view": "item body" if value["origin_ref"] == ref else "original source",
+                             "preview": excerpt(value["text"], 100), "role": value.get("role"),
+                             "source_time": source_date(value.get("source_time"))}
                             for i, value in enumerate(options[:8])]
             actions = (["inspect"] if options else []) + (["backlinks"] if (ref, "backlinks") not in done else [])
             if evict and not any(v.get("item_ref") == ref and v["fragment_id"] in context.get("pinned", [])
-                                 for v in context.get("disclosures", [])) and ref not in context.get("protected_refs", []):
+                                 for v in context.get("disclosures", [])) and ref not in context.get("protected_refs", []) and ref not in context.get("protected_bodies", []):
                 actions.append("evict")
             rows.append(row)
             allowed[ref] = actions
         choices = Choices.freeze(rows, allowed)
         projected["choices"] = list(choices.rows)
+        control = projected.get("reflection_control")
+        if control and context.get("last_gate_error"):
+            by_ref = {row["ref"]: row for row in choices.rows}
+            actions = []
+            for need in context["last_gate_error"].get("missing", [])[:8]:
+                row = by_ref.get(need.get("ref")) or next((row for row in choices.rows
+                    if any(page["origin_ref"] == need["ref"] for page in row["pages"])), {})
+                ref = need["ref"]
+                node = context.get("items", {}).get(ref)
+                ready = False
+                if need["need"] == "same_version_inspect_full_body_in_final_call" and node:
+                    version = node.get("content_digest") or digest(node["text"])
+                    body = {"origin_ref": ref, "content_digest": version, "start": 0,
+                            "end": node.get("body_chars", len(node["text"]))}
+                    ready = range_is_visible(body, shown) and range_is_visible(body, context.get("read_ranges", []))
+                elif need["need"] == "newly_cited_source_visible":
+                    ready = any(v["origin_ref"] == ref for v in shown) or ref in context.get("new_refs", [])
+                elif need["need"] == "declare_no_prior_match":
+                    ready = True  # Only the proposal flag remains; no additional read.
+                actions.append({**need, "material_ready": ready,
+                    "next_action": "resubmit_mutation_with_current_evidence" if ready else "supply_required_material",
+                    "reference_position": row.get("position"),
+                    "pages": [] if ready else [p for p in row.get("pages", []) if p["origin_ref"] == ref][:3]})
+            control["required_actions"] = actions
+            control["last_gate_error"] = {**control["last_gate_error"],
+                "missing": [need for need in actions if not need["material_ready"]],
+                "note": "Last rejected proposal only; resubmit once its required material is ready. Source pages are optional unless explicitly missing."}
         return choices
 
 

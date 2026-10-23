@@ -9,7 +9,11 @@ from amlink.text import digest, dumps
 
 
 def test_new_identity_queries_old_scope_and_can_commit_without_old_match(make):
-    engine, provider = make(reflection_threshold=1)
+    engine, provider = make(mode='raw', reflection_threshold=1)
+    engine.add(request('old', ['A previous note unrelated to Maya.']))
+    engine.store.commit_mutation('u', {'items': [], 'links': [], 'forget': []}, watermark=1, fingerprint='x', vectors={})
+    engine.config = replace(engine.config, mode='graph')
+    engine._search_refs = lambda *a, **kw: []
     calls = []
     def decide(purpose, payload):
         calls.append(payload)
@@ -22,20 +26,23 @@ def test_new_identity_queries_old_scope_and_can_commit_without_old_match(make):
     provider.decide = decide
     engine.add(request('a', ['Speaker: Maya\nMy name is Maya.']))
     assert any(n['kind'] == 'person' for n in engine.store.nodes('u'))
-    assert engine.store.state('u')['settled_through'] == 1
+    assert engine.store.state('u')['settled_through'] == 2
 
 
 def test_missing_identity_query_cannot_be_hidden_by_noop(make):
-    engine, provider = make(reflection_threshold=1)
+    engine, provider = make(mode='raw', reflection_threshold=1)
+    engine.add(request('old', ['An older person note.']))
+    engine.store.commit_mutation('u', {'items': [], 'links': [], 'forget': []}, watermark=1, fingerprint='x', vectors={})
+    engine.config = replace(engine.config, mode='graph')
     def decide(purpose, payload):
         if payload['step'] == 0:
             return 'reflection_mutation', {'no_prior_match': True, 'items': [
                 {'ref': 'new:maya', 'kind': 'person', 'text': 'Maya', 'source_refs': [payload['working'][0]['ref']]}]}
         return 'reflection_stop', {}
     provider.decide = decide
-    with pytest.raises(MemoryError, match='reflection_unresolved_evidence'):
+    with pytest.raises(MemoryError, match='model_unknown_tool'):
         engine.add(request('a',['Speaker: Maya']))
-    assert engine.store.state('u')['settled_through'] == 0
+    assert engine.store.state('u')['settled_through'] == 1
 
 
 def test_full_replacement_requires_same_version_full_body_visible():

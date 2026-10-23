@@ -4,6 +4,7 @@ from .text import dumps
 from .evidence import fragment
 
 UPDATE = re.compile(r"\b(correction|changed\s+(?:my|the|our)|no longer|instead of|update\s+(?:my|the|our))\b|改为|更正|不再|变更为|更新我的", re.I)
+EXPLICIT_CHANGE = re.compile(r"\bcorrection\s*:|\b(?:I|we)\s+(?:have\s+)?changed\s+(?:my|our)\b|(?:更正|变更为|改为)", re.I)
 FORGET_REQUEST = re.compile(r"\b(?:please\s+)?(?:forget|erase|delete|remove)\s+(?:my|the|that|this|everything|all|what)\b|请.*(?:忘记|删除|遗忘)|不要再记|别再记|删除.*(?:记录|记忆|信息)", re.I)
 
 def plan_prefix(pending, request_end, required, settled, config):
@@ -21,13 +22,16 @@ def plan_prefix(pending, request_end, required, settled, config):
     ordinary = len(request_ids) >= config.reflection_min_adds and (
         len(rows) >= config.reflection_threshold or sum(len(row["text"]) for row in rows) >= config.reflection_chars)
     capacity = len(rows) >= 2 * config.batch_messages or size >= 2 * config.batch_chars
-    signal = any(row["role"] == "user" and (UPDATE.search(row["text"]) or FORGET_REQUEST.search(row["text"])) for row in rows)
+    hints = [{"ref": row["ref"], "cue": match.group(0), "excerpt": row["text"][max(0, match.start()-40):match.end()+100]}
+             for row in rows if row["role"] == "user" and (match := UPDATE.search(row["text"]))]
+    signal = any(row["role"] == "user" and (EXPLICIT_CHANGE.search(row["text"]) or FORGET_REQUEST.search(row["text"])) for row in rows)
     for hit, reason in ((ordinary, "accumulation"), (capacity, "capacity"), (signal, "explicit_change")):
         if hit:
             target = request_end
             reasons.append(reason)
     return {"target": target, "trigger": target > settled, "reasons": reasons,
-            "request_count": len(request_ids), "request_end": request_end}
+            "request_count": len(request_ids), "request_end": request_end,
+            "change_hints": hints[:8], "omitted_hint_count": max(0, len(hints)-8)}
 
 
 def prefix_overview(rows, watermark, limit):

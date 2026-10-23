@@ -186,6 +186,14 @@ class Store:
     def is_minimum_episode(self, user, ref):
         return self.one("SELECT 1 FROM requests WHERE user_id=? AND episode_ref=?", (user, ref)) is not None
 
+    def old_scope_empty(self, user, before):
+        # Conservative: any active node with a valid old source makes the scope
+        # nonempty, including a mixed minimum episode's old projection.
+        return self.one("""SELECT 1 FROM nodes n,json_each(n.sources) s
+            JOIN raw_events r ON r.ref=s.value AND r.user_id=n.user_id
+            WHERE n.user_id=? AND n.status!='tombstoned' AND r.blocked=0
+            AND r.ordinal<? LIMIT 1""", (user, before)) is None
+
     def request_complete(self, user, rid, episode_ref, watermark=0):
         with self.transaction() as db:
             db.execute("UPDATE requests SET status='done',episode_ref=?,reflection_watermark=? WHERE user_id=? AND request_id=?",

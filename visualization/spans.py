@@ -169,6 +169,8 @@ def evidence_panel(value):
                 for row in value["decisions"][:20]], "shown": min(20,len(value["decisions"])), "total": len(value["decisions"])}
     if "target" in value and "trigger" in value:
         return {"title": "缓冲与稳定处理前缀", "rows": [value], "shown": 1, "total": 1}
-    if "accepted" in value and ("required" in value or "actual_inspections" in value):
+    if "old_scope" in value and "orientation_only" in value:
+        return {"title": "旧记忆范围核验", "rows": [value], "shown": 1, "total": 1}
+    if "accepted" in value and ("required" in value or "actual_inspections" in value or "invalid_links" in value):
         return {"title": "Reflection变更依据", "rows": [value], "shown": 1, "total": 1}
     return None

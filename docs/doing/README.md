@@ -2,8 +2,9 @@
 
 | 日期 | 计划 | 当前状态 |
 | --- | --- | --- |
+| 2026-10-23 | [Reflection闭环实施与复验](./2026-10-23-reflection-convergence-implementation.md) | 工程实施done；140项回归、220次真实调用；构图/探索未验收，默认确定性装箱，未扩大20/100题 |
 | 2026-10-23 | [提交后闭环复核](./2026-10-23-reflection-convergence-audit.md) | done：126项复核、8次轨迹重析、3个本地反例、6次真实诊断；部分工程验收重新打开，改进收益待验证 |
-| 2026-10-23 | [Reflection闭环执行方案](../phase-2/reflection-convergence-plan.md) | 设计完成、未实施：统一可见范围、目标读取与进展、关系反馈、缓冲时机及真实机制覆盖 |
+| 2026-10-23 | [Reflection闭环执行方案](../phase-2/reflection-convergence-plan.md) | 已按确认方案实施并核对；机制真实覆盖部分完成，方法质量验收保持开放 |
 | 2026-10-23 | [P0/P1实施核对](./2026-10-23-evidence-loop-implementation.md) | 五包已接入；工程回归、真实L04/BEAM切片与失败定位；方法质量继续验收 |
 | 2026-10-23 | [P0/P1执行方案](../phase-2/evidence-loop-execution-plan.md) | 保留完整目标、接口、预算、水位和验收条件；实际状态见实施核对 |
 | 2026-10-23 | [当前实施与设计缺口核查](./2026-10-23-design-status-audit.md) | done：核查afe8c8d、100项回归；离线复现引用位置错位、同源片段遗漏及图证据装箱丢失；新问题待修复，真实质量未验收 |

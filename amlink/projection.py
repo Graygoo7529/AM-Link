@@ -3,6 +3,61 @@ from copy import deepcopy
 from dataclasses import dataclass
 
 from .errors import MemoryError
+from .evidence import fragment
+
+
+def visible_fragments(projected, working=()):
+    """Ranges actually serialized, regardless of their display container."""
+    found = {}
+
+    def add(value, owner=None, text=None):
+        if not isinstance(value, dict) or not all(k in value for k in
+                ("origin_ref", "content_digest", "start", "end", "fragment_id")):
+            return
+        value = {**value}
+        if text is not None:
+            value["text"] = text
+        if len(value.get("text", "")) != value["end"] - value["start"]:
+            return
+        if owner:
+            value["item_ref"] = owner
+        key = value["fragment_id"]
+        if key not in found or owner:
+            found[key] = value
+
+    for value in projected.get("disclosures", []):
+        add(value, value.get("item_ref"))
+    for ref, row in projected.get("items", {}).items():
+        add(row.get("text_fragment"), ref, row.get("text"))
+    for ref, row in projected.get("references", {}).items():
+        for value in row.get("evidence_fragments", []):
+            add(value, ref)
+    for row in projected.get("sources", []):
+        add(row.get("text_fragment"), text=row.get("text"))
+    for row in working:
+        add(fragment(row, 0, len(row["text"])))
+    return list(found.values())
+
+
+def range_is_visible(value, shown):
+    """Union coverage for a specific version and requested interval."""
+    end = value["start"]
+    for start, stop in sorted((v["start"], v["end"]) for v in shown
+                              if v["origin_ref"] == value["origin_ref"]
+                              and v["content_digest"] == value["content_digest"]):
+        if stop <= end:
+            continue
+        if start > end:
+            return False
+        end = max(end, stop)
+        if end >= value["end"]:
+            return True
+    return end >= value["end"]
+
+
+def range_receipt(value):
+    return {k: v for k, v in value.items() if k in
+            {"fragment_id", "origin_ref", "content_digest", "start", "end", "source_chars", "item_ref"}}
 
 
 @dataclass(frozen=True)

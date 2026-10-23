@@ -13,6 +13,7 @@ from amlink.reflection import prepare_mutation
 from amlink.schemas import AddRequest, SearchRequest
 from amlink.store import Store
 from amlink.text import dumps
+from amlink.projection import visible_fragments
 
 
 class Scripted:
@@ -352,7 +353,7 @@ def test_search_inspect_then_backlink_same_ref_and_follow_new_ref(make):
 
     provider.decide = decide
     result = engine.search(SearchRequest(user_id="u", query="Caroline", top_k=5))
-    assert seen[1]["items"][items[0]["ref"]]["text"] == items[0]["text"]
+    assert any(v['origin_ref'] == items[0]['ref'] and v['text'] == items[0]['text'] for v in visible_fragments(seen[1]))
     assert items[1]["ref"] in seen[2]["references"]
     assert any("Sweden" in edge.get("narrative", "") for edge in seen[3]["edges"])
     assert any(items[1]["ref"] in row["content"] for row in result["data"])
@@ -379,7 +380,7 @@ def test_reflection_can_inspect_backlink_and_validate_newly_loaded_old_node(make
 
     provider.decide = decide
     assert engine.add(request("new", ["Caroline remembers that move."]))["success"]
-    assert items[1]["ref"] in contexts[-1]["items"]
+    assert any(v['origin_ref'] == items[1]['ref'] and v['text'] == items[1]['text'] for v in visible_fragments(contexts[-1]))
     persisted = engine.store.state("u")["context"]
     assert items[1]["ref"] in persisted["items"]
     assert items[1]["ref"] in persisted["items"]
