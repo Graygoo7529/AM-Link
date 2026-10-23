@@ -8,7 +8,7 @@
 | 2 | [一期实验与工程经验](./phase-1/lessons.md) | 接口、数据、效果、架构及重试教训 |
 | 3 | [一期收尾记录](./phase-1/closeout.md) | 当前状态、归档边界和已完成事项 |
 | 4 | [服务器接入经验](./operations/server.md) | 本地运行、部署和端口服务；2026-10-04 SSH/HTTPS/续期核验 |
-| 5 | [模型接入经验](./operations/models.md) | LLM、embedding、配置；2026-10-20 二期调用探测定位到本机 socket 权限阻断，服务与 Key 有效性未获核验 |
+| 5 | [模型接入经验](./operations/models.md) | LLM、embedding、配置；10月23日网络权限复核成功；后续冻结输入诊断出现间歇超时，详见最新报告 |
 | 6 | [二期接入调研](./phase-2/integration-research.md) | 当前官方约定、变化与下一步 |
 | 7 | [数据集与 Add/Search 靶场实施](./doing/README.md) | 独立数据层、公开数据获取、靶场双向适配与可观测记录 |
 | 8 | [样本与记忆案例分析](../casestudies/README.md) | 持续积累真实案例、处理方法和可核验的实验经验 |
@@ -22,9 +22,9 @@
 | 16 | [AM-Link 二期方法改进计划](./phase-2/method-improvement-plan.md) | 结合 TinySoul、案例与当前实现的重构计划；每个 Add 先生成可检索最小 episode，工作区跨请求累积，Search/Reflection 分开 |
 | 17 | [P0/P1证据链与Reflection执行细则](./phase-2/evidence-loop-execution-plan.md) | 五包已接入；[实施核对](./doing/2026-10-23-evidence-loop-implementation.md)记录回归、真实切片、失败与尚未达成的质量验收 |
 
-2026-10-23 最新先读[P0/P1实施核对](./doing/2026-10-23-evidence-loop-implementation.md)：引用/范围、路径装箱、Reflection依据和跨Add缓冲已接入；真实LoCoMo、BEAM、PerLTQA小切片保留了成功与失败，尚未达到扩大20/100题的门槛。模型经网络权限复核已可调用。[设计缺口核查](./doing/2026-10-23-design-status-audit.md)是修复前基线；[提交前检查](./doing/2026-10-23-commit-readiness.md)保留历史清理记录，8项旧跟踪测试产物仍待处理。
+2026-10-23 最新先读[提交后闭环复核](./doing/2026-10-23-reflection-convergence-audit.md)及[后续执行方案](./phase-2/reflection-convergence-plan.md)：当前`0e6f035`、126项回归通过，部分披露/Reflection/缓冲验收重新打开。先前8次小切片没有触发Select/查询扩展，所有真实图0边；本轮6次冻结输入调用2次返回、4次超时，不能宣布改进有效。未扩大20/100题，未部署。[实施核对](./doing/2026-10-23-evidence-loop-implementation.md)、[修复前核查](./doing/2026-10-23-design-status-audit.md)、[提交前检查](./doing/2026-10-23-commit-readiness.md)保留为过程记录；8项旧跟踪测试产物仍待处理。
 
-最新状态先读[10月14日100题重跑复核](./doing/2026-10-14-amlink-100-rerun-review.md)和[10月15日证据链修复记录](./doing/2026-10-15-evidence-chain-repair.md)：完整修复版为128/145 Add、100/100 Search；目标Add均成功的94道题上，top-5证据召回约55.3%、完整链约59.6%。Search实测338次Inspect、72次Backlink和787次Select；新的 Reference 互补片段、证据闭合和 Reflection 先看再写门槛已完成本地实现，模型语境投影现在也记录实际展示覆盖。10月16日 l4 真实切片再次因模型端点网络错误未形成可评价样本，不能据此评价新方法；无模型本地 l4 切片完成5/5 Add、1/1 Search，top-5召回与闭合链均为1.0，只证明确定性装箱和观测接线。64项当前 amlink/benchmark 回归通过。跨数据集锚点和定向复验见[10月13日扩展验证](./doing/2026-10-13-amlink-expanded-validation.md)。历史完整基线Add 68/145、Search 99/100及旧0.2.0审计分别见[100题诊断](./doing/2026-10-11-amlink-100-rerun-analysis.md)和[核心审计](./doing/2026-10-11-amlink-core-audit.md)。
+历史验证见[10月14日100题重跑复核](./doing/2026-10-14-amlink-100-rerun-review.md)和[10月15日证据链修复记录](./doing/2026-10-15-evidence-chain-repair.md)：完整修复版为128/145 Add、100/100 Search；目标Add均成功的94道题上，top-5证据召回约55.3%、完整链约59.6%。Search实测338次Inspect、72次Backlink和787次Select；新的 Reference 互补片段、证据闭合和 Reflection 先看再写门槛已完成本地实现，模型语境投影现在也记录实际展示覆盖。10月16日 l4 真实切片再次因模型端点网络错误未形成可评价样本，不能据此评价新方法；无模型本地 l4 切片完成5/5 Add、1/1 Search，top-5召回与闭合链均为1.0，只证明确定性装箱和观测接线。64项当前 amlink/benchmark 回归通过。跨数据集锚点和定向复验见[10月13日扩展验证](./doing/2026-10-13-amlink-expanded-validation.md)。历史完整基线Add 68/145、Search 99/100及旧0.2.0审计分别见[100题诊断](./doing/2026-10-11-amlink-100-rerun-analysis.md)和[核心审计](./doing/2026-10-11-amlink-core-audit.md)。
 
 新增的 Mem0/AM-Link 同条件 Add/Search/Answer 运行见[10月14日真实模型链路补充实验](./doing/2026-10-14-real-model-chain-report.md)：关系组和拒答小例已完成端到端回答，B03 长历史暴露 Add/Reflection 丢批，PersonaMem 暴露失败 Add 仍留下部分可检索状态，C02 暴露 Answer 越过条件证据。分享页[docs/report](./report/README.md)已同步这些案例观察。
 

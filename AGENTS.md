@@ -1,5 +1,7 @@
 # 项目记忆
 
+- 2026-10-23提交后最新复核见`docs/doing/2026-10-23-reflection-convergence-audit.md`，后续方案见`docs/phase-2/reflection-convergence-plan.md`：当前提交`0e6f035`，126项回归复核通过；但隐藏页不能重读、实际输入与覆盖账本分裂、旧正文被逐出、关系类型过滤及update缓存误触发仍需修复，P0-B/P1-B/P1-C重新打开。先前265次调用中Select/查询扩展均为0，真实图仍0边。本轮6次冻结输入调用2次返回、4次60秒超时，未验证改进收益；未改生产方法/配置、未扩大20/100题、未部署。方案中的空旧范围凭据、非法关系阻止提交为建议确认的行为调整，尚未实施。
+
 - 2026-10-23最新状态见`docs/doing/2026-10-23-evidence-loop-implementation.md`：已按P0/P1计划接入可见引用位置、同源多范围/Inspect续页与回放保护、路径证据组、逐项Reflection依据及跨Add稳定前缀，126项本地回归通过。8次LoCoMo/BEAM/PerLTQA真实调试运行共265次模型调用；网络权限复核后现有embedding/gpt-4o-mini可用。真实Reflection仍有参数不合协议、相关旧目标/来源未补齐、轮数耗尽，所有真实图仍0边，整体方法未验收；未扩大20/100题、未部署。受限LLM装箱两次诊断均无效选择，默认仍确定性装箱。后续先读此报告和根DESIGN；下列10月11日经验为历史。
 
 - AM-Link 是 Graygoo7529 参加 Agent Memory Leaderboard 的原创记忆系统。我们只提供 Add/Search，主办方负责 Answer/Eval。TinySoul-Agent 也是同一作者的个人原创项目，是设计灵感来源。

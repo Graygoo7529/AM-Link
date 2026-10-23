@@ -2,6 +2,8 @@
 
 日期：2026-10-23。起点提交`db6aedf`（方法基线`afe8c8d`），当前工作树尚未提交。目标为[已确认执行计划](../phase-2/evidence-loop-execution-plan.md)的两项P0、三项P1；没有部署、修改一期归档或实现P2协调器。
 
+后续状态：本文所述功能已提交为`0e6f035`；下文“尚未提交”为撰写时快照。[提交后复核](2026-10-23-reflection-convergence-audit.md)重新打开部分披露/Reflection/缓冲验收项，并补充6次只读真实诊断；最新问题及后续工作以该报告和[闭环方案](../phase-2/reflection-convergence-plan.md)为准。
+
 ## 实施范围与验收边界
 
 | 工作包 | 已接入的代码行为 | 验证与剩余限制 |

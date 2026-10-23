@@ -4,6 +4,8 @@
 
 状态：**五个工作包已接入，126项本地回归通过；8次真实调试运行完成，整体方法质量未验收。** 实施、真实失败与修正见[10月23日实施核对](../doing/2026-10-23-evidence-loop-implementation.md)。尚未满足扩大20/100题门槛；本文保留完整目标与验收条件，不以工具存在替代方法验收。
 
+**提交后复核（`0e6f035`）：**[最新审计](../doing/2026-10-23-reflection-convergence-audit.md)发现隐藏页重读、统一可见范围、Reflection材料保留及触发分级仍有缺口，P0-B/P1-B/P1-C重新打开。真实运行未触发Select/查询扩展；关系提出与过滤也未构成有效图。按[闭环执行方案](reflection-convergence-plan.md)补齐后再进入扩大验证；126项通过不覆盖这些新反例。
+
 ## 1. 范围、目标与最少的协议变化
 
 沿用 MemoryItem、MemoryRelation、References、MemoryContext、MemoryWorking、Query、Select、Inspect、Backlink、Reflection。本文的“可见清单”“片段”“证据组”“展示记录”都是这些对象的调用/输出组织方式，不是新增长期记忆类型，不增加一套事实库。

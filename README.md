@@ -8,6 +8,8 @@ AM-Link 和设计灵感来源 **TinySoul-Agent** 都是 Graygoo7529 的个人原
 
 2026-10-23：[P0/P1证据链实施核对](./docs/doing/2026-10-23-evidence-loop-implementation.md)记录本轮引用位置、多窗口披露、证据组装箱、Reflection依据及跨Add缓冲改进。工程回归与真实小切片分开报告；复杂图质量尚未验收，尚未扩大新一轮100题。
 
+提交`0e6f035`后的[最新复核](./docs/doing/2026-10-23-reflection-convergence-audit.md)确认126项回归通过，但发现实际展示账本、重读、整理材料保留、关系过滤和误触发问题；[后续执行方案](./docs/phase-2/reflection-convergence-plan.md)已形成，生产修复尚未实施。
+
 | 入口 | 内容 |
 | --- | --- |
 | [AGENTS.md](./AGENTS.md) | 给后续 agent 的项目背景、环境和简要规约 |

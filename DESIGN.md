@@ -1,6 +1,6 @@
 # AM-Link Add/Search 当前设计
 
-更新：2026-10-23。当前为0.2.1上的P0/P1实施分支，未部署、未参加官方Smoke。五个工作包已接入，正在按[执行计划](docs/phase-2/evidence-loop-execution-plan.md)进行工程及真实切片验收；以[实施核对报告](docs/doing/2026-10-23-evidence-loop-implementation.md)中的逐项结论为准，不以工具存在或HTTP200代替方法效果。
+更新：2026-10-23。当前为0.2.1上的P0/P1提交`0e6f035`，未部署、未参加官方Smoke。五个工作包已接入，126项回归通过；[最新复核](docs/doing/2026-10-23-reflection-convergence-audit.md)重新打开披露/Reflection/缓冲验收项。下面描述当前链路，已知边界见各节；[后续闭环方案](docs/phase-2/reflection-convergence-plan.md)尚未实施，不以工具存在或HTTP200代替方法效果。
 
 ## 边界和对象
 
@@ -85,6 +85,8 @@ Search近似于Query＋有深度上限的Inspect/Backlink多跳＋候选过多�
 
 Inspect按已有Item及其合法sources分页。模型选择可读页编号，不直接提供任意偏移；每次最多展示8个续页选项，后续调用可继续披露。新页先占预算，再填自动预览；页的保护在下一次成功主决策实际包含该页后解除，Select/embedding不解除。实际输入范围进入receipt：它证明材料送达并返回，不证明模型理解。遗忘、删除或版本变化使缓存范围及阅读依据失效。
 
+**已知实现缺口：**receipt目前只收集disclosures，未统一计入items/sources/References中的实际正文；仍留在内部disclosures但不在当前模型投影中的页，可能不再提供重读。已有本地反例，不能把这段机制表述为完整覆盖账本已验收。后续将明确读取、本次可见、历史展示分开，并统一最终请求的范围计算。
+
 ## Reflection依据与Workspace
 
 旧候选资格先于词法/向量候选上限检查；本批及未来最低episode不能冒充旧身份匹配。更新旧目标、改旧关系端点需要同版本Inspect，且所需正文在最终Mutation调用可见。冲突/替代两侧需要可见来源；新引用来源必须是已展示来源，继承来源不被冒充新增支持。
@@ -92,6 +94,8 @@ Inspect按已有Item及其合法sources分页。模型选择可读页编号，�
 每个新person需要绑定new ref的定向旧身份Query：成功空结果允许no_prior_match；有候选需读相关候选。全新端点之间的关系可由本批原文直接支持，不强迫无关旧检索。程序校验的是材料与过程，人物语义是否正确仍需实测。
 
 Workspace格式v1，有界至2×context_chars，节点和引用受现有预算限制。先折叠非保护正文，再逐出低优先级引用；保护新读页与未解决变更依据，全部受保护仍超限则失败。旧格式仅恢复有效引用，不虚构旧阅读凭据；未知格式显式拒绝。原文始终留在数据库。
+
+**真实未闭合处：**BEAM读取的短fact正文可在下一轮之后被Workspace回收，后到的Mutation门槛来不及补材料；默认Inspect又可能先读长来源页。词面`update the`仍可把程序缓存刷新误判为硬触发。关系类型错误当前记录filtered_links后允许节点提交；6条进入准备阶段的真实关系均因此被过滤，不能由accepted/水位推进推断图构建成功。读取顺序、保护目标、关系反馈和触发分级见后续方案。
 
 ## 最终证据组合与研究对照
 
@@ -106,3 +110,5 @@ Workspace格式v1，有界至2×context_chars，节点和引用受现有预算�
 [观测标准](benchmark/OBSERVABILITY.md)沿用span及artifact协议。当前记录引用清单、工具参数、原文范围回执、Reflection门槛缺项、缓冲目标及证据组决策；网页显示有界预览和原始artifact路径，旧记录缺项显示未知。HTTP默认不开内部轨迹。
 
 [本轮实施报告](docs/doing/2026-10-23-evidence-loop-implementation.md)保存测试、真实失败/复跑和执行计划核对。历史[0.2.0审计](docs/doing/2026-10-11-amlink-core-audit.md)、[100题重跑](docs/doing/2026-10-14-amlink-100-rerun-review.md)保留原貌，不能当作当前代码成绩。
+
+[当前轨迹复核](docs/doing/2026-10-23-reflection-convergence-audit.md)：先前265次调用为55次embedding、153次Reflection、57次BFS，Select和查询扩展均未触发。本轮6次独立冻结输入诊断2次返回、4次60秒超时，未取得有效改进组结果；没有新增端到端质量结论。后续先补闭环及机制覆盖，再扩大20/100题。
