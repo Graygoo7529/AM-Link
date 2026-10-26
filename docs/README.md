@@ -1,6 +1,6 @@
 # 项目文档
 
-更新日期：2026-10-23。目标是让新会话快速恢复项目背景和决策依据；旧过程记录留在一期归档中。
+更新日期：2026-10-24。目标是让新会话快速恢复项目背景和决策依据；旧过程记录留在一期归档中。
 
 | 阅读顺序 | 文档 | 用途 |
 | --- | --- | --- |
@@ -22,7 +22,9 @@
 | 16 | [AM-Link 二期方法改进计划](./phase-2/method-improvement-plan.md) | 结合 TinySoul、案例与当前实现的重构计划；每个 Add 先生成可检索最小 episode，工作区跨请求累积，Search/Reflection 分开 |
 | 17 | [P0/P1证据链与Reflection执行细则](./phase-2/evidence-loop-execution-plan.md) | 五包已接入；[实施核对](./doing/2026-10-23-evidence-loop-implementation.md)记录回归、真实切片、失败与尚未达成的质量验收 |
 
-2026-10-23 最新先读[闭环实施与真实复验](./doing/2026-10-23-reflection-convergence-implementation.md)及[执行计划核对](./phase-2/reflection-convergence-plan.md)：140项回归通过，新增220次真实调用。统一可见范围、目标正文保留、关系阻断反馈、缓冲误触发修复已实施；真实Select/查询扩展在历史图副本上执行，但当前构图仍不稳定、整体方法未验收。LLM装箱合法但来源覆盖6/7，确定性为7/7，维持默认。未扩大20/100题、未部署。[之前的复核](./doing/2026-10-23-reflection-convergence-audit.md)与[前轮实施核对](./doing/2026-10-23-evidence-loop-implementation.md)保留为过程记录；8项旧跟踪测试产物仍待处理。
+2026-10-24 最新先读[跨数据集实施报告](./doing/2026-10-24-broad-method-implementation.md)、[执行计划](./phase-2/2026-10-24-broad-method-improvement-plan.md)和[运行台账](./doing/2026-10-24-broad-run-ledger.md)：148项回归，23个不同问题、1385次真实调用。写入身份/可行性预检、关系局部修复及BFS异常终止已实施；写入有所改善但图质量和长材料仍有失败，LM4暴露片段未呈现金额与top-k挤占。提前Select试验已撤回，整体方法未验收、未部署。
+
+此前阶段：2026-10-23 先读[闭环实施与真实复验](./doing/2026-10-23-reflection-convergence-implementation.md)及[执行计划核对](./phase-2/reflection-convergence-plan.md)：140项回归通过，新增220次真实调用。统一可见范围、目标正文保留、关系阻断反馈、缓冲误触发修复已实施；真实Select/查询扩展在历史图副本上执行，但当前构图仍不稳定、整体方法未验收。LLM装箱合法但来源覆盖6/7，确定性为7/7，维持默认。未扩大20/100题、未部署。[之前的复核](./doing/2026-10-23-reflection-convergence-audit.md)与[前轮实施核对](./doing/2026-10-23-evidence-loop-implementation.md)保留为过程记录；8项旧跟踪测试产物仍待处理。
 
 历史验证见[10月14日100题重跑复核](./doing/2026-10-14-amlink-100-rerun-review.md)和[10月15日证据链修复记录](./doing/2026-10-15-evidence-chain-repair.md)：完整修复版为128/145 Add、100/100 Search；目标Add均成功的94道题上，top-5证据召回约55.3%、完整链约59.6%。Search实测338次Inspect、72次Backlink和787次Select；新的 Reference 互补片段、证据闭合和 Reflection 先看再写门槛已完成本地实现，模型语境投影现在也记录实际展示覆盖。10月16日 l4 真实切片再次因模型端点网络错误未形成可评价样本，不能据此评价新方法；无模型本地 l4 切片完成5/5 Add、1/1 Search，top-5召回与闭合链均为1.0，只证明确定性装箱和观测接线。64项当前 amlink/benchmark 回归通过。跨数据集锚点和定向复验见[10月13日扩展验证](./doing/2026-10-13-amlink-expanded-validation.md)。历史完整基线Add 68/145、Search 99/100及旧0.2.0审计分别见[100题诊断](./doing/2026-10-11-amlink-100-rerun-analysis.md)和[核心审计](./doing/2026-10-11-amlink-core-audit.md)。
 

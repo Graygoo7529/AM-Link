@@ -2,6 +2,7 @@
 
 | 日期 | 计划 | 当前状态 |
 | --- | --- | --- |
+| 2026-10-24 | [跨数据集方法迭代与真实观测](./2026-10-24-broad-method-implementation.md) | 局部实施done；148项回归、23个问题、1385次真实调用；图/长材料/片段语义仍待验收；[执行计划](../phase-2/2026-10-24-broad-method-improvement-plan.md)、[完整台账](./2026-10-24-broad-run-ledger.md) |
 | 2026-10-23 | [Reflection闭环实施与复验](./2026-10-23-reflection-convergence-implementation.md) | 工程实施done；140项回归、220次真实调用；构图/探索未验收，默认确定性装箱，未扩大20/100题 |
 | 2026-10-23 | [提交后闭环复核](./2026-10-23-reflection-convergence-audit.md) | done：126项复核、8次轨迹重析、3个本地反例、6次真实诊断；部分工程验收重新打开，改进收益待验证 |
 | 2026-10-23 | [Reflection闭环执行方案](../phase-2/reflection-convergence-plan.md) | 已按确认方案实施并核对；机制真实覆盖部分完成，方法质量验收保持开放 |

@@ -6,9 +6,7 @@
 
 AM-Link 和设计灵感来源 **TinySoul-Agent** 都是 Graygoo7529 的个人原创项目。一期借鉴自己的记忆设计思想，独立实现比赛接口，未直接移植 TinySoul-Agent 代码。
 
-2026-10-23：[P0/P1证据链实施核对](./docs/doing/2026-10-23-evidence-loop-implementation.md)记录本轮引用位置、多窗口披露、证据组装箱、Reflection依据及跨Add缓冲改进。工程回归与真实小切片分开报告；复杂图质量尚未验收，尚未扩大新一轮100题。
-
-提交`0e6f035`后的[最新复核](./docs/doing/2026-10-23-reflection-convergence-audit.md)确认126项回归通过，但发现实际展示账本、重读、整理材料保留、关系过滤和误触发问题；[后续执行方案](./docs/phase-2/reflection-convergence-plan.md)已形成，生产修复尚未实施。
+2026-10-24：[跨数据集方法迭代](./docs/doing/2026-10-24-broad-method-implementation.md)完成局部修复与真实验证，148项回归通过，覆盖23个不同问题、1385次模型调用。写入可行性/身份约束、关系修复与BFS局部异常处理已实施；真实图质量和长材料整理仍未验收，新增LM4片段与top-k退化分析。[后续计划](./docs/phase-2/2026-10-24-broad-method-improvement-plan.md)按方向、设计、验证、分析持续推进；未部署、未开展新一轮100题总体评测。
 
 | 入口 | 内容 |
 | --- | --- |

@@ -63,3 +63,58 @@ def test_backlink_select_then_inspect_uses_result_in_next_decision(make):
     provider.decide = decide
     engine.search(SearchRequest(user_id='u', query='Caroline', top_k=2))
     assert seen[:3] == ['bfs', 'select', 'bfs']
+
+
+def test_bfs_malformed_followup_stops_with_existing_evidence(make):
+    engine, provider = make(mode='raw', search_model=True)
+    item = graph(engine)[0]
+    engine.config = replace(engine.config, mode='graph')
+    engine._search_refs = lambda *a, **k: [engine.store.get('u', item['ref'])]
+    calls = []
+
+    def decide(purpose, payload):
+        calls.append(purpose)
+        if purpose == 'bfs':
+            return 'bfs_inspect', {
+                'action': 'inspect', 'reason': 'read the item',
+                'target': {'frontier_position': 0, 'page_position:null': None},
+            }
+        return 'bfs_stop', {'action': 'stop'}
+
+    provider.decide = decide
+    result = engine.search(SearchRequest(user_id='u', query='Caroline', top_k=1))
+    assert calls == ['bfs']
+    assert result['data']
+
+
+def test_bfs_stale_position_stops_with_existing_evidence(make):
+    engine, provider = make(mode='raw', search_model=True)
+    item = graph(engine)[0]
+    engine.config = replace(engine.config, mode='graph')
+    engine._search_refs = lambda *a, **k: [engine.store.get('u', item['ref'])]
+
+    def decide(purpose, payload):
+        if purpose == 'bfs':
+            return 'bfs_backlinks', {'action': 'backlinks', 'frontier_position': 99, 'reason': 'stale'}
+        return 'bfs_stop', {'action': 'stop'}
+
+    provider.decide = decide
+    result = engine.search(SearchRequest(user_id='u', query='Caroline', top_k=1))
+    assert result['data']
+
+
+def test_bfs_invalid_provider_tool_output_stops_with_existing_evidence(make):
+    engine, provider = make(mode='raw', search_model=True)
+    item = graph(engine)[0]
+    engine.config = replace(engine.config, mode='graph')
+    engine._search_refs = lambda *a, **k: [engine.store.get('u', item['ref'])]
+    original = provider.tool
+
+    def invalid_bfs_output(purpose, prompt, payload, tools, deadline):
+        if purpose == 'bfs':
+            raise MemoryError('model_tool_output_invalid', 502)
+        return original(purpose, prompt, payload, tools, deadline)
+
+    provider.tool = invalid_bfs_output
+    result = engine.search(SearchRequest(user_id='u', query='Caroline', top_k=1))
+    assert result['data']

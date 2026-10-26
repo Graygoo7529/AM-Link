@@ -16,7 +16,7 @@ from .reflection_policy import plan_prefix, prefix_overview
 from .grounding import missing_material
 from .packing import freeze_pack, pack_frozen
 from .providers import tool_body
-from .reflection import parse_mutation, prepare_mutation, prompt
+from .reflection import parse_mutation, preflight_mutation, prepare_mutation, prompt
 from .schemas import AddRequest, BfsAction, EvictAction, Mutation, QueryExpansion, SearchRequest, Selection
 from .text import CHANGE, COMPLEX, FORGET, digest, dumps, excerpt, terms
 
@@ -99,6 +99,15 @@ class Engine:
                 "recent_actions": context.get("action_log", [])[-6:],
                 "identity_queries": {key: {**v, "refs": v["refs"][:8], "candidate_count": len(v["refs"])}
                     for key, v in list(context.get("identity_queries", {}).items())[-8:]}}
+            pending = context.get("pending_mutation")
+            if pending and context.get("last_gate_error", {}).get("code") == "reflection_invalid_relations":
+                result["reflection_control"]["pending_mutation"] = {
+                    "basis": pending.get("basis", "new_information"),
+                    "items": [{key: item.get(key) for key in ("ref", "kind", "text", "source_refs")}
+                              for item in pending.get("items", [])],
+                    "forget_count": len(pending.get("forget", [])),
+                    "instruction": "These node/forget fields are an uncommitted proposal. Grounding is checked after relation repair. Submit corrected links in reflection_relations; set drop_invalid=true with links=[] when no legal supported edge remains."
+                }
         # Metadata/navigation are part of the same budget. A required page is
         # indivisible and cannot disappear during a second projection.
         if len(dumps(result)) > max(0, limit - 600):
@@ -270,8 +279,15 @@ class Engine:
                            [row["ref"] for row in context.get("sources", [])])
         definitions = schema.get("$defs", {})
         item_properties = definitions.get("ItemChange", {}).get("properties", {})
-        item_properties["ref"] = {"type": "string", "pattern": "^(new:.+|memory:.+)$",
-            "description": "Node identifier, NEVER a raw: source identifier. For a new node invent a meaningful new: label, e.g. new:daily-api-quota. For an existing node copy an exact loaded memory: ref."}
+        editable = sorted(ref for ref, node in context.get('items', {}).items()
+                          if node['kind'] not in {'fact', 'event'} and not node.get('scope_omit_body'))
+        new_ref = {'type': 'string', 'pattern': '^new:.+$'}
+        item_properties['ref'] = ({'anyOf': [new_ref, {'type': 'string', 'enum': editable}]}
+                                  if editable else dict(new_ref))
+        item_properties['ref']['description'] = (
+            'For each new or changed fact/event use a meaningful new: label. Only the listed existing mutable nodes '
+            'may be re-emitted for an update. Never invent memory: identifiers or rewrite a minimum episode. '
+            'Unchanged old facts/events may be relation endpoints without re-emitting them in items.')
         link_properties = definitions.get("LinkChange", {}).get("properties", {})
         for endpoint in ("from_ref", "to_ref"):
             link_properties[endpoint] = {"type": "string", "pattern": "^(new:.+|memory:.+)$",
@@ -372,6 +388,31 @@ class Engine:
                 _tool("reflection_stop", "Stop because the current context is sufficient and no additional mutation is needed.",
                       {"type": "object", "properties": {}, "additionalProperties": False}),
             ]
+            relation_repair = (context.get("pending_mutation")
+                               and context.get("last_gate_error", {}).get("code") == "reflection_invalid_relations")
+            if relation_repair:
+                mutation_schema = self._mutation_tool_schema(context, source_refs)
+                link_schema = mutation_schema["$defs"]["LinkChange"]
+                pending_items = context["pending_mutation"].get("items", [])
+                endpoints = list(dict.fromkeys([
+                    *[item.get("ref") for item in pending_items],
+                    *context.get("items", {}).keys(),
+                    *[row.get("ref") for row in context.get("memories", [])],
+                    *context.get("references", {}).keys(),
+                ]))
+                if endpoints:
+                    for endpoint in ("from_ref", "to_ref"):
+                        link_schema["properties"][endpoint] = {"type": "string", "enum": endpoints}
+                link_schema["properties"]["support"] = {
+                    "type": "string", "minLength": 8,
+                    "description": "One short explanation of the exact cited source text that directly supports this relation. Shared topic or co-occurrence alone is not support. For contradicts/supersedes state both sides and why the relation applies."}
+                kind_summary = ", ".join(f"{item.get('ref')}={item.get('kind')}" for item in pending_items)
+                tools.insert(0, _tool(
+                    "reflection_relations",
+                    "Repair only the relation list for the pending node proposal. Grounding is checked after this repair; nothing is committed yet. Return exactly one links array and drop_invalid. If no legal, directly supported edge remains, set drop_invalid=true and links=[]; retain the nodes for final validation without new relations. Pending kinds are " + kind_summary + ". Legal directions are: about fact/event -> person/entity/concept/event; contains episode -> fact/event; supersedes/contradicts same-kind fact/event; same_event_as event -> event. Do not use about between two facts, do not use contains from an event/person, and do not add an edge merely because two items share a topic. Use exact pending or loaded memory refs, a nonempty source_refs list, and a short direct-support explanation for every edge.",
+                    {"type": "object", "properties": {"drop_invalid": {"type": "boolean"}, "links": {
+                        "type": "array", "items": link_schema, "maxItems": 256}}}))
+                tools = [tool for tool in tools if tool["name"] == "reflection_relations"]
             if refs:
                 for action in ("evict", "inspect", "backlinks"):
                     allowed = [row["position"] for row in choices.rows if action in row["allowed_actions"]]
@@ -391,7 +432,20 @@ class Engine:
                 tools = [t for t in tools if t["name"] != "reflection_search"]
             if context.get("last_gate_error"):
                 tools = [t for t in tools if t["name"] != "reflection_stop"]
-            return [tool for tool in tools if tool["name"] in {"reflection_mutation", "reflection_stop"}] if terminal else tools
+                # A rejected proposal with no missing material has a closed
+                # deterministic todo: repair the proposal and resubmit it.
+                # Keeping Inspect/Backlink/Evict available here made the model
+                # reread the same old episode after a relation/type or immutable
+                # episode error, consuming the final submission slots without
+                # changing the rejected proposal. Material-oriented failures
+                # still expose exploration tools until their missing ranges are
+                # actually visible.
+                if not context["last_gate_error"].get("missing"):
+                    allowed_repairs = {"reflection_mutation"}
+                    if relation_repair:
+                        allowed_repairs = {"reflection_relations"}
+                    tools = [t for t in tools if t["name"] in allowed_repairs]
+            return [tool for tool in tools if tool["name"] in {"reflection_mutation", "reflection_relations", "reflection_stop"}] if terminal else tools
         for step in range(self.config.reflection_steps):
             if time.monotonic() >= deadline:
                 raise MemoryError("request_deadline", 504)
@@ -465,22 +519,74 @@ class Engine:
                 self._reflection_action(context, "evict", refs=evicted_refs)
                 self._save_workspace(user, state="maintenance", context=context)
                 continue
-            if name == "reflection_mutation":
-                with self.observer.span("reflection", "reflection mutation validate", inputs=arguments) as event:
+            if name in {"reflection_mutation", "reflection_relations"}:
+                submitted_arguments = arguments
+                relation_support = []
+                if name == "reflection_relations":
+                    pending_mutation = context.get("pending_mutation")
+                    if not pending_mutation:
+                        raise MemoryError("reflection_relation_state_missing", 409)
+                    if (not isinstance(arguments.get('links'), list)
+                            or not all(isinstance(link, dict) for link in arguments['links'])
+                            or type(arguments.get('drop_invalid', False)) is not bool
+                            or (arguments.get('drop_invalid') and arguments['links'])):
+                        raise MemoryError('reflection_relation_output_invalid', 502)
+                    relation_support = [{key: link.get(key) for key in ("from_ref", "relation", "to_ref", "source_refs", "support")}
+                                        for link in arguments.get("links", [])]
+                    clean_links = [] if submitted_arguments.get("drop_invalid") else [
+                        {key: value for key, value in link.items() if key != "support"}
+                        for link in arguments.get("links", [])]
+                    arguments = {**pending_mutation, "links": clean_links}
+                with self.observer.span("reflection", "reflection mutation validate", inputs={
+                        "submitted": submitted_arguments, "mutation": arguments}) as event:
                     if context.get("last_gate_error") and not any(arguments.get(key) for key in ("items", "links", "forget")):
                         raise MemoryError("reflection_unresolved_evidence", 409)
                     try:
+                        invalid = preflight_mutation(arguments, user=user, store=self.store)
+                        if invalid:
+                            context['pending_mutation'] = {key: value for key, value in arguments.items() if key != 'links'}
+                            self._reflection_feedback(user, context, arguments, [], invalid,
+                                                      event, step, 'reflection_invalid_relations')
+                            continue
                         self._check_reflection_basis(arguments, context)
                         prepared = prepare_mutation(arguments, user=user, request_id=request.request_id, number=watermark,
                                                     context=context, store=self.store)
                         if prepared["filtered_links"]:
+                            if name == "reflection_mutation":
+                                context["pending_mutation"] = {
+                                    "basis": arguments.get("basis", "new_information"),
+                                    "inspected_refs": arguments.get("inspected_refs", []),
+                                    "no_prior_match": bool(arguments.get("no_prior_match", False)),
+                                    "items": arguments.get("items", []),
+                                    "forget": arguments.get("forget", []),
+                                }
                             self._reflection_feedback(user, context, arguments, [], prepared["filtered_links"],
                                                       event, step, "reflection_invalid_relations")
                             continue
                     except MemoryError as error:
+                        if error.code == "mutation_schema_invalid":
+                            # A malformed tool payload is a repairable proposal
+                            # error while the current Reflection budget remains.
+                            # Give the model one concrete schema task instead of
+                            # turning a missing relation source list into a
+                            # request failure or reopening source exploration.
+                            self._reflection_feedback(user, context, arguments, [], [{
+                                "reason": "mutation_schema_invalid",
+                                "instruction": "Resubmit reflection_mutation with exact fields. Every item needs ref, kind, text and nonempty source_refs; every link also needs from_ref, to_ref, relation and nonempty source_refs. Do not reread material for this schema repair."
+                            }], event, step, error.code)
+                            continue
                         if error.code in {"mutation_fact_overwrite", "minimum_episode_immutable", "mutation_invalid_identity"}:
+                            bad_refs = []
+                            for item in arguments.get("items", []):
+                                ref = item.get("ref") if isinstance(item, dict) else None
+                                if isinstance(ref, str) and ref.startswith("memory:") and ref not in context.get("items", {}) and ref not in context.get("references", {}):
+                                    bad_refs.append(ref)
+                            instruction = "Reference unchanged old items without re-emitting them. New facts/events use new: refs; minimum episodes cannot be rewritten."
+                            if error.code == "mutation_invalid_identity" and bad_refs:
+                                instruction = ("These memory refs are not loaded old nodes: " + ", ".join(bad_refs[:8]) + ". "
+                                    "Use a new: semantic placeholder for each genuinely new or changed node, or inspect/load the exact existing memory ref before referencing it. Do not invent memory: identifiers.")
                             self._reflection_feedback(user, context, arguments, [], [{"reason": error.code,
-                                "instruction": "Reference unchanged old items without re-emitting them. New facts/events use new: refs; minimum episodes cannot be rewritten."}],
+                                "instruction": instruction}],
                                 event, step, error.code)
                             continue
                         if error.code != "reflection_orientation_required":
@@ -493,6 +599,10 @@ class Engine:
                                                  "actual_inspections": context.get("inspections", {}),
                                                  "accepted": True}, kind="context", title="Reflection 先看再写门槛")
                     self.observer.output(event, prepared, kind="memory", title="Reflection Mutation 校验结果")
+                    if relation_support:
+                        self.observer.output(event, {"links": relation_support}, kind="context",
+                                             title="Relation 直接来源支持说明（待人工核验）")
+                context.pop("pending_mutation", None)
                 self._save_workspace(user, state="mutation", context=context)
                 self._commit_reflection(user, prepared, watermark, deadline, context)
                 return
@@ -521,6 +631,16 @@ class Engine:
         context["rejected_proposal"] = signature
         context["rejected_problem"] = problem
         context["last_gate_error"] = {"code": code, "missing": missing[:16], "invalid_links": invalid_links[:8]}
+        if invalid_links and not missing:
+            if context.get("pending_mutation"):
+                context["last_gate_error"]["next_action"] = (
+                    "No additional reading is required to repair these relation types. The uncommitted node proposal is under pending_mutation; grounding will be checked after repair. "
+                    "Repair/remove the listed relation or return an empty links list with reflection_relations; "
+                    "do not call Inspect, Backlink, Evict, or Stop.")
+            else:
+                context["last_gate_error"]["next_action"] = (
+                    "No additional reading is required. Repair or remove the listed invalid relation/immutable-node "
+                    "proposal and call reflection_mutation now; do not call Inspect, Backlink, Evict, or Stop.")
         context["protected_refs"] = [v["ref"] for v in missing if v["ref"].startswith("memory:")]
         context["protected_sources"] = [v["ref"] for v in missing if v["ref"].startswith("raw:")]
         # Load only navigation for missing targets; this is not an implicit Inspect.
@@ -576,7 +696,7 @@ class Engine:
             for key in ("disclosures", "last_visible", "read_ranges"):
                 retained[key] = [v for v in retained.get(key, []) if v["origin_ref"] not in blocked_sources | blocked_items and v.get("item_ref") not in blocked_items]
             retained["edges"] = [e for e in retained.get("edges", []) if not blocked_items.intersection((e["from_ref"], e["to_ref"])) and not blocked_sources.intersection(e["source_refs"])]
-            for key in ("prefix_overview", "protected_refs", "protected_sources", "protected_bodies", "last_gate_error", "rejected_proposal", "rejected_problem", "identity_queries", "visible_source_refs", "completed_queries", "action_log", "_page_choices"):
+            for key in ("prefix_overview", "protected_refs", "protected_sources", "protected_bodies", "last_gate_error", "pending_mutation", "rejected_proposal", "rejected_problem", "identity_queries", "visible_source_refs", "completed_queries", "action_log", "_page_choices"):
                 retained.pop(key, None)
             self._bound_workspace(retained)
             self.store.commit_mutation(user, prepared, watermark=watermark,
@@ -598,7 +718,7 @@ class Engine:
         context["old_scope"] = {"before": pending[0]["ordinal"], "empty": self.store.old_scope_empty(user, pending[0]["ordinal"]),
                                 "basis": "database_valid_old_sources", "query_performed": False}
         context.pop("last_gate_error", None)
-        for key in ("protected_refs", "protected_sources", "protected_bodies", "rejected_proposal", "rejected_problem", "completed_queries", "action_log"):
+        for key in ("protected_refs", "protected_sources", "protected_bodies", "pending_mutation", "rejected_proposal", "rejected_problem", "completed_queries", "action_log"):
             context.pop(key, None)
         context["identity_queries"] = {}
         context["question"] = query
@@ -1152,22 +1272,71 @@ class Engine:
                     tools.append(_tool("bfs_" + action, "Choose one allowed reference position. Inspect target binds a reference to its offered pages; page_position=null reads next relevant unread page. Backlinks takes only frontier_position and reason.",
                         {"type": "object", "properties": properties}))
         with self.observer.span("retrieve", "bfs action", inputs={"query": query, "context": context}) as event:
-            name, data = self._call_tool("bfs", "Explore the supplied memory graph. Choose a numbered context.choices entry and an allowed action. Inspect page_position=null reads the next query-relevant unread page; other positions refer to that choice's pages. Read new links or further pages as needed. Stop when evidence is sufficient; the last decision must stop. Never answer.", {"query": query, "context": projected}, tools, deadline)
+            try:
+                name, data = self._call_tool("bfs", "Explore the supplied memory graph. Return exactly ONE tool call and no prose. Choose a numbered context.choices entry and an allowed action. Inspect page_position=null reads the next query-relevant unread page; other positions refer to that choice's pages. Read new links or further pages as needed. Stop when evidence is sufficient; the last decision must stop. Never answer.", {"query": query, "context": projected}, tools, deadline)
+            except MemoryError as error:
+                # A malformed structured decision is local to optional graph
+                # expansion. Preserve query/Inspect evidence already in hand;
+                # provider, timeout, and other dependency errors still fail.
+                if error.code != "model_tool_output_invalid":
+                    raise
+                context["bfs_terminal_reason"] = error.code
+                with self.observer.span("retrieve", "bfs terminalized", inputs={
+                        "reason": error.code}) as terminal:
+                    self.observer.output(terminal, {"handled": "stop",
+                        "reason": error.code, "evidence_preserved": True},
+                        kind="context", title="BFS 结构化决策无效，保留已有证据")
+                return BfsAction(action="stop", reason="invalid structured decision; preserve current evidence")
             self._record_visible(context, projected, "bfs")
             if name == "bfs_inspect":
                 data = {**{k: v for k, v in data.items() if k != "target"}, **data.get("target", {})}
             try:
                 action = BfsAction.model_validate(data)
             except ValidationError:
-                raise MemoryError("bfs_action_invalid", 502) from None
+                # A malformed follow-up decision must not discard the query
+                # candidates already collected.  The public Search contract
+                # returns evidence, so terminate this bounded exploration and
+                # keep the observable failure reason instead of retrying the
+                # model or turning a useful partial result into a 502.
+                context["bfs_terminal_reason"] = "bfs_action_invalid"
+                with self.observer.span("retrieve", "bfs terminalized", inputs={
+                        "reason": "bfs_action_invalid", "data": data}) as terminal:
+                    self.observer.output(terminal, {"handled": "stop",
+                        "reason": "bfs_action_invalid", "evidence_preserved": True},
+                        kind="context", title="BFS 动作异常后保留已有证据")
+                return BfsAction(action="stop", reason="invalid model action; preserve current evidence")
             if name != "bfs_" + action.action:
-                raise MemoryError("bfs_action_invalid", 502)
+                context["bfs_terminal_reason"] = "bfs_action_invalid"
+                with self.observer.span("retrieve", "bfs terminalized", inputs={
+                        "reason": "bfs_action_invalid", "tool": name,
+                        "action": action.model_dump()}) as terminal:
+                    self.observer.output(terminal, {"handled": "stop",
+                        "reason": "bfs_action_invalid", "evidence_preserved": True},
+                        kind="context", title="BFS 工具与动作不一致")
+                return BfsAction(action="stop", reason="tool/action mismatch; preserve current evidence")
             if action.action == "stop":
                 action = action.model_copy(update={"ref": None})
             else:
                 if context.get("terminal_step"):
                     raise MemoryError("bfs_terminal_action", 502)
-                action = action.model_copy(update={"ref": choices.resolve(data.get("frontier_position"), action.action)})
+                try:
+                    resolved = choices.resolve(data.get("frontier_position"), action.action)
+                except MemoryError as error:
+                    # The model may repeat a stale choice after the preceding
+                    # Inspect changed the unread-page set.  This is a local
+                    # protocol miss, not a provider dependency failure: stop
+                    # the graph walk with the query/Inspect evidence intact.
+                    if error.code not in {"reference_invalid_position", "reference_action_not_allowed"}:
+                        raise
+                    context["bfs_terminal_reason"] = error.code
+                    with self.observer.span("retrieve", "bfs terminalized", inputs={
+                            "reason": error.code, "action": action.model_dump(),
+                            "frontier": choices.rows}) as terminal:
+                        self.observer.output(terminal, {"handled": "stop",
+                            "reason": error.code, "evidence_preserved": True},
+                            kind="context", title="BFS 过期选择后保留已有证据")
+                    return BfsAction(action="stop", reason=f"{error.code}; preserve current evidence")
+                action = action.model_copy(update={"ref": resolved})
             self.observer.output(event, action.model_dump(), kind="context", title="BFS 模型决策")
             return action
 

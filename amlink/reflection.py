@@ -20,6 +20,10 @@ changes once the relevant new information is understood; validation will list sp
 old targets or sources. Correct those gaps and resubmit within the remaining decisions.
 When required_actions says material_ready, resubmit the mutation; do not keep reading optional
 source pages for that satisfied requirement. Empty missing means the read gaps are now filled.
+If the last rejection has invalid_links and no missing material, repair those fields immediately.
+When reflection_control.pending_mutation is present, use reflection_relations; otherwise resubmit
+reflection_mutation with the corrected nodes/schema. If no legal directly supported edge remains
+in the relation stage, set drop_invalid=true with links=[]. Do not reread sources or call Evict for this repair.
 The last decision must be a valid mutation or a genuine no-op. Rejected changes, missing
 material and budget exhaustion are NOT reasons for no-op. An empty valid mutation is allowed
 only when the current batch needs no additional semantic memory beyond its existing episodes.
@@ -89,6 +93,47 @@ def parse_mutation(value):
     except ValidationError:
         raise MemoryError("mutation_schema_invalid", 502) from None
     return mutation, filtered_fields
+
+
+def preflight_mutation(value, *, user, store):
+    """Reject impossible writes before asking the model to read their targets.
+
+    This checks only schema, immutability and known endpoint kinds. It does not
+    authorize writes or count database content as model-visible evidence.
+    """
+    mutation, _ = parse_mutation(value)
+    kinds = {item.ref: item.kind for item in mutation.items}
+    for item in mutation.items:
+        old = store.get(user, item.ref) if item.ref.startswith('memory:') else None
+        if item.ref.startswith('memory:') and (not old or old['kind'] != item.kind):
+            raise MemoryError('mutation_invalid_identity', 502)
+        if not old:
+            continue
+        changed = any(getattr(item, field) != old.get(field) for field in
+                      ('text', 'time_expression', 'time_start', 'time_end'))
+        if store.is_minimum_episode(user, item.ref) and (
+                changed or set(item.source_refs) != set(old['source_refs'])):
+            raise MemoryError('minimum_episode_immutable', 502)
+        if old['kind'] in {'fact', 'event'} and changed:
+            raise MemoryError('mutation_fact_overwrite', 502)
+    invalid = []
+    for link in mutation.links:
+        endpoints = []
+        for ref in (link.from_ref, link.to_ref):
+            node = store.get(user, ref) if ref.startswith('memory:') else None
+            endpoints.append(kinds.get(ref) or (node['kind'] if node else None))
+        if all(endpoints) and not _relation_kinds_valid(*endpoints, link.relation):
+            invalid.append({**link.model_dump(), 'reason': 'relation_type_mismatch',
+                            'from_kind': endpoints[0], 'to_kind': endpoints[1]})
+    return invalid
+
+
+def _relation_kinds_valid(left, right, relation):
+    return ((relation == 'about' and left in {'fact', 'event'}
+             and right in {'person', 'entity', 'concept', 'event'})
+            or (relation == 'contains' and left == 'episode' and right in {'fact', 'event'})
+            or (relation in {'supersedes', 'contradicts'} and left in {'fact', 'event'} and right == left)
+            or (relation == 'same_event_as' and left == right == 'event'))
 
 
 def prepare_mutation(value, *, user, request_id, number, context, store):
@@ -197,10 +242,7 @@ def prepare_mutation(value, *, user, request_id, number, context, store):
             # episodes; that is not a graph edge in this vocabulary.
             filtered_links.append({**link.model_dump(), "reason": "episode_to_episode_outside_relation_vocabulary"})
             continue
-        valid = ((link.relation == "about" and a["kind"] in {"fact", "event"} and b["kind"] in {"person", "entity", "concept", "event"})
-            or (link.relation == "contains" and a["kind"] == "episode" and b["kind"] in {"fact", "event"})
-            or (link.relation in {"supersedes", "contradicts"} and a["kind"] in {"fact", "event"} and b["kind"] == a["kind"])
-            or (link.relation == "same_event_as" and a["kind"] == b["kind"] == "event"))
+        valid = _relation_kinds_valid(a['kind'], b['kind'], link.relation)
         if not valid:
             # Return all diagnostics before any commit. Engine blocks the
             # whole mutation until the model fixes these semantic errors.
