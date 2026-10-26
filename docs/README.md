@@ -2,6 +2,8 @@
 
 更新日期：2026-10-26。目标是让新会话快速恢复项目背景和决策依据；旧过程记录留在一期归档中。
 
+最新：`256fced`已提交。已按用户确认[备份并清空实验库与活动观测](./doing/2026-10-26-observation-reset-and-design-audit.md)，下一轮从空库构建。[自然叙事、局部整理与Select讨论稿](./phase-2/2026-10-26-narrative-local-reflection-design.md)尚未实施，当前方法以根DESIGN和上轮实测为准。
+
 | 阅读顺序 | 文档 | 用途 |
 | --- | --- | --- |
 | 1 | [一期设计理念](./phase-1/design-principles.md) | 不依赖代码名称理解记忆设计 |

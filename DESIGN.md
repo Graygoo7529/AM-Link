@@ -1,5 +1,7 @@
 # AM-Link Add/Search 当前设计
 
+当前实现已由用户提交为`256fced`。2026-10-26随后已[清空实验数据库与活动观测](docs/doing/2026-10-26-observation-reset-and-design-audit.md)，新实验须从空库构建；历史指标仍可读。另有[自然叙事与局部整理讨论稿](docs/phase-2/2026-10-26-narrative-local-reflection-design.md)，其中局部提交等属于提议，不是下述已实现流程。
+
 更新：2026-10-26，基线为用户提交 `2490307`。本轮收敛为唯一主链路：[执行计划](docs/phase-2/2026-10-26-live-method-plan.md)、[实施与实测](docs/doing/2026-10-26-live-method-implementation.md)。分步Reflection、来源对应与局部修订、原文卡Select均直接启用；已删除staged开关、旧整包提交和未调用的旧装箱实现。174项回归通过。真实成功与长记录失败分别记录；未部署、未参加官方Smoke。
 
 ## 边界和对象

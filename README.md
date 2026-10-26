@@ -6,7 +6,7 @@
 
 AM-Link 和设计灵感来源 **TinySoul-Agent** 都是 Graygoo7529 的个人原创项目。一期借鉴自己的记忆设计思想，独立实现比赛接口，未直接移植 TinySoul-Agent 代码。
 
-2026-10-26：[证据窗口与分步Reflection](./docs/doing/2026-10-26-evidence-and-draft-implementation.md)修复片段选择、无依据数值查询和可见来源回载；首次节点—关系—提交协议已作为默认关闭的实验选项接入。LM4金额已展示但Select仍漏证据，L1有小窗口构图成功，完整人物材料仍有失败。[执行计划](./docs/phase-2/2026-10-26-evidence-and-draft-plan.md)持续区分工程完成和方法质量；未部署、未开展新一轮100题总体评测。
+2026-10-26：用户已提交`256fced`，[分步Reflection与原文卡Select](./docs/doing/2026-10-26-live-method-implementation.md)已作为唯一主链路实施，长历史整理与关系语义仍未验收。已按用户确认[备份并清空实验数据库和活动观测](./docs/doing/2026-10-26-observation-reset-and-design-audit.md)，后续实验从新库开始。[自然叙事与局部整理设计](./docs/phase-2/2026-10-26-narrative-local-reflection-design.md)是下一轮讨论稿，尚未修改方法；无部署。
 
 | 入口 | 内容 |
 | --- | --- |
