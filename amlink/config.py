@@ -20,7 +20,7 @@ class Config:
     max_request_chars: int = 64000
     max_request_messages: int = 128
     old_candidates: int = 32
-    seed_count: int = 8
+    select_threshold: int = 5
     candidate_limit: int = 64
     select_candidate_limit: int = 24
     max_hops: int = 3
@@ -35,7 +35,6 @@ class Config:
     model_max_tokens: int = 5000
     search_model: bool = True
     reflection_steps: int = 16
-    reflection_staged: bool = False
     search_steps: int = 8
     llm_base_url: str = "https://api.zhizengzeng.com/v1"
     llm_api_key: str = ""

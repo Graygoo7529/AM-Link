@@ -25,8 +25,14 @@ class FakeProviders:
         self.calls.append((purpose, payload))
         if purpose == "reflection":
             if self.reflection:
-                return "reflection_mutation", self.reflection(payload)
+                stage = payload['context']['reflection_control'].get('pending_mutation', {}).get('stage')
+                if stage == 'relations': return 'reflection_relations', {'links': []}
+                if stage == 'commit': return 'reflection_commit', {}
+                return "reflection_items", self.reflection(payload)
             return "reflection_stop", {}
+        if purpose == 'reflection_review':
+            return 'review', {'reviews': [{'position': u['position'], 'action': 'keep', 'text': None, 'detail': 'fixture',
+                'source_positions': [i for i in u['source_positions'] if payload['sources'][i]['source_ref'] in u['proposal']['source_refs']]} for u in payload['units']]}
         if purpose == "bfs":
             return "bfs_stop", {"action": "stop"}
         raise AssertionError(f"unexpected tool {purpose}")

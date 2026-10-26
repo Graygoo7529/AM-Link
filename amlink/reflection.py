@@ -15,27 +15,29 @@ Use ONLY the offered tools and exact field names. Inspect takes target={referenc
 page_position}; choose an offered numbered context.choices entry, not dictionary order.
 Inspect defaults to the next needed item-body page in Reflection. Sources are separate pages.
 
-If reflection_items is offered, the staged protocol overrides the legacy mutation workflow:
-first draft a small useful set of nodes, with exact sources and supported person/entity endpoints.
+First draft a small useful set of nodes with reflection_items, with exact sources and supported person/entity endpoints.
 Then resolve the specific missing-material tasks; do not read everything before drafting.
 reflection_relations proposes only links for that draft (or explicitly no links). If a necessary
-endpoint is missing, request reflection_revise_items with a concrete reason; then reflection_items
-revises the whole draft before links are proposed again. Do not repeatedly rewrite accepted nodes.
+endpoint is genuinely useful but missing, use reflection_patch_items to upsert that node ONLY.
+Untouched draft nodes persist. Patch incorrect source_refs/text locally, or remove an unsupported
+draft node with remove_refs. Do not rewrite accepted nodes or invent endpoints just to add edges.
+After reading missing material, reflection_validate checks the existing draft without resubmission.
 reflection_commit accepts no content and atomically commits the validated nodes and links.
 These stages are uncommitted proposals, never stored facts. Respect pending_mutation.stage;
-in items stage resubmit corrected/grounded items, in relations stage propose links, and in
+in items stage patch defects or validate after reading, in relations stage propose links, and in
 commit stage commit. Never call stop to discard an unresolved draft. No tool/network retries.
-Staged reflection_relations uses only links; links=[] explicitly means no supported relation.
+reflection_relations uses only links; links=[] explicitly means no useful supported relation.
+Commit runs a separate source correspondence review which locally corrects or removes unsupported
+draft units, then revalidates the resulting mutation. Every cited source must directly support the associated statement;
+use short coherent nodes instead of large biographies mixing unrelated claims and citations.
 
 Make progress toward a small useful mutation. Do not read every available episode. Propose
 changes once the relevant new information is understood; validation will list specific missing
 old targets or sources. Correct those gaps and resubmit within the remaining decisions.
-When required_actions says material_ready, resubmit the mutation; do not keep reading optional
+When required_actions says material_ready, call reflection_validate; do not keep reading optional
 source pages for that satisfied requirement. Empty missing means the read gaps are now filled.
 If the last rejection has invalid_links and no missing material, repair those fields immediately.
-In the legacy workflow (reflection_mutation offered), when pending_mutation is present use reflection_relations; otherwise resubmit
-reflection_mutation with the corrected nodes/schema. If no legal directly supported edge remains
-in the relation stage, set drop_invalid=true with links=[]. Do not reread sources or call Evict for this repair.
+If no legal directly supported edge remains, return links=[]. Do not reread sources or call Evict for this repair.
 The last decision must be a valid mutation or a genuine no-op. Rejected changes, missing
 material and budget exhaustion are NOT reasons for no-op. An empty valid mutation is allowed
 only when the current batch needs no additional semantic memory beyond its existing episodes.
@@ -226,7 +228,7 @@ def prepare_mutation(value, *, user, request_id, number, context, store):
             raise MemoryError("mutation_unknown_memory", 502)
         return ref
 
-    links, seen, filtered_links = [], set(), []
+    links, seen, filtered_links, deduplicated_links = [], set(), [], []
     for link in mutation.links:
         # Raw refs are provenance, not graph nodes. The mandatory episode
         # already carries these source_refs. Collect diagnostics; the engine
@@ -252,6 +254,9 @@ def prepare_mutation(value, *, user, request_id, number, context, store):
                                    "reason": "unknown_memory"})
             continue
         if left == right:
+            if link.from_ref != link.to_ref:
+                deduplicated_links.append({**link.model_dump(), "reason": "endpoints_resolve_to_same_memory", "resolved_ref": left})
+                continue
             refs = checked(link.source_refs)
             filtered_links.append({**link.model_dump(), "source_refs": refs,
                                    "reason": "self_link"})
@@ -306,4 +311,4 @@ def prepare_mutation(value, *, user, request_id, number, context, store):
         raw_refs = checked(list(raw_refs))
         forget.append({"source_refs": raw_refs, "memory_refs": memory_refs, "instruction_refs": instructions})
     return {"items": items, "links": links, "forget": forget,
-            "filtered_links": filtered_links, "filtered_fields": filtered_fields}
+            "filtered_links": filtered_links, "filtered_fields": filtered_fields, "deduplicated_links": deduplicated_links}

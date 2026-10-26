@@ -2,6 +2,7 @@
 
 | 日期 | 计划 | 当前状态 |
 | --- | --- | --- |
+| 2026-10-26 | [单一主链路：原文卡与局部草案](./2026-10-26-live-method-implementation.md) | 默认实施、174项回归；929次已落盘尝试、16题，失败/中断单列；[台账](./2026-10-26-live-run-ledger.md)、[执行计划](../phase-2/2026-10-26-live-method-plan.md) |
 | 2026-10-26 | [证据窗口与分步Reflection](./2026-10-26-evidence-and-draft-implementation.md) | 默认片段/查询/可见来源修复；分步协议实验实现done、质量未验收；[执行计划](../phase-2/2026-10-26-evidence-and-draft-plan.md) |
 | 2026-10-24 | [跨数据集方法迭代与真实观测](./2026-10-24-broad-method-implementation.md) | 局部实施done；148项回归、23个问题、1385次真实调用；图/长材料/片段语义仍待验收；[执行计划](../phase-2/2026-10-24-broad-method-improvement-plan.md)、[完整台账](./2026-10-24-broad-run-ledger.md) |
 | 2026-10-23 | [Reflection闭环实施与复验](./2026-10-23-reflection-convergence-implementation.md) | 工程实施done；140项回归、220次真实调用；构图/探索未验收，默认确定性装箱，未扩大20/100题 |

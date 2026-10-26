@@ -14,13 +14,18 @@ from .text import digest, dumps
 
 
 def tool_body(config, purpose, prompt, payload, tools):
-    """One canonical serialization for engine preflight and the actual HTTP call."""
+    """One serialization for preflight and HTTP, preserving task-first order.
+
+    Storage hashes use sorted keys; the model reads the explicitly composed
+    question/decision before its material, so model input must not sort keys.
+    """
     return {"model": config.llm_model, "temperature": 0,
             "max_tokens": config.model_max_tokens, "parallel_tool_calls": False,
             "tools": [{"type": "function", "function": tool} for tool in tools],
             "tool_choice": "required",
             "messages": [{"role": "system", "content": prompt},
-                         {"role": "user", "content": dumps({"purpose": purpose, "data": payload})}]}
+                         {"role": "user", "content": json.dumps({"purpose": purpose, "data": payload},
+                            ensure_ascii=False, separators=(",", ":"), allow_nan=False)}]}
 
 
 class Providers:

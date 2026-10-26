@@ -22,7 +22,7 @@
 | 16 | [AM-Link 二期方法改进计划](./phase-2/method-improvement-plan.md) | 结合 TinySoul、案例与当前实现的重构计划；每个 Add 先生成可检索最小 episode，工作区跨请求累积，Search/Reflection 分开 |
 | 17 | [P0/P1证据链与Reflection执行细则](./phase-2/evidence-loop-execution-plan.md) | 五包已接入；[实施核对](./doing/2026-10-23-evidence-loop-implementation.md)记录回归、真实切片、失败与尚未达成的质量验收 |
 
-2026-10-26 最新先读[证据窗口与分步Reflection报告](./doing/2026-10-26-evidence-and-draft-implementation.md)和[执行计划](./phase-2/2026-10-26-evidence-and-draft-plan.md)。默认链路修复片段和可见来源，分步协议默认关闭、独立实测。LM4由“未展示价格”推进到“已展示仍被Select排除”；新人物历史与完整人物材料的失败单列，整体方法未验收、未部署。此前23个问题/1385次调用见[10月24日报告](./doing/2026-10-24-broad-method-implementation.md)。
+2026-10-26 最新先读[单一主链路实施与实测](./doing/2026-10-26-live-method-implementation.md)、[执行计划](./phase-2/2026-10-26-live-method-plan.md)和根DESIGN。分步Reflection、来源对应/局部校正及原文卡Select直接进入默认方法；取消双路径开关。真实成功、变体失败与完整人物记录分栏。前一包[证据窗口报告](./doing/2026-10-26-evidence-and-draft-implementation.md)是历史基线，不能继续沿用其默认关闭结论。
 
 此前阶段：2026-10-23 先读[闭环实施与真实复验](./doing/2026-10-23-reflection-convergence-implementation.md)及[执行计划核对](./phase-2/reflection-convergence-plan.md)：140项回归通过，新增220次真实调用。统一可见范围、目标正文保留、关系阻断反馈、缓冲误触发修复已实施；真实Select/查询扩展在历史图副本上执行，但当前构图仍不稳定、整体方法未验收。LLM装箱合法但来源覆盖6/7，确定性为7/7，维持默认。未扩大20/100题、未部署。[之前的复核](./doing/2026-10-23-reflection-convergence-audit.md)与[前轮实施核对](./doing/2026-10-23-evidence-loop-implementation.md)保留为过程记录；8项旧跟踪测试产物仍待处理。
 

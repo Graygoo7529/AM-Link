@@ -18,7 +18,7 @@ def relations(payload):
 
 
 def test_draft_and_links_are_invisible_until_atomic_commit(make):
-    engine, provider = make(reflection_staged=True, reflection_threshold=1)
+    engine, provider = make(reflection_threshold=1)
     stages = []
     def decide(purpose, payload):
         assert engine.store.state('u')['settled_through'] == 0
@@ -44,7 +44,7 @@ def test_draft_and_links_are_invisible_until_atomic_commit(make):
 
 
 def test_failed_draft_replay_never_partially_writes_or_duplicates_nodes(make):
-    engine, provider = make(reflection_staged=True, reflection_threshold=1)
+    engine, provider = make(reflection_threshold=1)
     failed = False
     def decide(purpose, payload):
         nonlocal failed
@@ -66,22 +66,31 @@ def test_failed_draft_replay_never_partially_writes_or_duplicates_nodes(make):
     assert len([n for n in engine.store.nodes('u') if n['kind'] == 'fact']) == 1
 
 
-def test_relation_stage_can_return_to_items_to_add_supported_endpoint(make):
-    engine, provider = make(reflection_staged=True, reflection_threshold=1)
+def test_review_defect_can_patch_one_node_without_rewriting_others(make):
+    engine, provider = make(reflection_threshold=1)
+    ordinary_review = provider.review
+    def review(payload):
+        result = ordinary_review(payload)
+        if payload['units'][0]['proposal'].get('text') == 'Maya likes coffee.':
+            result['reviews'][0].update(action='revise', text='Maya likes tea.', detail='The source says tea, not coffee.')
+        return result
+    provider.review = review
     def decide(purpose, payload):
         step = payload['step']
-        if step == 0: return 'reflection_items', proposal(payload, person=False)
-        if step == 1: return 'reflection_revise_items', {'reason': 'The supported person endpoint Maya is missing.'}
-        if step == 2: return 'reflection_items', proposal(payload)
-        if step == 3: return 'reflection_relations', relations(payload)
+        if step == 0:
+            value = proposal(payload)
+            value['items'][0]['text'] = 'Maya likes coffee.'
+            return 'reflection_items', value
+        if step == 1: return 'reflection_relations', relations(payload)
         return 'reflection_commit', {}
     provider.decide = decide
     engine.add(request('a', ['Speaker: Maya\nI like tea.']))
     assert len(engine.store.nodes('u')) == 3
+    assert next(n for n in engine.store.nodes('u') if n['kind']=='fact')['text']=='Maya likes tea.'
 
 
 def test_uncommitted_draft_cannot_finish_via_stop(make):
-    engine, provider = make(reflection_staged=True, reflection_threshold=1)
+    engine, provider = make(reflection_threshold=1)
     provider.decide = lambda purpose, payload: ('reflection_items', proposal(payload)) if payload['step'] == 0 else ('reflection_stop', {})
     with pytest.raises(MemoryError, match='model_unknown_tool'):
         engine.add(request('a', ['Speaker: Maya\nI like tea.']))
@@ -89,7 +98,7 @@ def test_uncommitted_draft_cannot_finish_via_stop(make):
 
 
 def test_staged_invalid_relation_can_be_removed_but_not_committed(make):
-    engine, provider = make(reflection_staged=True, reflection_threshold=1)
+    engine, provider = make(reflection_threshold=1)
     def decide(purpose, payload):
         if payload['step'] == 0: return 'reflection_items', proposal(payload)
         if payload['step'] == 1:
@@ -107,7 +116,7 @@ def test_staged_invalid_relation_can_be_removed_but_not_committed(make):
 
 
 def test_accepted_nodes_cannot_be_silently_rewritten_in_relation_stage(make):
-    engine, provider = make(reflection_staged=True, reflection_threshold=1)
+    engine, provider = make(reflection_threshold=1)
     provider.decide = lambda purpose, payload: ('reflection_items', proposal(payload))
     with pytest.raises(MemoryError, match='model_unknown_tool'):
         engine.add(request('a', ['Speaker: Maya\nI like tea.']))
@@ -115,19 +124,14 @@ def test_accepted_nodes_cannot_be_silently_rewritten_in_relation_stage(make):
 
 
 def test_revision_must_change_the_node_draft(make):
-    engine, provider = make(reflection_staged=True, reflection_threshold=1)
-    def decide(purpose, payload):
-        if payload['step'] == 1:
-            return 'reflection_revise_items', {'reason': 'The subject endpoint should be corrected.'}
-        return 'reflection_items', proposal(payload)
-    provider.decide = decide
+    from amlink.drafts import patch_items
+    draft = {'items': [dict(ref='new:maya', kind='person', text='Maya', source_refs=['raw:a'])]}
     with pytest.raises(MemoryError, match='reflection_no_draft_progress'):
-        engine.add(request('a', ['Speaker: Maya\nI like tea.']))
-    assert engine.store.state('u')['settled_through'] == 0
+        patch_items(draft, {'reason': 'Correct Maya.', 'upsert': draft['items'], 'remove_refs': []})
 
 
 def test_relation_tool_limits_endpoint_kinds_before_model_generation(make):
-    engine, provider = make(reflection_staged=True, reflection_threshold=1)
+    engine, provider = make(reflection_threshold=1)
     original = provider.tool
     seen = []
     def tool(purpose, prompt, payload, tools, deadline):
@@ -151,7 +155,7 @@ def test_relation_tool_limits_endpoint_kinds_before_model_generation(make):
 
 
 def test_short_chinese_support_is_not_rejected_by_english_length_threshold(make):
-    engine, provider = make(reflection_staged=True, reflection_threshold=1)
+    engine, provider = make(reflection_threshold=1)
     def decide(purpose, payload):
         if payload['step'] == 0: return 'reflection_items', proposal(payload)
         if payload['step'] == 1:

@@ -51,7 +51,8 @@ def freeze_pack(store, user, query, rows, context, config):
         sources = [source for source in sources if source]
         queries = list(dict.fromkeys([query] + [entry["branch"] for row in rows if row["ref"] in members
                                                for entry in row.get("lineage", []) if entry.get("branch")]))
-        units = []
+        preferred = [value for ref in members for value in metadata.get(ref, {}).get("selected_fragments", [])]
+        units = [value for value in preferred if value["origin_ref"].startswith("raw:")]
         for source in sources:
             if len(source["text"]) <= 1000:
                 values = [fragment(source, 0, len(source["text"]))]
@@ -63,7 +64,7 @@ def freeze_pack(store, user, query, rows, context, config):
                        and v["content_digest"] == digest(source["text"])]
             units.extend({v["fragment_id"]: v for v in values}.values())
         # Derived node bodies are distinct evidence; never call them source originals.
-        bodies = []
+        bodies = [value for value in preferred if not value["origin_ref"].startswith("raw:")]
         for node in group_nodes:
             if not store.is_minimum_episode(user, node["ref"]):
                 values, _ = complementary_passages([node], queries, min(2000, config.result_chars // 3), max(1, len(queries)))

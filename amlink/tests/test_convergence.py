@@ -66,104 +66,83 @@ def test_reflection_reads_short_body_before_long_keyword_source(make):
 
 
 def test_empty_scope_is_database_fact_and_new_person_needs_no_empty_query(make):
-    engine,provider=make(reflection_threshold=1)
-    def decide(purpose,payload):
-        control=payload['context']['reflection_control']
+    engine, provider = make(reflection_threshold=1)
+    def decide(purpose, payload):
+        control = payload['context']['reflection_control']
         assert control['old_scope']['empty'] and not control['old_scope']['query_performed']
-        return 'reflection_mutation', {'items':[dict(ref='new:maya',kind='person',text='Maya is the speaker.',
-                                                    source_refs=[payload['working'][0]['ref']])]}
-    provider.decide=decide
-    engine.add(request('a',['Speaker: Maya\nI am Maya.']))
-    assert len([c for c in provider.calls if c[0]=='reflection'])==1
-    assert engine.store.old_scope_empty('u',1)
-    assert not engine.store.old_scope_empty('u',2)
-    assert engine.store.old_scope_empty('another_user',2)
+        stage = control.get('pending_mutation', {}).get('stage')
+        if stage == 'relations': return 'reflection_relations', {'links': []}
+        if stage == 'commit': return 'reflection_commit', {}
+        return 'reflection_items', {'items': [dict(ref='new:maya', kind='person', text='Maya is the speaker.', source_refs=[payload['working'][0]['ref']])]}
+    provider.decide = decide
+    engine.add(request('a', ['Speaker: Maya\nI am Maya.']))
+    assert len([c for c in provider.calls if c[0]=='reflection']) == 3
+    assert engine.store.old_scope_empty('u', 1)
+    assert not engine.store.old_scope_empty('u', 2)
+    assert engine.store.old_scope_empty('another_user', 2)
 
 
 def test_invalid_relation_feedback_then_correct_direction_commits_atomically(make):
-    engine,provider=make(reflection_threshold=1,reflection_steps=4)
-    seen=[]
-    tool_names=[]
-    original_tool=provider.tool
-    def capture_tool(purpose, prompt, payload, tools, deadline):
-        if purpose == 'reflection':
-            tool_names.append([tool['name'] for tool in tools])
-        return original_tool(purpose, prompt, payload, tools, deadline)
-    provider.tool=capture_tool
-    def decide(purpose,payload):
-        seen.append(payload)
-        ref=payload['working'][0]['ref']
-        if payload['step']:
-            assert payload['context']['reflection_control']['last_gate_error']['invalid_links']
-            assert engine.store.state('u')['settled_through']==0
-            assert all(n['kind']=='episode' for n in engine.store.nodes('u'))
-        if payload['step']:
-            return 'reflection_relations', {'links': [dict(from_ref='new:tea', to_ref='new:maya',
-                relation='about', source_refs=[ref])]}
-        return 'reflection_mutation', {'items':[
-            dict(ref='new:maya',kind='person',text='Maya',source_refs=[ref]),
-            dict(ref='new:tea',kind='fact',text='Maya likes tea.',source_refs=[ref])],
-            'links':[dict(from_ref='new:maya', to_ref='new:tea',relation='about',source_refs=[ref])]}
-    provider.decide=decide
+    engine, provider = make(reflection_threshold=1)
+    names = []
+    original = provider.tool
+    def capture(purpose, prompt, payload, tools, deadline):
+        if purpose == 'reflection': names.append([t['name'] for t in tools])
+        return original(purpose, prompt, payload, tools, deadline)
+    provider.tool = capture
+    def decide(purpose, payload):
+        source = payload['working'][0]['ref']; step = payload['step']
+        assert engine.store.state('u')['settled_through'] == 0
+        assert all(n['kind']=='episode' for n in engine.store.nodes('u'))
+        if step == 0: return 'reflection_items', {'items': [dict(ref='new:maya',kind='person',text='Maya',source_refs=[source]),dict(ref='new:tea',kind='fact',text='Maya likes tea.',source_refs=[source])]}
+        if step == 3: return 'reflection_commit', {}
+        if step == 2: assert payload['context']['reflection_control']['last_gate_error']['invalid_links']
+        a,b = ('new:maya','new:tea') if step==1 else ('new:tea','new:maya')
+        return 'reflection_relations', {'links':[dict(from_ref=a,to_ref=b,relation='about',source_refs=[source],support='Maya says she likes tea.')]}
+    provider.decide = decide
     engine.add(request('a',['Speaker: Maya\nI like tea.']))
-    fact=next(n for n in engine.store.nodes('u') if n['kind']=='fact')
-    assert len(engine.store.edges('u',fact['ref']))==1
-    assert len(seen)==2 and engine.store.state('u')['settled_through']==1
-    assert 'reflection_inspect' not in tool_names[1]
-    assert 'reflection_backlinks' not in tool_names[1]
+    fact = next(n for n in engine.store.nodes('u') if n['kind']=='fact')
+    assert len(engine.store.edges('u',fact['ref'])) == 1
+    assert 'reflection_inspect' not in names[2] and 'reflection_backlinks' not in names[2]
 
 
 def test_invalid_relation_cannot_finish_by_noop(make):
-    engine,provider=make(reflection_threshold=1)
+    engine, provider = make(reflection_threshold=1)
     def decide(purpose,payload):
-        if payload['step']: return 'reflection_stop',{}
-        ref=payload['working'][0]['ref']
-        return 'reflection_mutation', {'items':[dict(ref='new:e',kind='event',text='A meeting',source_refs=[ref])],
-            'links':[dict(from_ref='new:e',to_ref='new:e',relation='same_event_as',source_refs=[ref])]}
+        source = payload['working'][0]['ref']
+        if payload['step']==0: return 'reflection_items', {'items':[dict(ref='new:e',kind='event',text='A meeting',source_refs=[source])]}
+        if payload['step']==1: return 'reflection_relations', {'links':[dict(from_ref='new:e',to_ref='new:e',relation='same_event_as',source_refs=[source],support='A meeting.')]}
+        return 'reflection_stop', {}
     provider.decide=decide
-    with pytest.raises(MemoryError,match='model_unknown_tool'):
-        engine.add(request('a',['There was a meeting.']))
+    with pytest.raises(MemoryError,match='model_unknown_tool'): engine.add(request('a',['A meeting.']))
     assert engine.store.state('u')['settled_through']==0
-    assert all(n['kind']=='episode' for n in engine.store.nodes('u'))
 
 
 def test_schema_feedback_repairs_missing_relation_sources(make):
-    engine, provider = make(reflection_threshold=1, reflection_steps=4)
-    calls = []
-    def decide(purpose, payload):
-        if purpose != 'reflection':
-            return 'bfs_action', {'action': 'stop'}
-        calls.append(payload)
-        ref = payload['working'][0]['ref']
-        link = {'from_ref': 'new:f', 'to_ref': 'new:e', 'relation': 'about'}
-        if payload['step']:
-            link['source_refs'] = [ref]
-        return 'reflection_mutation', {'items': [
-            {'ref': 'new:f', 'kind': 'fact', 'text': 'A fact.', 'source_refs': [ref]},
-            {'ref': 'new:e', 'kind': 'entity', 'text': 'An entity.', 'source_refs': [ref]}],
-            'links': [link]}
-    provider.decide = decide
-    engine.add(request('a', ['A fact concerns an entity.']))
-    assert len(calls) == 2
-    assert any(n['kind'] == 'fact' for n in engine.store.nodes('u'))
+    engine, provider = make(reflection_threshold=1)
+    def decide(purpose,payload):
+        source=payload['working'][0]['ref']; step=payload['step']
+        if step==0: return 'reflection_items', {'items':[dict(ref='new:f',kind='fact',text='A fact',source_refs=[source]),dict(ref='new:e',kind='entity',text='An entity',source_refs=[source])]}
+        if step==3: return 'reflection_commit', {}
+        link=dict(from_ref='new:f',to_ref='new:e',relation='about',support='A fact concerns the entity.')
+        if step==2:
+            assert payload['context']['reflection_control']['last_gate_error']['code']=='mutation_schema_invalid'
+            link['source_refs']=[source]
+        return 'reflection_relations', {'links':[link]}
+    provider.decide=decide
+    engine.add(request('a',['A fact concerns an entity.']))
+    assert any(n['kind']=='fact' for n in engine.store.nodes('u'))
 
 
 def test_rephrasing_unrelated_item_is_not_progress_on_same_invalid_edge(make):
     engine, provider = make(reflection_threshold=1)
-    def decide(purpose, payload):
-        ref=payload['working'][0]['ref']
-        if payload['step']:
-            return 'reflection_relations', {'links': [
-                dict(from_ref='new:p',to_ref='new:f',relation='about',source_refs=[ref])]}
-        return 'reflection_mutation', {'items':[
-            dict(ref='new:p',kind='person',text='Maya' + '.'*payload['step'],source_refs=[ref]),
-            dict(ref='new:f',kind='fact',text='Maya likes tea.',source_refs=[ref])],
-            'links':[dict(from_ref='new:p',to_ref='new:f',relation='about',source_refs=[ref])]}
+    def decide(purpose,payload):
+        source=payload['working'][0]['ref']
+        if payload['step']==0: return 'reflection_items', {'items':[dict(ref='new:p',kind='person',text='Maya',source_refs=[source]),dict(ref='new:f',kind='fact',text='Maya likes tea.',source_refs=[source])]}
+        return 'reflection_relations', {'links':[dict(from_ref='new:p',to_ref='new:f',relation='about',source_refs=[source],support='Maya likes tea.')]}
     provider.decide=decide
-    with pytest.raises(MemoryError,match='reflection_no_evidence_progress'):
-        engine.add(request('a',['Speaker: Maya\nI like tea.']))
-    assert len(provider.calls)==2
-    assert engine.store.state('u')['settled_through']==0
+    with pytest.raises(MemoryError,match='reflection_no_evidence_progress'): engine.add(request('a',['Speaker: Maya\nI like tea.']))
+    assert len(provider.calls)==3 and engine.store.state('u')['settled_through']==0
 
 
 def test_tool_schema_distinguishes_node_identity_from_source_identity(make):
@@ -176,7 +155,7 @@ def test_tool_schema_distinguishes_node_identity_from_source_identity(make):
     provider.tool = tool
     engine.add(request('a', ['A named project launched.']))
     import re
-    schema = next(t['parameters'] for t in captured if t['name']=='reflection_mutation')
+    schema = next(t['parameters'] for t in captured if t['name']=='reflection_items')
     props = schema['$defs']['ItemChange']['properties']
     assert re.match(props['ref']['pattern'], 'new:project-launch')
     assert not re.match(props['ref']['pattern'], 'raw:source')
@@ -249,52 +228,38 @@ def test_workspace_folds_optional_source_pages_without_losing_required_body(make
 @pytest.mark.parametrize('invalid_kind', ['overwrite_episode', 'about_episode'])
 def test_impossible_old_episode_write_is_repaired_before_reading(make, invalid_kind):
     engine, provider = make(mode='raw')
-    engine.add(request('old', ['The project used an old configuration.']))
-    old = engine.store.nodes('u')[0]
-    engine.store.commit_mutation('u', {'items': [], 'links': [], 'forget': []},
-                                watermark=1, fingerprint='x', vectors={})
-    engine.config = replace(engine.config, mode='graph', reflection_threshold=1)
-    seen = []
-
-    def decide(purpose, payload):
-        seen.append(purpose)
-        source = payload['working'][0]['ref']
-        node = dict(ref='new:configuration', kind='fact',
-                    text='The project now uses a different configuration.', source_refs=[source])
-        if payload['step']:
-            gate = payload['context']['reflection_control']['last_gate_error']
-            assert gate['missing'] == []
-            assert not payload['context']['reflection_control'].get('required_actions')
-            if invalid_kind == 'about_episode':
-                return 'reflection_relations', {'drop_invalid': True, 'links': []}
-            return 'reflection_mutation', {'items': [node]}
-        if invalid_kind == 'overwrite_episode':
-            return 'reflection_mutation', {'items': [{**node, 'ref': old['ref'], 'kind': 'episode'}]}
-        return 'reflection_mutation', {'items': [node], 'links': [dict(
-            from_ref=node['ref'], to_ref=old['ref'], relation='about', source_refs=[source])]}
-
-    provider.decide = decide
-    engine.add(request('new', ['The project now uses a different configuration.']))
-    assert seen == ['reflection', 'reflection']
-    assert engine.store.get('u', old['ref'])['text'] == old['text']
-    assert len([n for n in engine.store.nodes('u') if n['kind'] == 'fact']) == 1
+    engine.add(request('old',['The project used an old configuration.']))
+    old=engine.store.nodes('u')[0]
+    engine.store.commit_mutation('u', {'items':[],'links':[],'forget':[]},watermark=1,fingerprint='x',vectors={})
+    engine.config=replace(engine.config,mode='graph',reflection_threshold=1)
+    def decide(purpose,payload):
+        step=payload['step']; source=payload['working'][0]['ref']
+        node=dict(ref='new:configuration',kind='fact',text='The project now uses a different configuration.',source_refs=[source])
+        stage=payload['context']['reflection_control'].get('pending_mutation',{}).get('stage')
+        if stage=='commit': return 'reflection_commit', {}
+        if step==0:
+            return 'reflection_items', {'items':[{**node,'ref':old['ref'],'kind':'episode'}] if invalid_kind=='overwrite_episode' else [node]}
+        if invalid_kind=='overwrite_episode' and step==1:
+            assert payload['context']['reflection_control']['last_gate_error']['missing']==[]
+            return 'reflection_items', {'items':[node]}
+        if invalid_kind=='about_episode' and step==1:
+            return 'reflection_relations', {'links':[dict(from_ref=node['ref'],to_ref=old['ref'],relation='about',source_refs=[source],support='The configuration changed.')]}
+        return 'reflection_relations', {'links':[]}
+    provider.decide=decide
+    engine.add(request('new',['The project now uses a different configuration.']))
+    assert engine.store.get('u',old['ref'])['text']==old['text']
+    assert len([n for n in engine.store.nodes('u') if n['kind']=='fact'])==1
 
 
 def test_relation_repair_cannot_drop_a_nonempty_link_list_silently(make):
-    engine, provider = make(reflection_threshold=1)
-    def decide(purpose, payload):
-        source = payload['working'][0]['ref']
-        link = dict(from_ref='new:p', to_ref='new:f', relation='about', source_refs=[source])
-        if payload['step']:
-            return 'reflection_relations', {'drop_invalid': True, 'links': [link]}
-        return 'reflection_mutation', {'items': [
-            dict(ref='new:p', kind='person', text='Maya', source_refs=[source]),
-            dict(ref='new:f', kind='fact', text='Maya likes tea.', source_refs=[source])], 'links': [link]}
-    provider.decide = decide
-    with pytest.raises(MemoryError, match='reflection_relation_output_invalid'):
-        engine.add(request('new', ['Maya likes tea.']))
-    assert all(n['kind'] == 'episode' for n in engine.store.nodes('u'))
-    assert engine.store.state('u')['settled_through'] == 0
+    engine, provider=make(reflection_threshold=1)
+    def decide(purpose,payload):
+        source=payload['working'][0]['ref']
+        if payload['step']==0: return 'reflection_items', {'items':[dict(ref='new:p',kind='person',text='Maya',source_refs=[source]),dict(ref='new:f',kind='fact',text='Maya likes tea.',source_refs=[source])]}
+        return 'reflection_relations', {'drop_invalid':True,'links':[dict(from_ref='new:p',to_ref='new:f',relation='about',source_refs=[source],support='Maya likes tea.')]}
+    provider.decide=decide
+    with pytest.raises(MemoryError,match='reflection_relation_output_invalid'): engine.add(request('new',['Maya likes tea.']))
+    assert engine.store.state('u')['settled_through']==0
 
 
 def test_item_tool_exposes_only_new_or_exact_mutable_identities(make):

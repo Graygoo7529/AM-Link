@@ -10,18 +10,18 @@ AM-Link 只提供官方要求的 Add/Search，Search 返回证据，不生成最
 
 同日后续[闭环实施报告](../docs/doing/2026-10-23-reflection-convergence-implementation.md)：统一最终投影范围、恢复隐藏页读取、保留必要旧正文；数据库空旧范围可替代人物空Query，非法关系阻止整批提交，反馈随材料补齐更新。140项回归通过、220次新增真实调用；当前仍有Reflection协议/探索失败，未通过整体方法验收。Workspace内部格式v2，旧阅读凭据需重新取得；公开API和数据库版本不变。默认确定性装箱，离线LLM对照虽输出合法但漏掉一个来源。
 
-2026-10-26：[最新实施报告](../docs/doing/2026-10-26-evidence-and-draft-implementation.md)记录窗口区分度/长度归一化、多来源预览、数值查询约束及可见来源回载。`AML2_REFLECTION_STAGED=true`可试验节点草案→关系→原子提交；默认false。阶段有明确准入，关系按端点类型约束，支持说明留到提交语境；无内部重试。小窗口已有构图成功，完整人物记录仍失败，不能据此切换默认或宣称整体验收。
+2026-10-26当前：[单一主链路实施报告](../docs/doing/2026-10-26-live-method-implementation.md)与[执行计划](../docs/phase-2/2026-10-26-live-method-plan.md)。已删除staged实验开关及旧整包提交。默认直接执行节点草案→材料探索/必要局部patch→关系→来源对应与局部校正→原子提交；Select按独立原文片段选择并把范围带到最终装箱。完整人物记录的质量仍需按真实失败审查，不能用局部成功代替整体验收。
 
 ## 核心边界
 
 - 每个成功 Add 先保存不可变 `RawEvent`，再生成保留角色、会话、顺序、来源日期和原文的最小 `episode`，完成 BM25 与 embedding 索引。触发 Reflection 时，还要等待本请求目标水位内的全部批次终结才返回200；其他请求推进水位不能替代该请求的episode/索引检查。
 - Add 可以先停在 `WorkingMemory`。达到条数/字符阈值、出现更新/遗忘信号或会话切换时，Reflection 才消费这一批工作记忆；同一用户的 Reflection 按水位串行。
-- Reflection 的 context 由本批完整 WorkingMemory、持续保留的旧结构化节点和来源组成。模型可以 Query/Select（工具名 `reflection_search`）、Inspect、Backlink、Evict、Mutation 或真正 no-op；提交后保留Workspace，推进实际消费的批次水位。最低episode不可摘要覆盖，全部改变节点均同步嵌入。
+- Reflection 的 context 由本批完整 WorkingMemory、持续保留的旧结构化节点和来源组成。模型可以 Query/Select（工具名 `reflection_search`）、Inspect、Backlink、Evict、节点/关系草案或真正 no-op；提交后保留Workspace，推进实际消费的批次水位。最低episode不可摘要覆盖，全部改变节点均同步嵌入。
 - 标准 Search 每次创建独立语境，只检索结构化 `MemoryItem`（包括最小 episode），不读取 WorkingMemory，也不与 Reflection 共用 loop。Query 是 BM25+embedding（复杂问题可先做查询扩展），多个分支合并后统一 `select`；之后由模型决定 Inspect、Backlink 或停止，按深度/节点/邻居预算进行 BFS。
-- `select` 同时筛选排序，不另设 `rerank`；输入仅question与自包含References，按大小分页后对保留候选统一精炼。Reference 预览保留互补来源片段、shown range 和省略原因；最终装箱按同一顺序做确定性证据闭合，逐来源记录 evidence units 和裁剪原因。受限 LLM 装箱只作为后续离线对照，不进入默认链路。
+- `select` 同时筛选排序，不另设 `rerank`；输入仅question与自包含References，候选超过5引用触发，按原文片段卡分页后对保留内容统一精炼。Reference 预览保留互补来源片段、shown range 和省略原因；最终装箱按同一顺序做确定性证据闭合，逐来源记录 evidence units 和裁剪原因。模型选中的范围直接优先进入确定性装箱；历史受限模型装箱工具仅供靶场研究对照。
 - 模型调用只尝试一次；依赖失败显式返回错误，不伪装为成功。官方调用方负责约定内重试。
 
-默认本地总期限1740秒（Add含排队）、模型单次120秒、整包输入80000字符；Reflection每批32条/18000字符、最多64批，16轮含最后提交槽。普通积累需至少2个Add且达到8条/6000字符；容量为64条或36000序列化字符。Select每页24候选。阈值仍需质量校准；完整并发追加协调器未实现，仍使用同用户锁。配置见[.env.example](./.env.example)，旧库不会自动修复。
+默认本地总期限1740秒（Add含排队）、模型单次120秒、整包输入80000字符；Reflection每批32条/18000字符、最多64批，16轮含最后提交槽。普通积累需至少2个Add且达到8条/6000字符；容量为64条或36000序列化字符。Select每页24张原文卡，多个卡可属于同一Reference。阈值仍需质量校准；完整并发追加协调器未实现，仍使用同用户锁。配置见[.env.example](./.env.example)，旧库不会自动修复。
 
 ## 本地验证
 

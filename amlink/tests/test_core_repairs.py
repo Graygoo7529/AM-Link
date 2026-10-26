@@ -22,6 +22,8 @@ class Scripted:
     def __init__(self):
         self.calls = []
         self.fail_embedding = False
+        self.review = lambda payload: {"reviews": [{"position": u["position"], "action": "keep", "text": None, "detail": "fixture source support",
+            "source_positions": [i for i in u["source_positions"] if payload["sources"][i]["source_ref"] in u["proposal"]["source_refs"]]} for u in payload["units"]]}
         self.decide = lambda purpose, payload: ("reflection_stop", {}) if purpose == "reflection" else ("bfs_action", {"action": "stop"})
 
     def embed(self, texts, deadline):
@@ -33,6 +35,8 @@ class Scripted:
 
     def tool(self, purpose, prompt, payload, tools, deadline):
         self.calls.append((purpose, payload))
+        if purpose == "reflection_review":
+            return "review", self.review(payload)
         assert len(dumps(tool_body(self.engine.config, purpose, prompt, payload, tools))) <= self.engine.config.model_input_chars
         if purpose == "select":
             positions = [row["position"] for row in payload["candidates"]]
@@ -153,7 +157,10 @@ def test_derived_episode_also_gets_vector_and_workspace_survives(make):
 
     def decide(purpose, payload):
         if purpose == "reflection":
-            return "reflection_mutation", {"items": [{"ref": "new:journey", "kind": "episode",
+            stage = payload['context']['reflection_control'].get('pending_mutation', {}).get('stage')
+            if stage == 'relations': return 'reflection_relations', {'links': []}
+            if stage == 'commit': return 'reflection_commit', {}
+            return "reflection_items", {"items": [{"ref": "new:journey", "kind": "episode",
                 "text": "A separate account of the journey", "source_refs": [payload["working"][0]["ref"]]}]}
         return "bfs_action", {"action": "stop"}
 
@@ -273,7 +280,7 @@ def test_select_merge_fits_with_full_survivor_set_and_heavy_lineage(make):
                                   time.monotonic() + 30, reason="query")
     assert [row["ref"] for row in selected] == [row["ref"] for row in candidates]
     calls = [payload for purpose, payload in provider.calls if purpose == "select"]
-    assert len(calls[-1]["candidates"]) == 64
+    assert {row['ref'] for row in calls[-1]['candidates']} == {row['ref'] for row in candidates}
     assert all(row["narrative"] and row["ref"] for row in calls[-1]["candidates"])
 
 
@@ -361,17 +368,21 @@ def test_search_inspect_then_backlink_same_ref_and_follow_new_ref(make):
 
 
 def test_reflection_can_inspect_backlink_and_validate_newly_loaded_old_node(make):
-    engine, provider = make(mode="raw", reflection_steps=6)
+    engine, provider = make(mode="raw", reflection_steps=8)
     items = graph(engine)
     engine.config = replace(engine.config, mode="graph", reflection_threshold=1)
     engine._search_refs = lambda *args, **kwargs: [engine.store.get("u", items[0]["ref"])]
-    actions = iter([("reflection_inspect", {"ref": items[0]["ref"]}),
-                    ("reflection_backlinks", {"ref": items[0]["ref"]}),
-                    ("reflection_inspect", {"ref": items[1]["ref"]}), ("reflection_stop", {})])
+    actions = iter([("reflection_backlinks", {"ref": items[0]["ref"]}),
+                    ("reflection_inspect", {"ref": items[1]["ref"]}),
+                    ("reflection_inspect", {"ref": items[0]["ref"]}), ("reflection_validate", {}),
+                    ("reflection_relations", {"links": []}), ("reflection_commit", {})])
     contexts = []
 
     def decide(purpose, payload):
         contexts.append(payload["context"])
+        if payload['step'] == 0:
+            return 'reflection_items', {'items': [{**items[0], 'text': 'Caroline remembers that move.',
+                'source_refs': [payload['working'][0]['ref']]}]}
         name, arguments = next(actions)
         ref = arguments.pop("ref", None)
         if ref:
