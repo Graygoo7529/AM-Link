@@ -4,8 +4,26 @@ import pytest
 from test_core_repairs import make, request
 from amlink.errors import MemoryError
 from amlink.engine import Engine
+from amlink.reflection import prepare_mutation
 from amlink.evidence import fragment
 from amlink.text import digest, dumps
+
+
+def test_visible_source_remains_citable_after_duplicate_workspace_copy_is_folded(make):
+    engine, _ = make(mode='raw')
+    engine.add(request('a', ['Maya likes tea.']))
+    source = engine.store.raw('u')[0]
+    context = {'sources': [], 'items': {}, 'old_before': 2, 'new_refs': [],
+               'visible_source_refs': [source['ref']]}
+    proposal = {'items': [dict(ref='new:tea', kind='fact', text='Maya likes tea.', source_refs=[source['ref']])]}
+    prepared = prepare_mutation(proposal, user='u', request_id='b', number=2, context=context, store=engine.store)
+    assert prepared['items'][0]['source_refs'] == [source['ref']]
+    context['visible_source_refs'] = []
+    with pytest.raises(MemoryError, match='mutation_unknown_source'):
+        prepare_mutation(proposal, user='u', request_id='b', number=2, context=context, store=engine.store)
+    context.update(visible_source_refs=[source['ref']], old_before=1)
+    with pytest.raises(MemoryError, match='mutation_unknown_source'):
+        prepare_mutation(proposal, user='u', request_id='b', number=2, context=context, store=engine.store)
 
 
 def test_new_identity_queries_old_scope_and_can_commit_without_old_match(make):

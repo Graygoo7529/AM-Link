@@ -15,13 +15,25 @@ Use ONLY the offered tools and exact field names. Inspect takes target={referenc
 page_position}; choose an offered numbered context.choices entry, not dictionary order.
 Inspect defaults to the next needed item-body page in Reflection. Sources are separate pages.
 
+If reflection_items is offered, the staged protocol overrides the legacy mutation workflow:
+first draft a small useful set of nodes, with exact sources and supported person/entity endpoints.
+Then resolve the specific missing-material tasks; do not read everything before drafting.
+reflection_relations proposes only links for that draft (or explicitly no links). If a necessary
+endpoint is missing, request reflection_revise_items with a concrete reason; then reflection_items
+revises the whole draft before links are proposed again. Do not repeatedly rewrite accepted nodes.
+reflection_commit accepts no content and atomically commits the validated nodes and links.
+These stages are uncommitted proposals, never stored facts. Respect pending_mutation.stage;
+in items stage resubmit corrected/grounded items, in relations stage propose links, and in
+commit stage commit. Never call stop to discard an unresolved draft. No tool/network retries.
+Staged reflection_relations uses only links; links=[] explicitly means no supported relation.
+
 Make progress toward a small useful mutation. Do not read every available episode. Propose
 changes once the relevant new information is understood; validation will list specific missing
 old targets or sources. Correct those gaps and resubmit within the remaining decisions.
 When required_actions says material_ready, resubmit the mutation; do not keep reading optional
 source pages for that satisfied requirement. Empty missing means the read gaps are now filled.
 If the last rejection has invalid_links and no missing material, repair those fields immediately.
-When reflection_control.pending_mutation is present, use reflection_relations; otherwise resubmit
+In the legacy workflow (reflection_mutation offered), when pending_mutation is present use reflection_relations; otherwise resubmit
 reflection_mutation with the corrected nodes/schema. If no legal directly supported edge remains
 in the relation stage, set drop_invalid=true with links=[]. Do not reread sources or call Evict for this repair.
 The last decision must be a valid mutation or a genuine no-op. Rejected changes, missing
@@ -48,6 +60,8 @@ Every item and edge must cite nonempty exact raw source_refs actually shown. Pre
 person asserted what, negation, conditions, quantities and uncertainty. A proposed relationship
 needs a supporting source, not just two names present in the batch. New-to-new relations can
 use current sources without unrelated old reading. Never use raw refs as graph endpoints.
+Empty/null template fields mean not recorded in that source, not a negative fact about the
+person. Keep the original episode, but do not create separate semantic facts for empty fields.
 
 Allowed relation directions (invalid edges BLOCK the entire mutation):
   fact/event --about--> person/entity/concept/event
@@ -139,6 +153,17 @@ def _relation_kinds_valid(left, right, relation):
 def prepare_mutation(value, *, user, request_id, number, context, store):
     mutation, filtered_fields = parse_mutation(value)
     sources = {row["ref"]: row for row in context["sources"]}
+    # A source may have been shown in a Reference/disclosed page while its
+    # duplicate workspace.sources copy was folded away. Rehydrate only sources
+    # with actual visible receipts, still respecting the frozen batch boundary.
+    # Database existence alone never grants citation authority.
+    for ref in context.get("visible_source_refs", []):
+        if ref in sources or not ref.startswith("raw:"):
+            continue
+        source = store.get(user, ref)
+        if source and (ref in context.get("new_refs", []) or
+                       source["ordinal"] < context.get("old_before", 0)):
+            sources[ref] = source
     old = {row["ref"]: row for row in context.get("items", {}).values()}
     old.update({row["ref"]: row for row in context.get("memories", [])})
     aliases, items = {}, []

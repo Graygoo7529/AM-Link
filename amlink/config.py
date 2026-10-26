@@ -35,6 +35,7 @@ class Config:
     model_max_tokens: int = 5000
     search_model: bool = True
     reflection_steps: int = 16
+    reflection_staged: bool = False
     search_steps: int = 8
     llm_base_url: str = "https://api.zhizengzeng.com/v1"
     llm_api_key: str = ""

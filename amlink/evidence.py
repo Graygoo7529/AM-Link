@@ -3,20 +3,39 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timezone
+import math
 import re
 
 from .text import digest, excerpt, terms
 
 
-def _excerpt_with_range(text, limit, query=""):
+def _excerpt_with_range(text, limit, query="", weights=None):
     """Return a bounded excerpt and the source character range it exposes."""
     if len(text) <= limit:
         return text, [0, len(text)], True
-    positions = [match.start() for word in terms(query)
-                 if (match := re.search(re.escape(word), text, re.IGNORECASE))]
-    hit = min(positions, default=0)
-    start = max(0, hit - limit // 4)
     width = max(1, limit - 20)
+    keywords = set(terms(query))
+    counts = Counter(terms(text))
+    weights = weights or {word: 1 / (1 + math.log1p(counts[word])) for word in keywords}
+    # Rank windows, not the first occurrence of any query word. Match offsets
+    # come from the original string: casefold() changes Unicode codepoint counts.
+    starts, occurrences = {0}, {}
+    for word in sorted(keywords):
+        hits = [m.start() for m in re.finditer(re.escape(word), text, re.IGNORECASE)]
+        if len(hits) > 128:
+            hits = [hits[i * (len(hits) - 1) // 127] for i in range(128)]
+        occurrences[word] = hits
+        starts.update(max(0, min(len(text) - width, hit - width // 4)) for hit in hits)
+    def score(offset):
+        matched = keywords.intersection(terms(text[offset:offset + width]))
+        weight = sum(weights.get(word, 0) for word in matched)
+        # Ties must leave room after the meaningful hit for its qualifier/date,
+        # instead of selecting the earliest window that barely reaches the hit.
+        distance = sum(weights.get(word, 0) * min(
+            (abs(pos - offset - width / 3) for pos in occurrences[word]
+             if offset <= pos < offset + width), default=width) for word in matched)
+        return -weight, distance, offset
+    start = min(starts, key=score)
     selected = text[start:start + width]
     return ("…" if start else "") + selected + "… [片段截断]", [start, start + len(selected)], False
 
@@ -148,13 +167,21 @@ def complementary_passages(sources, queries, limit, max_fragments=4):
     deliberately reports omitted sources so Select can request Inspect later.
     """
     queries = list(dict.fromkeys(str(query).strip() for query in queries if str(query).strip())) or [""]
+    # Common scene words ("year", "project") should not dominate a rarer
+    # information need. Weight only supplied query terms; no inferred answer,
+    # amount, person or timestamp is introduced here.
+    counts = Counter(word for source in sources for word in terms(source["text"]))
+    weights = {word: 1 / (1 + math.log1p(counts[word])) for query in queries for word in terms(query)}
+    source_words = [terms(source["text"]) for source in sources]
+    average_words = sum(map(len, source_words)) / max(1, len(sources))
     ranked = []
     for query in queries:
         query_terms = set(terms(query))
         pairs = []
         for index, source in enumerate(sources):
-            source_terms = set(terms(source["text"]))
-            pairs.append((-(len(query_terms & source_terms)), index, query))
+            source_terms = set(source_words[index])
+            length_norm = 0.25 + 0.75 * len(source_words[index]) / max(1, average_words)
+            pairs.append((-sum(weights[word] for word in query_terms & source_terms) / length_norm, index, query))
         ranked.append(sorted(pairs))
     # One proposal per query before taking a second from the same query.
     pairs = [group[i] for i in range(len(sources)) for group in ranked if i < len(group)]
@@ -168,8 +195,12 @@ def complementary_passages(sources, queries, limit, max_fragments=4):
         room = limit - used - len(header) - 1
         if room < 80:
             continue
-        size = min(per_fragment, room)
-        _, shown_range, _ = _excerpt_with_range(source["text"], size, query)
+        # Keep a short message whole if it fits one half of the total budget.
+        # Otherwise several arbitrary cuts can omit the qualifier or amount at
+        # its end even when there was enough space for the complete assertion.
+        short_complete = len(source["text"]) + len(header) + 1 <= limit // 2
+        size = min(len(source["text"]) if short_complete else per_fragment, room)
+        _, shown_range, _ = _excerpt_with_range(source["text"], size, query, weights)
         start, end = shown_range
         overlapping = [f for f in fragments if f["origin_ref"] == source["ref"]
                        and f["start"] <= end and start <= f["end"]]

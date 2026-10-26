@@ -118,3 +118,21 @@ def test_bfs_invalid_provider_tool_output_stops_with_existing_evidence(make):
     provider.tool = invalid_bfs_output
     result = engine.search(SearchRequest(user_id='u', query='Caroline', top_k=1))
     assert result['data']
+def test_query_expansion_discards_invented_dates_without_retry(make):
+    engine, provider = make(search_model=True)
+    seen = []
+    engine.store.lexical = lambda user, branch, limit, **kw: seen.append(branch) or []
+    provider.decide = lambda *args: ('query_expansion', {'queries': [
+        'purchases in 2023', 'repair expenses this year']})
+    engine._search_refs('u', 'What was my total spending this year?', {}, time.monotonic() + 10)
+    assert seen == ['What was my total spending this year?', 'repair expenses this year']
+    assert len(provider.calls) == 1
+
+
+def test_query_expansion_preserves_explicit_numeric_constraints(make):
+    engine, provider = make(search_model=True)
+    seen = []
+    engine.store.lexical = lambda user, branch, limit, **kw: seen.append(branch) or []
+    provider.decide = lambda *args: ('query_expansion', {'queries': ['purchases in 2023']})
+    engine._search_refs('u', 'What was my total spending in 2023?', {}, time.monotonic() + 10)
+    assert seen[-1] == 'purchases in 2023'

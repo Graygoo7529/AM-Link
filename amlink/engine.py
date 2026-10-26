@@ -100,7 +100,7 @@ class Engine:
                 "identity_queries": {key: {**v, "refs": v["refs"][:8], "candidate_count": len(v["refs"])}
                     for key, v in list(context.get("identity_queries", {}).items())[-8:]}}
             pending = context.get("pending_mutation")
-            if pending and context.get("last_gate_error", {}).get("code") == "reflection_invalid_relations":
+            if pending and (context.get("draft_stage") or context.get("last_gate_error", {}).get("code") == "reflection_invalid_relations"):
                 result["reflection_control"]["pending_mutation"] = {
                     "basis": pending.get("basis", "new_information"),
                     "items": [{key: item.get(key) for key in ("ref", "kind", "text", "source_refs")}
@@ -108,10 +108,16 @@ class Engine:
                     "forget_count": len(pending.get("forget", [])),
                     "instruction": "These node/forget fields are an uncommitted proposal. Grounding is checked after relation repair. Submit corrected links in reflection_relations; set drop_invalid=true with links=[] when no legal supported edge remains."
                 }
+                if context.get("draft_stage"):
+                    result["reflection_control"]["pending_mutation"].update(
+                        items=pending.get("items", []), forget=pending.get("forget", []),
+                        revision_reason=context.get("revision_reason"),
+                        stage=context["draft_stage"], links=context.get("pending_link_support", context.get("pending_links", [])),
+                        instruction="Uncommitted draft. In items stage correct/ground the nodes. In relations stage propose directly supported links; a concrete endpoint defect may request reflection_revise_items. In commit stage call reflection_commit; it revalidates all evidence and atomically writes the draft. Nothing is stored yet.")
         # Metadata/navigation are part of the same budget. A required page is
         # indivisible and cannot disappear during a second projection.
         if len(dumps(result)) > max(0, limit - 600):
-            if mandatory:
+            if mandatory or context.get("pending_mutation"):
                 raise MemoryError("protected_context_budget", 413)
             return {}
         for value in reversed(disclosed):
@@ -377,6 +383,8 @@ class Engine:
         target = self.store.request(user, request.request_id).get("reflection_watermark", watermark)
         context["prefix_overview"] = prefix_overview([row for row in prefix if row["ordinal"] <= target],
                                                       watermark, min(6000, self.config.context_chars // 4))
+        if self.config.reflection_staged:
+            context["draft_stage"] = "items"
         self._save_workspace(user, state="maintenance", context=context)
         def reflection_tools(choices, source_refs=None, terminal=False):
             refs = [row["ref"] for row in choices.rows]
@@ -388,9 +396,20 @@ class Engine:
                 _tool("reflection_stop", "Stop because the current context is sufficient and no additional mutation is needed.",
                       {"type": "object", "properties": {}, "additionalProperties": False}),
             ]
+            if self.config.reflection_staged:
+                item_schema = self._mutation_tool_schema(context, source_refs)
+                item_schema["properties"].pop("links", None)
+                item_schema["properties"]["items"]["maxItems"] = 12
+                item_schema.get("$defs", {}).pop("LinkChange", None)
+                tools = [t for t in tools if t["name"] != "reflection_mutation"]
+                tools.insert(0, _tool("reflection_items",
+                    "Draft at most 12 useful nodes and optional authorized forgetting; no links or writes yet. Include supported person/entity navigation nodes when needed, without inventing identities. Revisions replace the WHOLE pending node draft. Validation lists specific missing old bodies, identity queries or sources. Do not explore without a proposed change.", item_schema))
+                if context.get("pending_mutation"):
+                    tools = [t for t in tools if t["name"] != "reflection_stop"]
             relation_repair = (context.get("pending_mutation")
                                and context.get("last_gate_error", {}).get("code") == "reflection_invalid_relations")
-            if relation_repair:
+            relation_stage = self.config.reflection_staged and context.get("draft_stage") == "relations"
+            if relation_repair or relation_stage:
                 mutation_schema = self._mutation_tool_schema(context, source_refs)
                 link_schema = mutation_schema["$defs"]["LinkChange"]
                 pending_items = context["pending_mutation"].get("items", [])
@@ -404,15 +423,55 @@ class Engine:
                     for endpoint in ("from_ref", "to_ref"):
                         link_schema["properties"][endpoint] = {"type": "string", "enum": endpoints}
                 link_schema["properties"]["support"] = {
-                    "type": "string", "minLength": 8,
+                    "type": "string", "minLength": 1,
                     "description": "One short explanation of the exact cited source text that directly supports this relation. Shared topic or co-occurrence alone is not support. For contradicts/supersedes state both sides and why the relation applies."}
                 kind_summary = ", ".join(f"{item.get('ref')}={item.get('kind')}" for item in pending_items)
+                link_items = link_schema
+                link_limit = 256
+                if self.config.reflection_staged:
+                    # The kind map is navigation metadata, not reading evidence.
+                    # Expose only legal directional type combinations instead
+                    # of asking the model to memorize the whole relation table.
+                    kinds = {row['ref']: row.get('kind') for row in [
+                        *context.get('references', {}).values(), *context.get('items', {}).values(), *pending_items]}
+                    alternatives = []
+                    directions = [('about', {'fact', 'event'}, {'person', 'entity', 'concept', 'event'}),
+                        ('contains', {'episode'}, {'fact', 'event'}),
+                        ('same_event_as', {'event'}, {'event'}),
+                        *[(relation, {kind}, {kind}) for relation in ('supersedes', 'contradicts') for kind in ('fact', 'event')]]
+                    for relation, left, right in directions:
+                        a = [ref for ref, kind in kinds.items() if kind in left]
+                        b = [ref for ref, kind in kinds.items() if kind in right]
+                        if not any(x != y for x in a for y in b):
+                            continue
+                        properties = {**link_schema['properties'],
+                            'from_ref': {'type': 'string', 'enum': a}, 'to_ref': {'type': 'string', 'enum': b},
+                            'relation': {'type': 'string', 'enum': [relation]}}
+                        alternatives.append({'type': 'object', 'properties': properties})
+                    link_items = {'anyOf': alternatives} if alternatives else {'type': 'object', 'properties': {}}
+                    link_limit = 256 if alternatives else 0
+                relation_properties = {"links": {"type": "array", "items": link_items, "maxItems": link_limit}}
+                if not self.config.reflection_staged:
+                    relation_properties["drop_invalid"] = {"type": "boolean"}
                 tools.insert(0, _tool(
                     "reflection_relations",
-                    "Repair only the relation list for the pending node proposal. Grounding is checked after this repair; nothing is committed yet. Return exactly one links array and drop_invalid. If no legal, directly supported edge remains, set drop_invalid=true and links=[]; retain the nodes for final validation without new relations. Pending kinds are " + kind_summary + ". Legal directions are: about fact/event -> person/entity/concept/event; contains episode -> fact/event; supersedes/contradicts same-kind fact/event; same_event_as event -> event. Do not use about between two facts, do not use contains from an event/person, and do not add an edge merely because two items share a topic. Use exact pending or loaded memory refs, a nonempty source_refs list, and a short direct-support explanation for every edge.",
-                    {"type": "object", "properties": {"drop_invalid": {"type": "boolean"}, "links": {
-                        "type": "array", "items": link_schema, "maxItems": 256}}}))
-                tools = [tool for tool in tools if tool["name"] == "reflection_relations"]
+                    ("Propose relations for the validated node draft. Request reflection_revise_items if a supported endpoint is missing. " if self.config.reflection_staged else "Repair only the relation list for the pending node proposal. ") + "Grounding is checked after this proposal; nothing is committed yet. Return exactly one links array and drop_invalid. If no legal, directly supported edge remains, set drop_invalid=true and links=[]; retain the nodes for final validation without new relations. Pending kinds are " + kind_summary + ". Legal directions are: about fact/event -> person/entity/concept/event; contains episode -> fact/event; supersedes/contradicts same-kind fact/event; same_event_as event -> event. Do not use about between two facts, do not use contains from an event/person, and do not add an edge merely because two items share a topic. Use exact pending or loaded memory refs, a nonempty source_refs list, and a short direct-support explanation for every edge.",
+                    {"type": "object", "properties": relation_properties}))
+                if self.config.reflection_staged:
+                    tools[0]['description'] = tools[0]['description'].replace(
+                        'Return exactly one links array and drop_invalid.', 'Return exactly one links array.').replace(
+                        'set drop_invalid=true and links=[]', 'return links=[]')
+                tools = [tool for tool in tools if tool["name"] in (
+                    {"reflection_relations", "reflection_search"} if self.config.reflection_staged else {"reflection_relations"})]
+                if self.config.reflection_staged:
+                    tools.append(_tool("reflection_revise_items",
+                        "Return to the node stage ONLY when a concrete missing/incorrect endpoint prevents a supported relation. Name that endpoint and the exact correction needed; do not request stylistic rewriting.",
+                        {"type": "object", "properties": {"reason": {"type": "string", "minLength": 12}}}))
+            if self.config.reflection_staged and context.get("draft_stage") == "commit":
+                tools = [t for t in tools if t["name"] != "reflection_items"]
+                tools.insert(0, _tool("reflection_commit",
+                    "Revalidate and atomically commit the visible pending nodes and relations with the batch watermark. No new content is accepted by this tool.",
+                    {"type": "object", "properties": {}, "additionalProperties": False}))
             if refs:
                 for action in ("evict", "inspect", "backlinks"):
                     allowed = [row["position"] for row in choices.rows if action in row["allowed_actions"]]
@@ -441,11 +500,13 @@ class Engine:
                 # still expose exploration tools until their missing ranges are
                 # actually visible.
                 if not context["last_gate_error"].get("missing"):
-                    allowed_repairs = {"reflection_mutation"}
+                    allowed_repairs = {"reflection_items"} if self.config.reflection_staged else {"reflection_mutation"}
                     if relation_repair:
-                        allowed_repairs = {"reflection_relations"}
+                        allowed_repairs = {"reflection_relations", "reflection_revise_items"} if self.config.reflection_staged else {"reflection_relations"}
                     tools = [t for t in tools if t["name"] in allowed_repairs]
-            return [tool for tool in tools if tool["name"] in {"reflection_mutation", "reflection_relations", "reflection_stop"}] if terminal else tools
+            if self.config.reflection_staged and not context.get("pending_mutation") and not context.get("last_gate_error"):
+                tools = [t for t in tools if t["name"] in {"reflection_items", "reflection_stop"}]
+            return [tool for tool in tools if tool["name"] in {"reflection_mutation", "reflection_relations", "reflection_items", "reflection_commit", "reflection_stop"}] if terminal else tools
         for step in range(self.config.reflection_steps):
             if time.monotonic() >= deadline:
                 raise MemoryError("request_deadline", 504)
@@ -519,9 +580,32 @@ class Engine:
                 self._reflection_action(context, "evict", refs=evicted_refs)
                 self._save_workspace(user, state="maintenance", context=context)
                 continue
-            if name in {"reflection_mutation", "reflection_relations"}:
+            if name == "reflection_revise_items":
+                reason = arguments.get("reason")
+                if not isinstance(reason, str) or len(reason.strip()) < 12:
+                    raise MemoryError("reflection_revision_invalid", 502)
+                context["draft_stage"] = "items"
+                context["revision_from"] = digest(context["pending_mutation"])
+                context.pop("pending_links", None)
+                context.pop("pending_link_support", None)
+                context.pop("last_gate_error", None)
+                context["revision_reason"] = reason
+                self._save_workspace(user, state="maintenance", context=context)
+                continue
+            if name in {"reflection_mutation", "reflection_relations", "reflection_items", "reflection_commit"}:
                 submitted_arguments = arguments
                 relation_support = []
+                if name == "reflection_items":
+                    if "links" in arguments or not isinstance(arguments.get("items", []), list) or len(arguments.get("items", [])) > 12:
+                        raise MemoryError("reflection_item_draft_invalid", 502)
+                    if digest(arguments) == context.get("revision_from"):
+                        raise MemoryError("reflection_no_draft_progress", 409)
+                    arguments = {**arguments, "links": []}
+                if name == "reflection_commit":
+                    if arguments or context.get("draft_stage") != "commit" or not context.get("pending_mutation"):
+                        raise MemoryError("reflection_commit_state_invalid", 409)
+                    arguments = {**context["pending_mutation"], "links": context.get("pending_links", [])}
+                    relation_support = context.get("pending_link_support", [])
                 if name == "reflection_relations":
                     pending_mutation = context.get("pending_mutation")
                     if not pending_mutation:
@@ -530,6 +614,10 @@ class Engine:
                             or not all(isinstance(link, dict) for link in arguments['links'])
                             or type(arguments.get('drop_invalid', False)) is not bool
                             or (arguments.get('drop_invalid') and arguments['links'])):
+                        raise MemoryError('reflection_relation_output_invalid', 502)
+                    if self.config.reflection_staged and (set(arguments) != {'links'} or any(
+                            not isinstance(link.get('support'), str) or not link['support'].strip()
+                            for link in arguments['links'])):
                         raise MemoryError('reflection_relation_output_invalid', 502)
                     relation_support = [{key: link.get(key) for key in ("from_ref", "relation", "to_ref", "source_refs", "support")}
                                         for link in arguments.get("links", [])]
@@ -548,11 +636,16 @@ class Engine:
                             self._reflection_feedback(user, context, arguments, [], invalid,
                                                       event, step, 'reflection_invalid_relations')
                             continue
+                        if name == "reflection_items":
+                            context["pending_mutation"] = {key: value for key, value in arguments.items() if key != "links"}
+                            context["draft_stage"] = "items"
+                            context.pop("pending_links", None)
+                            context.pop("pending_link_support", None)
                         self._check_reflection_basis(arguments, context)
                         prepared = prepare_mutation(arguments, user=user, request_id=request.request_id, number=watermark,
                                                     context=context, store=self.store)
                         if prepared["filtered_links"]:
-                            if name == "reflection_mutation":
+                            if name in {"reflection_mutation", "reflection_items"}:
                                 context["pending_mutation"] = {
                                     "basis": arguments.get("basis", "new_information"),
                                     "inspected_refs": arguments.get("inspected_refs", []),
@@ -602,12 +695,24 @@ class Engine:
                     if relation_support:
                         self.observer.output(event, {"links": relation_support}, kind="context",
                                              title="Relation 直接来源支持说明（待人工核验）")
+                if self.config.reflection_staged and name in {"reflection_items", "reflection_relations"}:
+                    context["draft_stage"] = "relations" if name == "reflection_items" else "commit"
+                    if name == "reflection_relations":
+                        context["pending_links"] = arguments["links"]
+                        context["pending_link_support"] = relation_support
+                    for key in ("last_gate_error", "rejected_proposal", "rejected_problem"):
+                        context.pop(key, None)
+                    with self.observer.span("reflection", "reflection draft staged", inputs={"tool": name}) as event:
+                        self.observer.output(event, {"stage": context["draft_stage"], "committed": False,
+                            "items": context["pending_mutation"].get("items", []), "links": context.get("pending_links", [])}, kind="context")
+                    self._save_workspace(user, state="maintenance", context=context)
+                    continue
                 context.pop("pending_mutation", None)
                 self._save_workspace(user, state="mutation", context=context)
                 self._commit_reflection(user, prepared, watermark, deadline, context)
                 return
             if name == "reflection_stop":
-                if context.get("last_gate_error"):
+                if context.get("last_gate_error") or context.get("pending_mutation"):
                     raise MemoryError("reflection_unresolved_evidence", 409)
                 prepared = {"items": [], "links": [], "forget": []}
                 self._commit_reflection(user, prepared, watermark, deadline, context)
@@ -632,7 +737,9 @@ class Engine:
         context["rejected_problem"] = problem
         context["last_gate_error"] = {"code": code, "missing": missing[:16], "invalid_links": invalid_links[:8]}
         if invalid_links and not missing:
-            if context.get("pending_mutation"):
+            if self.config.reflection_staged and context.get("draft_stage") == "items":
+                context["last_gate_error"]["next_action"] = "Repair the node/schema error using reflection_items; do not reread unrelated material."
+            elif context.get("pending_mutation"):
                 context["last_gate_error"]["next_action"] = (
                     "No additional reading is required to repair these relation types. The uncommitted node proposal is under pending_mutation; grounding will be checked after repair. "
                     "Repair/remove the listed relation or return an empty links list with reflection_relations; "
@@ -696,7 +803,7 @@ class Engine:
             for key in ("disclosures", "last_visible", "read_ranges"):
                 retained[key] = [v for v in retained.get(key, []) if v["origin_ref"] not in blocked_sources | blocked_items and v.get("item_ref") not in blocked_items]
             retained["edges"] = [e for e in retained.get("edges", []) if not blocked_items.intersection((e["from_ref"], e["to_ref"])) and not blocked_sources.intersection(e["source_refs"])]
-            for key in ("prefix_overview", "protected_refs", "protected_sources", "protected_bodies", "last_gate_error", "pending_mutation", "rejected_proposal", "rejected_problem", "identity_queries", "visible_source_refs", "completed_queries", "action_log", "_page_choices"):
+            for key in ("prefix_overview", "protected_refs", "protected_sources", "protected_bodies", "last_gate_error", "pending_mutation", "pending_links", "pending_link_support", "draft_stage", "revision_from", "revision_reason", "rejected_proposal", "rejected_problem", "identity_queries", "visible_source_refs", "completed_queries", "action_log", "_page_choices"):
                 retained.pop(key, None)
             self._bound_workspace(retained)
             self.store.commit_mutation(user, prepared, watermark=watermark,
@@ -718,7 +825,7 @@ class Engine:
         context["old_scope"] = {"before": pending[0]["ordinal"], "empty": self.store.old_scope_empty(user, pending[0]["ordinal"]),
                                 "basis": "database_valid_old_sources", "query_performed": False}
         context.pop("last_gate_error", None)
-        for key in ("protected_refs", "protected_sources", "protected_bodies", "pending_mutation", "rejected_proposal", "rejected_problem", "completed_queries", "action_log"):
+        for key in ("protected_refs", "protected_sources", "protected_bodies", "pending_mutation", "pending_links", "pending_link_support", "draft_stage", "revision_from", "revision_reason", "rejected_proposal", "rejected_problem", "completed_queries", "action_log"):
             context.pop(key, None)
         context["identity_queries"] = {}
         context["question"] = query
@@ -924,7 +1031,13 @@ class Engine:
         branches = [query]
         if mode == "search" and self.config.mode == "graph" and self.config.search_model and (COMPLEX.search(query) or len(query) > 100):
             payload = {"question": query, "context": self._model_context(context)}
-            prompt_text = "Expand the retrieval question into up to three concise search expressions. Never answer."
+            prompt_text = ("Decompose the question into up to three complementary retrieval needs, using concise "
+                "keyword expressions and common synonyms for the information being sought. Seek the underlying "
+                "records needed to answer (for example purchases and their costs for spending), not repeated "
+                "paraphrases of the whole question. Preserve the question's subject and constraints. "
+                "Do not invent people, objects, values, events or absolute dates. Keep relative dates such as "
+                "'this year' unresolved unless an explicit reference date is supplied in the input. "
+                "Return fewer expressions when extra branches add no distinct evidence need. Never answer.")
             if hasattr(self.providers, "tool"):
                 name, data = self._call_tool("query_expansion", prompt_text, payload, [_tool(
                     "query_expansion", "Produce retrieval expressions.", {"type": "object", "properties": {"queries": {"type": "array", "items": {"type": "string"}, "maxItems": 3}}, "required": ["queries"], "additionalProperties": False})], deadline)
@@ -934,7 +1047,22 @@ class Engine:
                 expansion = QueryExpansion.model_validate(data)
             except ValidationError:
                 raise MemoryError("query_expansion_invalid", 502) from None
-            branches += expansion.queries
+            # Expansion is optional retrieval planning, not a source of facts.
+            # Reject an invented numeric constraint rather than querying it or
+            # silently stripping it into a different question. No model retry.
+            grounded_numbers = set(re.findall(r"\d+(?:[.,]\d+)*", dumps(payload)))
+            accepted, rejected = [], []
+            for expression in expansion.queries:
+                ungrounded = set(re.findall(r"\d+(?:[.,]\d+)*", expression)) - grounded_numbers
+                if ungrounded:
+                    rejected.append({"query": expression, "reason": "ungrounded_numeric_constraint",
+                                     "values": sorted(ungrounded)})
+                else:
+                    accepted.append(expression)
+            with self.observer.span("retrieve", "query.expansion validation", inputs={"question": query}) as event:
+                self.observer.output(event, {"accepted": accepted, "rejected": rejected,
+                    "scope": "numeric constraints only; other invented semantics still require evaluation"}, kind="context")
+            branches += accepted
         candidates = {}
         for branch in dict.fromkeys(branches):
             before = context.get("old_before") if mode == "reflection" else None
@@ -1027,7 +1155,8 @@ class Engine:
                     row["kind"] == "episode" and self.store.is_minimum_episode(user, row["ref"])) else [row]
                 if context.get("old_before"):
                     origin_rows = [origin for origin in origin_rows if not origin["ref"].startswith("raw:") or origin["ordinal"] < context["old_before"]]
-                hit_fragments, ranges = complementary_passages(origin_rows, branches, max(160, size), max(1, min(4, len(branches))))
+                hit_fragments, ranges = complementary_passages(origin_rows, branches, max(160, size),
+                    max(1, min(4, max(len(branches), len(origin_rows)))))
                 narrative = excerpt(reference["label"], min(size, 140))
                 coverage = {"source_count": len(origin_rows), "complete": all(v.get("complete") for v in ranges),
                             "shown_ranges": [span for v in ranges for span in v["shown_ranges"]],

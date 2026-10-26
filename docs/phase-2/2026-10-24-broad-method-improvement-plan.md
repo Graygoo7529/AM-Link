@@ -1,5 +1,7 @@
 # AM-Link 跨数据集方法改进计划
 
+后续：10月26日已按A/B方向推进[执行计划](2026-10-26-evidence-and-draft-plan.md)和[实施报告](../doing/2026-10-26-evidence-and-draft-implementation.md)。首次分步协议已作为默认关闭的实验实现；窗口修复使LM4关键价格可见，但Select仍漏选，长材料构图仍失败。以下首轮记录保留历史时点。
+
 日期：2026-10-24。状态：**首轮方向—设计—验证—分析闭环已完成；局部修复done，整体方法继续验收**。[实施与真实运行报告](../doing/2026-10-24-broad-method-implementation.md)记录实际范围和反例。目标是从分层样本和逐环节观测中找出稳定方法缺口，再做小范围实现并用未参与调参的样本复验。它承接[Reflection 闭环报告](../doing/2026-10-23-reflection-convergence-implementation.md)，不把旧报告的质量门槛视作已经达成。
 
 ## 方向与设计
