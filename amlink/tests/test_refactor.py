@@ -22,6 +22,9 @@ class FakeProviders:
         return [[1.0, 0.0] for _ in texts]
 
     def tool(self, purpose, prompt, payload, tools, deadline):
+        if purpose == 'reflection_plan':
+            return 'reflection_plan', {'groups': [{'title':'Fixture group', 'question':' '.join(r['text'] for r in payload['messages'])[:1200],
+                'positions': list(range(len(payload['messages'])))}]}
         self.calls.append((purpose, payload))
         if purpose == "reflection":
             if self.reflection:

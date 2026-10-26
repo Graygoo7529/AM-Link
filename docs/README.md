@@ -2,7 +2,7 @@
 
 更新日期：2026-10-26。目标是让新会话快速恢复项目背景和决策依据；旧过程记录留在一期归档中。
 
-最新：`256fced`已提交。已按用户确认[备份并清空实验库与活动观测](./doing/2026-10-26-observation-reset-and-design-audit.md)，下一轮从空库构建。[自然叙事、局部整理与Select讨论稿](./phase-2/2026-10-26-narrative-local-reflection-design.md)尚未实施，当前方法以根DESIGN和上轮实测为准。
+最新先读[自然叙事与局部整理实施报告](./doing/2026-10-26-local-narrative-implementation.md)、[完整执行计划](./phase-2/2026-10-26-narrative-local-execution-plan.md)和根DESIGN。用户确认后的方案已实施，组完成凭据和输入叙事进入默认方法；新库真实验证将短切片与完整历史、Add成功与图语义分开报告。
 
 | 阅读顺序 | 文档 | 用途 |
 | --- | --- | --- |
@@ -24,7 +24,7 @@
 | 16 | [AM-Link 二期方法改进计划](./phase-2/method-improvement-plan.md) | 结合 TinySoul、案例与当前实现的重构计划；每个 Add 先生成可检索最小 episode，工作区跨请求累积，Search/Reflection 分开 |
 | 17 | [P0/P1证据链与Reflection执行细则](./phase-2/evidence-loop-execution-plan.md) | 五包已接入；[实施核对](./doing/2026-10-23-evidence-loop-implementation.md)记录回归、真实切片、失败与尚未达成的质量验收 |
 
-2026-10-26 最新先读[单一主链路实施与实测](./doing/2026-10-26-live-method-implementation.md)、[执行计划](./phase-2/2026-10-26-live-method-plan.md)和根DESIGN。分步Reflection、来源对应/局部校正及原文卡Select直接进入默认方法；取消双路径开关。真实成功、变体失败与完整人物记录分栏。前一包[证据窗口报告](./doing/2026-10-26-evidence-and-draft-implementation.md)是历史基线，不能继续沿用其默认关闭结论。
+此前同日阶段：[单一主链路实施与实测](./doing/2026-10-26-live-method-implementation.md)、[执行计划](./phase-2/2026-10-26-live-method-plan.md)和根DESIGN。分步Reflection、来源对应/局部校正及原文卡Select直接进入默认方法；取消双路径开关。真实成功、变体失败与完整人物记录分栏。前一包[证据窗口报告](./doing/2026-10-26-evidence-and-draft-implementation.md)是历史基线，不能继续沿用其默认关闭结论。
 
 此前阶段：2026-10-23 先读[闭环实施与真实复验](./doing/2026-10-23-reflection-convergence-implementation.md)及[执行计划核对](./phase-2/reflection-convergence-plan.md)：140项回归通过，新增220次真实调用。统一可见范围、目标正文保留、关系阻断反馈、缓冲误触发修复已实施；真实Select/查询扩展在历史图副本上执行，但当前构图仍不稳定、整体方法未验收。LLM装箱合法但来源覆盖6/7，确定性为7/7，维持默认。未扩大20/100题、未部署。[之前的复核](./doing/2026-10-23-reflection-convergence-audit.md)与[前轮实施核对](./doing/2026-10-23-evidence-loop-implementation.md)保留为过程记录；8项旧跟踪测试产物仍待处理。
 

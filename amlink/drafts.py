@@ -59,9 +59,30 @@ def review_payload(arguments, projected, working):
                     start = end
             units.append({'position': len(units), 'kind': kind, 'proposal': value,
                 'source_positions': list(dict.fromkeys(positions))})
-    return {'units': units, 'sources': sources, 'endpoints': [
-        {'ref': item['ref'], 'kind': item['kind'], 'text': item['text']}
-        for item in [*projected.get('items', {}).values(), *arguments.get('items', [])]]}
+    endpoints = {item['ref']: {'ref': item['ref'], 'kind': item['kind'], 'text': item['text']}
+                 for item in projected.get('items', {}).values()}
+    needed = {ref for edge in arguments.get('links', []) for ref in (edge['from_ref'], edge['to_ref'])}
+    for ref in needed:
+        # Inspect bodies live in disclosures, not necessarily in projected.items.
+        # Reconstruct only actually visible ranges; never fetch hidden DB content.
+        fragments = [v for v in visible if v['origin_ref'] == ref]
+        if fragments:
+            parts, end = [], -1
+            for v in sorted(fragments, key=lambda v: (v['start'], -v['end'])):
+                if v['end'] <= end:
+                    continue
+                if end >= 0 and v['start'] > end:
+                    parts.append('[undisclosed gap]')
+                parts.append(v['text'][max(0, end - v['start']):])
+                end = v['end']
+            endpoints[ref] = {'ref': ref, 'kind': projected.get('references', {}).get(ref, {}).get('kind',
+                                 endpoints.get(ref, {}).get('kind', 'memory')),
+                              'text': ''.join(parts)}
+    for item in arguments.get('items', []):
+        endpoints[item['ref']] = {key: item[key] for key in ('ref', 'kind', 'text')}
+    if needed - endpoints.keys():
+        raise MemoryError('reflection_review_endpoint_missing', 409)
+    return {'units': units, 'sources': sources, 'endpoints': list(endpoints.values())}
 
 
 def check_review(payload, output):

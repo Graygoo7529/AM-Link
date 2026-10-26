@@ -12,9 +12,10 @@ from .evidence import (complementary_passages, episode_label, episode_text, pass
                        source_date, fragment, pages, ranges_complete, shrink_fragment, render_fragment)
 from .evidence import _excerpt_with_range
 from .projection import Choices, visible_fragments, range_receipt, range_is_visible
-from .reflection_policy import plan_prefix, prefix_overview
+from .reflection_policy import plan_prefix
 from .grounding import missing_material
 from .drafts import patch_items, review_payload, check_review
+from .local_reflection import PLAN_PROMPT, freeze_groups
 from .packing import freeze_pack, pack_frozen
 from .providers import tool_body
 from .reflection import parse_mutation, preflight_mutation, prepare_mutation, prompt
@@ -90,7 +91,8 @@ class Engine:
                   "references": {}, "items": {}, "sources": [], "edges": [], "disclosures": []}
         pinned = set(context.get("pinned", []))
         protected = set(context.get("protected_refs", [])) | set(context.get("protected_bodies", []))
-        disclosed = context.get("disclosures", [])
+        active = set(context.get('_active_refs', [])) if '_active_refs' in context else None
+        disclosed = [v for v in context.get('disclosures', []) if active is None or v.get('item_ref', v['origin_ref']) in active]
         mandatory = [v for v in disclosed if v["fragment_id"] in pinned or v["origin_ref"] in protected
                      or v["origin_ref"] in context.get("protected_sources", [])]
         result["disclosures"] = list(mandatory)
@@ -128,6 +130,9 @@ class Engine:
             if len(dumps(result)) > max(limit * 0.65, len(dumps({**result, "disclosures": mandatory}))):
                 result["disclosures"].pop()
         refs, items = context.get("references", {}), context.get("items", {})
+        if active is not None:
+            refs = {ref: row for ref, row in refs.items() if ref in active}
+            items = {ref: row for ref, row in items.items() if ref in active}
         priority = [v.get("item_ref") for v in result["disclosures"] if v.get("item_ref")]
         omitted = []
         for ref in dict.fromkeys([*sorted(protected), *priority, *reversed(items), *refs]):
@@ -222,7 +227,12 @@ class Engine:
         request_end = max((source["ordinal"] for source in raw), default=required)
         decision = plan_prefix(pending, request_end, required,
                                self.store.state(request.user_id)["settled_through"], self.config)
-        trigger = self.config.mode == "graph" and decision["trigger"]
+        active_plan = self.store.reflection_plan(request.user_id)
+        if active_plan:
+            decision = {**decision, 'trigger': True,
+                        'target': max(decision['target'], active_plan['through_ordinal']),
+                        'resume_reason': 'unfinished_local_plan'}
+        trigger = self.config.mode == "graph" and (decision["trigger"] or active_plan is not None)
         with self.observer.span("reflection", "reflection prefix policy", inputs={"request_id": request.request_id}) as event:
             self.observer.output(event, {"format_version": 1, **decision}, kind="context")
         self._observe_add_state(request, pending, trigger, episode)
@@ -230,10 +240,10 @@ class Engine:
             self._check_deadline(deadline)
             self.store.finish_minimum(request.user_id, request.request_id, require_vector=self.config.embedding_enabled)
             return self._response(request)
-        target = decision["target"]
+        target = max(decision["target"], active_plan['through_ordinal'] if active_plan else 0)
         self.store.require_reflection(request.user_id, request.request_id, target)
         batches = 0
-        while pending and pending[0]["ordinal"] <= target:
+        while active_plan or (pending and pending[0]["ordinal"] <= target):
             self._check_deadline(deadline)
             if batches >= self.config.max_batches:
                 raise MemoryError("reflection_batch_budget", 504)
@@ -246,13 +256,20 @@ class Engine:
                     break
                 batch.append(source)
                 chars += size
+            if active_plan:
+                frozen_refs = list(dict.fromkeys(ref for group in active_plan['groups'] for ref in group['source_refs']))
+                batch = self.store.raw(request.user_id, frozen_refs)
+                chars = sum(len(dumps(self._view(row))) for row in batch)
             with self.observer.span("reflection", "reflection batch", inputs={
-                    "target_watermark": target, "from_ordinal": batch[0]["ordinal"],
-                    "through_ordinal": batch[-1]["ordinal"], "count": len(batch), "serialized_chars": chars}) as event:
+                    "target_watermark": target, "from_ordinal": active_plan['from_ordinal'] if active_plan else batch[0]["ordinal"],
+                    "through_ordinal": active_plan['through_ordinal'] if active_plan else batch[-1]["ordinal"],
+                    "count": len(batch), "serialized_chars": chars}) as event:
                 self._run_reflection(request, batch, started)
-                self.observer.output(event, {"settled_through": batch[-1]["ordinal"], "remaining": len(pending) - len(batch)}, kind="context")
+                self.observer.output(event, {"settled_through": self.store.state(request.user_id)['settled_through'],
+                    "remaining": len(self.store.raw(request.user_id, pending=True))}, kind="context")
             batches += 1
             pending = self.store.raw(request.user_id, pending=True)
+            active_plan = self.store.reflection_plan(request.user_id)
         self._check_deadline(deadline)
         self.store.finish_minimum(request.user_id, request.request_id, target, require_vector=self.config.embedding_enabled)
         return self._response(request)
@@ -286,15 +303,14 @@ class Engine:
                            [row["ref"] for row in context.get("sources", [])])
         definitions = schema.get("$defs", {})
         item_properties = definitions.get("ItemChange", {}).get("properties", {})
-        editable = sorted(ref for ref, node in context.get('items', {}).items()
-                          if node['kind'] not in {'fact', 'event'} and not node.get('scope_omit_body'))
+        editable = sorted(ref for ref, node in context.get('items', {}).items() if not node.get('scope_omit_body'))
         new_ref = {'type': 'string', 'pattern': '^new:.+$'}
         item_properties['ref'] = ({'anyOf': [new_ref, {'type': 'string', 'enum': editable}]}
                                   if editable else dict(new_ref))
         item_properties['ref']['description'] = (
-            'For each new or changed fact/event use a meaningful new: label. Only the listed existing mutable nodes '
-            'may be re-emitted for an update. Never invent memory: identifiers or rewrite a minimum episode. '
-            'Unchanged old facts/events may be relation endpoints without re-emitting them in items.')
+            'New or changed assertions use a meaningful new: label. To attach new supporting sources to the SAME '
+            'old fact/event, use its listed ref and preserve its exact body/time fields. Do not duplicate a paraphrase. '
+            'Other listed navigation nodes may be updated after reading. Never rewrite minimum episodes.')
         link_properties = definitions.get("LinkChange", {}).get("properties", {})
         for endpoint in ("from_ref", "to_ref"):
             link_properties[endpoint] = {"type": "string", "pattern": "^(new:.+|memory:.+)$",
@@ -377,25 +393,57 @@ class Engine:
     def _run_reflection(self, request, pending, started):
         user = request.user_id
         deadline = started + self.config.request_seconds
-        state = self.store.state(user)
-        watermark = pending[-1]["ordinal"]
-        context = self._reflection_context(user, pending, deadline)
-        prefix = self.store.raw(user, pending=True)
-        target = self.store.request(user, request.request_id).get("reflection_watermark", watermark)
-        context["prefix_overview"] = prefix_overview([row for row in prefix if row["ordinal"] <= target],
-                                                      watermark, min(6000, self.config.context_chars // 4))
+        plan = self.store.reflection_plan(user)
+        if plan is None:
+            payload = {'task': 'Plan related changes before writing memory.',
+                       'messages': [{'position': i, **self._view(row)} for i, row in enumerate(pending)]}
+            schema = {'type': 'object', 'properties': {'groups': {'type': 'array', 'minItems': 1, 'maxItems': 12,
+                'items': {'type': 'object', 'properties': {'title': {'type': 'string'}, 'question': {'type': 'string'},
+                    'positions': {'type': 'array', 'minItems': 1, 'items': {'type': 'integer', 'enum': list(range(len(pending)))}}}}}}}
+            with self.observer.span('reflection', 'reflection local plan', inputs=payload) as event:
+                _, result = self._call_tool('reflection_plan', PLAN_PROMPT, payload,
+                    [_tool('reflection_plan', 'Group all message positions into related changes in processing order.', schema)], deadline)
+                plan = freeze_groups(result, pending)
+                self.store.freeze_plan(user, plan)
+                self.observer.output(event, plan, kind='context')
+            plan = self.store.reflection_plan(user)
+        for index in range(len(plan['receipts']), len(plan['groups'])):
+            self._check_deadline(deadline)
+            group = {**plan['groups'][index], 'plan_id': plan['plan_id'], 'index': index,
+                     'from_ordinal': plan['from_ordinal'], 'through_ordinal': plan['through_ordinal']}
+            rows = self.store.raw(user, group['source_refs'])
+            with self.observer.span('reflection', 'reflection local group', inputs=group) as event:
+                if rows:
+                    self._run_reflection_group(request, rows, started, group)
+                else:
+                    # All material was explicitly forgotten by an earlier group.
+                    self.store.commit_mutation(user, {'items': [], 'links': [], 'forget': []}, watermark=0,
+                        fingerprint=self.providers.embedding_fingerprint, vectors={}, group=group,
+                        context=self.store.state(user)['context'])
+                self.observer.output(event, {'index': index, 'committed': True,
+                    'settled_through': self.store.state(user)['settled_through']}, kind='context')
+
+    def _run_reflection_group(self, request, pending, started, group):
+        user = request.user_id
+        deadline = started + self.config.request_seconds
+        watermark = group['through_ordinal']
+        context = self._reflection_context(user, pending, deadline, group=group)
+        context['_local_group'] = group
+        context["prefix_overview"] = [{'title': g['title'], 'completed': i < group['index']}
+            for i, g in enumerate(self.store.reflection_plan(user)['groups'])]
         context["draft_stage"] = "items"
         self._save_workspace(user, state="maintenance", context=context)
         def reflection_tools(choices, source_refs=None, terminal=False, projected_gate=None):
             gate = projected_gate if projected_gate is not None else context.get("last_gate_error")
             refs = [row["ref"] for row in choices.rows]
+            schema_context = {**context, 'items': {ref: node for ref, node in context.get('items', {}).items() if ref in refs}}
             tools = [
                 _tool("reflection_search", "Query OLD structured memory. For each planned new person, supply for_new_ref equal to its exact future new: placeholder; use null for general discovery. The query receipt appears in reflection_control.identity_queries. Do not repeat a completed identity query unless seeking new evidence.",
                       {"type": "object", "properties": {"question": {"type": "string"}, "for_new_ref": {"type": ["string", "null"]}}, "required": ["question"], "additionalProperties": False}),
                 _tool("reflection_stop", "Stop because the current context is sufficient and no additional mutation is needed.",
                       {"type": "object", "properties": {}, "additionalProperties": False}),
             ]
-            item_schema = self._mutation_tool_schema(context, source_refs)
+            item_schema = self._mutation_tool_schema(schema_context, source_refs)
             item_schema["properties"].pop("links", None)
             item_schema["properties"]["items"]["maxItems"] = 12
             item_schema.get("$defs", {}).pop("LinkChange", None)
@@ -407,14 +455,12 @@ class Engine:
                                and context.get("last_gate_error", {}).get("code") == "reflection_invalid_relations")
             relation_stage = context.get("draft_stage") == "relations"
             if relation_repair or relation_stage:
-                mutation_schema = self._mutation_tool_schema(context, source_refs)
+                mutation_schema = self._mutation_tool_schema(schema_context, source_refs)
                 link_schema = mutation_schema["$defs"]["LinkChange"]
                 pending_items = context["pending_mutation"].get("items", [])
                 endpoints = list(dict.fromkeys([
                     *[item.get("ref") for item in pending_items],
-                    *context.get("items", {}).keys(),
-                    *[row.get("ref") for row in context.get("memories", [])],
-                    *context.get("references", {}).keys(),
+                    *refs,
                 ]))
                 if endpoints:
                     for endpoint in ("from_ref", "to_ref"):
@@ -423,7 +469,7 @@ class Engine:
                 link_items = link_schema
                 link_limit = 256
                 kinds = {row['ref']: row.get('kind') for row in [
-                    *context.get('references', {}).values(), *context.get('items', {}).values(), *pending_items]}
+                    *choices.rows, *schema_context['items'].values(), *pending_items]}
                 alternatives = []
                 directions = [('about', {'fact', 'event'}, {'person', 'entity', 'concept', 'event'}),
                     ('contains', {'episode'}, {'fact', 'event'}),
@@ -432,18 +478,24 @@ class Engine:
                 for relation, left, right in directions:
                     a = [ref for ref, kind in kinds.items() if kind in left]
                     b = [ref for ref, kind in kinds.items() if kind in right]
-                    if not any(x != y for x in a for y in b):
-                        continue
-                    properties = {**link_schema['properties'],
-                        'from_ref': {'type': 'string', 'enum': a}, 'to_ref': {'type': 'string', 'enum': b},
-                        'relation': {'type': 'string', 'enum': [relation]}}
-                    alternatives.append({'type': 'object', 'properties': properties})
+                    # Couple endpoints in the tool contract: two independent
+                    # enums misleadingly permit a node to point to itself.
+                    for left_ref in a:
+                        targets = [r for r in b if r != left_ref]
+                        if not targets:
+                            continue
+                        properties = {**link_schema['properties'],
+                            'from_ref': {'type': 'string', 'enum': [left_ref]},
+                            'to_ref': {'type': 'string', 'enum': targets},
+                            'relation': {'type': 'string', 'enum': [relation]},
+                            'support': {'type': 'string', 'description': 'Briefly state what the original explicitly establishes between these two DIFFERENT assertions/subjects; shared topic is insufficient.'}}
+                        alternatives.append({'type': 'object', 'properties': properties})
                 link_items = {'anyOf': alternatives} if alternatives else {'type': 'object', 'properties': {}}
                 link_limit = 256 if alternatives else 0
                 relation_properties = {"links": {"type": "array", "items": link_items, "maxItems": link_limit}}
                 tools.insert(0, _tool(
                     "reflection_relations",
-                    "Propose supported relations for the validated draft. Nothing is committed yet. Return exactly one links array. If no useful directly supported edge exists, return links=[] and commit the nodes; do not invent endpoints to obtain edges. Pending kinds are " + kind_summary + ". Legal directions are: about fact/event -> person/entity/concept/event; contains episode -> fact/event; supersedes/contradicts same-kind fact/event; same_event_as event -> event. Do not add an edge merely because two items share a topic. Use exact pending or loaded memory refs and nonempty source_refs. Source correspondence is reviewed at commit.",
+                    "Propose supported relations between TWO DIFFERENT nodes. A node cannot describe itself with a graph edge. Nothing is committed yet. Return exactly one links array. If no useful directly supported edge exists, return links=[] and commit the nodes; do not invent endpoints to obtain edges. Pending kinds are " + kind_summary + ". Legal directions are: about fact/event -> person/entity/concept/event; contains episode -> fact/event; supersedes/contradicts same-kind fact/event; same_event_as event -> event. Do not add an edge merely because two items share a topic. Use exact pending or loaded memory refs and nonempty source_refs. Source correspondence is reviewed at commit.",
                     {"type": "object", "properties": relation_properties}))
                 tools = [tool for tool in tools if tool["name"] in (
                     {"reflection_relations", "reflection_search"})]
@@ -495,13 +547,14 @@ class Engine:
                     if gate.get("code") == "reflection_orientation_required":
                         allowed_repairs = {"reflection_validate"}
                     tools = [t for t in tools if t["name"] in allowed_repairs]
-            if not context.get("pending_mutation") and not context.get("last_gate_error"):
-                tools = [t for t in tools if t["name"] in {"reflection_items", "reflection_stop"}]
+            # Reading is available before drafting; do not force a speculative
+            # write merely to unlock inspection of an apparent old match.
             return [tool for tool in tools if tool["name"] in {"reflection_commit", "reflection_stop"}] if terminal else tools
         for step in range(self.config.reflection_steps):
             if time.monotonic() >= deadline:
                 raise MemoryError("request_deadline", 504)
-            payload = {"decision": {"stage": context.get("draft_stage"),
+            payload = {"local_group": {'title': group['title'], 'question': group['question']},
+                       "decision": {"stage": context.get("draft_stage"),
                            "repair": context.get("last_gate_error"),
                            "next": "Repair only the listed defects; otherwise advance to relations or commit. Do not copy unchanged draft nodes."},
                        "working": [self._view(row) for row in pending], "context": {},
@@ -594,6 +647,16 @@ class Engine:
                 node_submission = name in {"reflection_items", "reflection_patch_items"} or (name == "reflection_validate" and context.get("draft_stage") == "items")
                 relation_submission = name == "reflection_relations" or (name == "reflection_validate" and context.get("draft_stage") == "relations")
                 if node_submission:
+                    if (not isinstance(arguments.get('items'), list)
+                            or not all(isinstance(item, dict) and isinstance(item.get('ref'), str)
+                                       for item in arguments['items'])):
+                        raise MemoryError('reflection_item_draft_invalid', 502)
+                    if isinstance(arguments.get('items'), list):
+                        unique = {dumps(item): item for item in arguments['items']}
+                        if len(unique) != len(arguments['items']):
+                            with self.observer.span('reflection', 'identical draft entries coalesced', inputs=arguments) as duplicate_event:
+                                self.observer.output(duplicate_event, {'before': len(arguments['items']), 'after': len(unique)}, kind='context')
+                            arguments = {**arguments, 'items': list(unique.values())}
                     if "links" in arguments or not isinstance(arguments.get("items", []), list) or len(arguments.get("items", [])) > 12:
                         raise MemoryError("reflection_item_draft_invalid", 502)
                     arguments = {**arguments, "links": []}
@@ -637,7 +700,7 @@ class Engine:
                             context.pop("pending_links", None)
                             context.pop("pending_link_support", None)
                         self._check_reflection_basis(arguments, context)
-                        prepared = prepare_mutation(arguments, user=user, request_id=request.request_id, number=watermark,
+                        prepared = prepare_mutation(arguments, user=user, request_id=group['plan_id'], number=group['index'],
                                                     context=context, store=self.store)
                         if prepared["filtered_links"]:
                             if node_submission:
@@ -706,7 +769,7 @@ class Engine:
                 # Reviewed text/citations are a new local proposal, not authority
                 # to bypass visibility, identity, type or write constraints.
                 self._check_reflection_basis(arguments, context)
-                prepared = prepare_mutation(arguments, user=user, request_id=request.request_id, number=watermark,
+                prepared = prepare_mutation(arguments, user=user, request_id=group['plan_id'], number=group['index'],
                                             context=context, store=self.store)
                 if prepared["filtered_links"]:
                     raise MemoryError("reflection_review_relation_invalid", 502)
@@ -732,11 +795,21 @@ class Engine:
         pages = []
         for kind in ("item", "relation"):
             units = [u for u in full["units"] if u["kind"] == kind]
-            pages.extend(units[offset:offset + 4] for offset in range(0, len(units), 4))
+            width = 1 if kind == 'relation' else 4
+            pages.extend(units[offset:offset + width] for offset in range(0, len(units), width))
         endpoints = {item["ref"]: item for item in full["endpoints"]}
         for page in pages:
+            relevant_endpoints = {ref for unit in page for ref in
+                (unit['proposal'].get('from_ref'), unit['proposal'].get('to_ref')) if ref}
+            if relevant_endpoints - endpoints.keys():
+                # A preceding node review withdrew this endpoint. Do not ask a
+                # model to approve a connection whose endpoint no longer exists.
+                decisions.extend({'position': unit['position'], 'kind': 'relation',
+                    'before': unit['proposal'], 'after': None, 'action': 'drop',
+                    'detail': 'Endpoint withdrawn by the preceding node review.'} for unit in page)
+                continue
             payload = {"task": "Check and locally correct the following proposals against the supplied original passages.",
-                "units": page, "sources": full["sources"], "endpoints": list(endpoints.values())}
+                "units": page, "sources": full["sources"], "endpoints": [node for ref, node in endpoints.items() if ref in relevant_endpoints]}
             schema = {"type": "object", "properties": {"reviews": {"type": "array",
                 "minItems": len(payload["units"]), "maxItems": len(payload["units"]), "items": {
                     "type": "object", "properties": {
@@ -744,7 +817,10 @@ class Engine:
                         "action": {"type": "string", "enum": ["keep", "revise", "drop"] if page[0]["kind"] == "item" else ["keep", "drop"]},
                         "text": {"type": ["string", "null"], "description": "For revise only, a concise corrected node statement, retaining explicit subject/conditions; otherwise null."},
                         "time": {"anyOf": [{"type": "null"}, {"type": "object", "properties": {
-                            key: {"type": ["string", "null"]} for key in ("time_expression", "time_start", "time_end") }}],
+                            key: ({"type": ["string", "null"]} if key == 'time_expression' else
+                                  {"type": ["string", "null"], "pattern": r"^\d{4}-\d{2}-\d{2}$",
+                                   "description": "Event calendar date YYYY-MM-DD only when explicitly supported; never a message timestamp or ISO datetime. Use null if unknown."})
+                            for key in ("time_expression", "time_start", "time_end") }}],
                             "description": "Null retains time metadata. For a revised node ONLY: supply all three existing time fields to correct or clear them; null fields clear unsupported dates."},
                         "detail": {"type": "string", "description": "Brief source correspondence or concrete correction, not private reasoning."},
                         "source_positions": {"type": "array", "items": {"type": "integer", "enum": list(range(len(payload["sources"]))) or [-1]}}}}}}}
@@ -760,6 +836,9 @@ class Engine:
                     "For relations, only keep or drop, never revise endpoints: shared topic does not imply supersedes, contradicts or about. "
                     "Supersedes requires an explicit replacement of the SAME subject/property under the SAME conditions; general/specific rules, exceptions, consistent restatements and reporting procedures do not supersede each other. "
                     "Contradicts requires incompatible assertions under the same conditions. About must describe that endpoint's subject, not merely be addressed to that conversational partner. "
+                    "Read the two endpoint statements literally. If Alex describes Alex's activity to Morgan, that activity is NOT about person Morgan. "
+                    "Mentioning the same shop does not make a later purchase a detail of an earlier unrelated repair. "
+                    "If the proper person or event node is absent, drop this edge instead of using the closest available endpoint. "
                     "For drop return text=null, time=null and source_positions=[]. source_time is the message timestamp, not automatically the event date. "
                     "For revise correct or clear incorrect time metadata using time; if no correction is needed use time=null. "
                     "For keep return text=null and time=null; for revise supply the complete corrected node text. Never answer a benchmark question.",
@@ -815,7 +894,8 @@ class Engine:
                     "proposal with reflection_items or reflection_patch_items; do not call Inspect, Backlink, Evict, or Stop.")
         context["protected_refs"] = [v["ref"] for v in missing if v["ref"].startswith("memory:")]
         context["protected_sources"] = [v["ref"] for v in missing if v["ref"].startswith("raw:")]
-        pending_items = {item["ref"]: item for item in arguments.get("items", [])}
+        pending_items = {item["ref"]: item for item in arguments.get("items", [])
+                         if isinstance(item, dict) and isinstance(item.get('ref'), str)}
         for need in missing:
             if need["need"] == "conflict_side_visible_provenance":
                 node = pending_items.get(need["ref"]) or context.get("items", {}).get(need["ref"], {})
@@ -825,13 +905,17 @@ class Engine:
         for ref in context["protected_refs"]:
             if node := self.store.get(user, ref):
                 context.setdefault("references", {})[ref] = self._reference(node, context["question"], "required", user, context.get("old_before"))
+                if '_active_refs' in context and ref not in context['_active_refs']:
+                    context['_active_refs'].append(ref)
         for source_ref in context["protected_sources"]:
             source = self.store.get(user, source_ref)
-            if source and (source["ordinal"] < context["old_before"] or source_ref in context.get("new_refs", [])):
+            if source and self._source_allowed(context, source):
                 for node in self.store.nodes(user):
                     if source_ref in node.get("source_refs", []):
                         context.setdefault("references", {}).setdefault(node["ref"],
                             self._reference(node, context["question"], "required_source", user, context.get("old_before")))
+                        if '_active_refs' in context and node['ref'] not in context['_active_refs']:
+                            context['_active_refs'].append(node['ref'])
                         break
         self._reflection_action(context, "proposal_feedback", code=code, missing=len(missing), invalid_relations=len(invalid_links))
         self._save_workspace(user, state="maintenance", context=context)
@@ -878,12 +962,16 @@ class Engine:
                 retained.pop(key, None)
             self._bound_workspace(retained)
             self.store.commit_mutation(user, prepared, watermark=watermark,
-                                       fingerprint=self.providers.embedding_fingerprint, vectors=vectors, context=retained)
-            self.observer.output(event, {"mutation": prepared, "watermark": watermark}, kind="memory", title="Reflection Mutation 提交")
+                                       fingerprint=self.providers.embedding_fingerprint, vectors=vectors,
+                                       context={k:v for k,v in retained.items() if not k.startswith('_')},
+                                       group=retained.get('_local_group'))
+            self.observer.output(event, {"mutation": prepared, "target_watermark": watermark,
+                "watermark": self.store.state(user)['settled_through'],
+                "completed_group": retained.get('_local_group')}, kind="memory", title="Reflection Mutation 提交")
 
-    def _reflection_context(self, user, pending, deadline):
+    def _reflection_context(self, user, pending, deadline, group=None):
         # Orientation is a bounded discovery expression, never the entire backlog.
-        query = excerpt("\n".join(row["text"] for row in pending), min(4000, self.config.batch_chars))
+        query = group['question'] if group else excerpt("\n".join(row["text"] for row in pending), min(4000, self.config.batch_chars))
         context = self.store.state(user).get("context") or {"references": {}, "items": {}, "edges": []}
         if context.get("format_version", 0) not in (0, 1, 2):
             raise MemoryError("workspace_version_unknown", 503)
@@ -892,8 +980,12 @@ class Engine:
                 context.pop(key, None)
         context["format_version"] = 2
         context.setdefault("read_ranges", [])
-        context["old_before"] = pending[0]["ordinal"]
-        context["old_scope"] = {"before": pending[0]["ordinal"], "empty": self.store.old_scope_empty(user, pending[0]["ordinal"]),
+        before = group['from_ordinal'] if group else pending[0]['ordinal']
+        context['local_committed_refs'] = [ref for receipt in (self.store.reflection_plan(user) or {}).get('receipts', []) for ref in receipt['refs']]
+        context['local_source_refs'] = list(dict.fromkeys(ref for node_ref in context['local_committed_refs']
+            if (node := self.store.get(user, node_ref)) for ref in node['source_refs']))
+        context["old_before"] = before
+        context["old_scope"] = {"before": before, "empty": self.store.old_scope_empty(user, before) and not context['local_committed_refs'],
                                 "basis": "database_valid_old_sources", "query_performed": False}
         context.pop("last_gate_error", None)
         for key in ("protected_refs", "protected_sources", "protected_bodies", "pending_mutation", "pending_links", "pending_link_support", "draft_stage", "revision_reason", "rejected_proposal", "rejected_problem", "completed_queries", "action_log"):
@@ -910,6 +1002,10 @@ class Engine:
                                          "count": len(refs), "orientation_only": True, "old_scope": context["old_scope"]}, kind="context",
                                 title="Reflection Orientation 旧记忆候选")
         self._add_context_refs(user, context, refs[:self.config.old_candidates], deadline)
+        if group:
+            # Keep persistent navigation in Workspace, but show only material
+            # relevant to this group's orientation or subsequently explored.
+            context['_active_refs'] = [row['ref'] for row in refs[:self.config.old_candidates]]
         context["orientation_refs"] = [row["ref"] for row in refs[:self.config.old_candidates]]
         for ref in context["references"]:
             context["depths"].setdefault(ref, 0)
@@ -961,6 +1057,8 @@ class Engine:
         for row in reversed(refs):
             if not row or row["ref"].startswith("raw:"):
                 continue
+            if '_active_refs' in context and row['ref'] not in context['_active_refs']:
+                context['_active_refs'].append(row['ref'])
             context.setdefault("question", "")
             previous = context.get("references", {}).get(row["ref"], {})
             if previous.get("selected_evidence") and not row.get("selected_fragments"):
@@ -972,7 +1070,7 @@ class Engine:
             if self.store.get(user, row["ref"]):
                 for source_ref in row.get("source_refs", []):
                     source = self.store.get(user, source_ref)
-                    if source and (not context.get("old_before") or source["ordinal"] < context["old_before"] or source_ref in context.get("new_refs", [])) and source_ref not in {item["ref"] for item in context.setdefault("sources", [])}:
+                    if source and self._source_allowed(context, source) and source_ref not in {item["ref"] for item in context.setdefault("sources", [])}:
                         context["sources"].append(self._view(source))
                 for edge in self.store.edges(user, row["ref"]):
                     value = self._edge_view(user, edge)
@@ -986,6 +1084,11 @@ class Engine:
             node = self.store.get(user, ref)
             labels.append(excerpt(node["text"], 160) if node else ref)
         return {**edge, "narrative": f"{labels[0]} --{edge['relation']}--> {labels[1]}"}
+
+    @staticmethod
+    def _source_allowed(context, source):
+        return (not context.get('old_before') or source['ordinal'] < context['old_before'] or
+                source['ref'] in context.get('new_refs', []) or source['ref'] in context.get('local_source_refs', []))
 
     def _refresh_context(self, user, context, pending=()):
         """Refresh mutable nodes, prune evicted/deleted sources, keep working protected."""
@@ -1008,7 +1111,7 @@ class Engine:
         for item in items.values():
             for ref in item.get("source_refs", []):
                 source = self.store.get(user, ref)
-                if source and (not context.get("old_before") or source["ordinal"] < context["old_before"] or ref in context.get("new_refs", [])):
+                if source and self._source_allowed(context, source):
                     sources[ref] = self._view(source)
         context["sources"] = list(sources.values())
         context["edges"] = [edge for edge in context.get("edges", [])
@@ -1144,6 +1247,12 @@ class Engine:
         for branch in dict.fromkeys(branches):
             before = context.get("old_before") if mode == "reflection" else None
             lexical = self.store.lexical(user, branch, self.config.candidate_limit, before=before)
+            local_nodes = [node for ref in context.get('local_committed_refs', [])
+                           if (node := self.store.get(user, ref))] if mode == 'reflection' else []
+            existing_lexical = {row['ref'] for row in lexical}
+            for node in local_nodes:
+                if node['ref'] not in existing_lexical and set(terms(branch)).intersection(terms(node['text'])):
+                    lexical.append({**node, 'score': 1/61, 'lexical_rank': 1, 'scope': 'committed_local_group'})
             with self.observer.span("retrieve", "query.lexical", inputs={"query": branch, "mode": mode, "scope_before": before}) as event:
                 self.observer.candidates(event, [self._view(row) | {"score": row["score"], "channel": "bm25"} for row in lexical])
             for row in lexical:
@@ -1152,6 +1261,12 @@ class Engine:
                 current["lineage"].append({"branch": branch, "channel": "bm25", "rank": row.get("lexical_rank")})
             if self.config.embedding_enabled:
                 vectors = list(self.store.vector_rows(user, self.providers.embedding_fingerprint, before=before))
+                known_vectors = {node['ref'] for node, _ in vectors}
+                for node in local_nodes:
+                    vector = self.store.one('SELECT vector FROM vectors WHERE user_id=? AND ref=? AND fingerprint=?',
+                        (user, node['ref'], self.providers.embedding_fingerprint))
+                    if vector and node['ref'] not in known_vectors:
+                        vectors.append((node, json_load(vector['vector'])))
                 if vectors:
                     query_vector = self.providers.embed([branch], deadline)[0]
                     scored = sorted(((sum(a * b for a, b in zip(vector, query_vector, strict=True)), row)
@@ -1194,7 +1309,7 @@ class Engine:
                 row["kind"] == "episode" and self.store.is_minimum_episode(user, row["ref"])) else [row]
             if context.get("old_before"):
                 origins = [r for r in origins if not r["ref"].startswith("raw:") or r["ordinal"] < context["old_before"]]
-            values, _ = complementary_passages(origins, branches, max(160, self.config.preview_chars),
+            values, _ = complementary_passages(origins, branches, max(160, self.config.preview_chars * 3),
                 max(1, min(4, max(len(branches), len(origins)))))
             for value in values:
                 cards.append({"row": row, "fragment": value})
@@ -1217,8 +1332,14 @@ class Engine:
                         "evidence": {"type": "string"}, "positions": positions}}}, "positions": positions}})]
 
         def payload(page):
-            return {"question": query, "result_limit": context.get("result_limit", 5), "candidates": [
+            return {"question": query,
+                "task": ('Find old assertions and identities to compare with this memory change. Keep same-subject, '
+                          'same-event, same-property candidates, conflicting versions and their sources.' if context.get('old_before') else
+                          'Find complementary original evidence and useful routes to missing facts; do not answer.'),
+                "result_limit": context.get("result_limit", 5), "candidates": [
                 {"position": i, "ref": c["row"]["ref"], "kind": c["row"]["kind"],
+                 "label": excerpt(c['row']['text'], 140, query),
+                 "retrieval": c['row'].get('via') or ', '.join(dict.fromkeys(str(v.get('branch', '')) for v in c['row'].get('lineage', []))),
                  "narrative": c["fragment"]["text"], "source_time": source_date(c["fragment"].get("source_time")),
                  "role": c["fragment"].get("role"), "complete_source": c["fragment"].get("complete", False)}
                 for i, c in enumerate(page)]}
@@ -1250,7 +1371,7 @@ class Engine:
 
         offset, number, selected = 0, 0, []
         while offset < len(cards):
-            page = cards[offset:offset + self.config.select_candidate_limit]
+            page = cards[offset:]
             while len(page) > 1 and size(page) > self.config.model_input_chars:
                 page = page[:-1]
             if size(page) > self.config.model_input_chars:
@@ -1258,10 +1379,8 @@ class Engine:
             selected.extend(execute(page, "page", number))
             offset += len(page); number += 1
         if number > 1 and len(selected) > 1:
-            # Global merge sees the same ranges, only smaller when necessary;
-            # it never regenerates a different excerpt for a surviving ref.
-            while size(selected) > self.config.model_input_chars and max(len(c["fragment"]["text"]) for c in selected) > 80:
-                selected = [{**c, "fragment": shrink_fragment(c["fragment"], max(80, len(c["fragment"]["text"]) // 2))} for c in selected]
+            # Global comparison preserves original selected passages. A surviving
+            # set that cannot fit is explicit, never silently recropped.
             if size(selected) > self.config.model_input_chars:
                 raise MemoryError("select_merge_budget", 413)
             selected = execute(selected, "merge", number)
@@ -1365,6 +1484,8 @@ class Engine:
             if other not in context["references"]:
                 context["expanded_refs"].append(other)
             context["references"][other] = self._reference(node, query, node["via"], user, context.get("old_before"))
+            if '_active_refs' in context and other not in context['_active_refs']:
+                context['_active_refs'].append(other)
             context["depths"][other] = min(context["depths"].get(other, depth + 1), depth + 1)
             context.setdefault("paths", []).append({"from_ref": ref, "to_ref": other,
                 "action": action, "depth": depth + 1,
@@ -1523,8 +1644,7 @@ class Engine:
         mixed = context.get("old_before") and self.store.is_minimum_episode(user, ref) and any(
             row["ordinal"] >= context["old_before"] for row in self.store.raw(user, node.get("source_refs", [])))
         body = [] if mixed else [node]
-        sources = body + [row for row in self.store.raw(user, node.get("source_refs", []))
-                            if not context.get("old_before") or row["ordinal"] < context["old_before"] or row["ref"] in context.get("new_refs", [])]
+        sources = body + [row for row in self.store.raw(user, node.get("source_refs", [])) if self._source_allowed(context, row)]
         if shown is None:
             shown = visible_fragments(self._model_context(context))
         read = context.get("read_ranges", context.get("disclosures", []))

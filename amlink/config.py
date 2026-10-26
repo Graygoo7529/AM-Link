@@ -22,7 +22,6 @@ class Config:
     old_candidates: int = 32
     select_threshold: int = 5
     candidate_limit: int = 64
-    select_candidate_limit: int = 24
     max_hops: int = 3
     max_nodes: int = 32
     max_neighbors: int = 8
@@ -67,7 +66,7 @@ class Config:
                 raise ValueError(f"{field.name} must be positive")
         if not 0 <= self.max_hops <= 8 or self.embedding_batch > 64:
             raise ValueError("invalid graph depth or embedding batch")
-        if self.reflection_steps < 1 or self.search_steps < 1 or self.select_candidate_limit < 1:
+        if self.reflection_steps < 1 or self.search_steps < 1:
             raise ValueError("tool loops must have a positive step budget")
         if self.model_timeout > self.request_seconds:
             raise ValueError("model timeout must fit request deadline")

@@ -39,6 +39,10 @@ CREATE TABLE IF NOT EXISTS edges(
  user_id TEXT,from_ref TEXT,to_ref TEXT,relation TEXT,sources TEXT,
  PRIMARY KEY(user_id,from_ref,to_ref,relation));
 CREATE INDEX IF NOT EXISTS edges_in ON edges(user_id,to_ref,relation);
+CREATE TABLE IF NOT EXISTS reflection_plans(
+ user_id TEXT,plan_id TEXT,from_ordinal INTEGER,through_ordinal INTEGER,
+ groups_json TEXT NOT NULL,receipts TEXT NOT NULL DEFAULT '[]',
+ PRIMARY KEY(user_id,plan_id));
 CREATE TABLE IF NOT EXISTS vectors(user_id TEXT,ref TEXT,fingerprint TEXT,vector TEXT,
  PRIMARY KEY(user_id,ref));
 CREATE TABLE IF NOT EXISTS blocks(user_id TEXT,ref TEXT,instructions TEXT,
@@ -329,8 +333,31 @@ class Store:
     def source_states(self, user, source_ref):
         return [self._node(row) for row in self.rows("SELECT DISTINCT n.* FROM nodes n,json_each(n.sources) s WHERE n.user_id=? AND s.value=? AND n.status IN ('superseded','conflict')", (user, source_ref))]
 
-    def commit_mutation(self, user, mutation, *, watermark, fingerprint, vectors, context=None):
+    def reflection_plan(self, user):
+        row = self.one("SELECT * FROM reflection_plans WHERE user_id=? AND through_ordinal>(SELECT settled_through FROM working WHERE user_id=?) ORDER BY from_ordinal LIMIT 1", (user, user))
+        if row:
+            row['groups'] = json.loads(row.pop('groups_json'))
+            row['receipts'] = json.loads(row['receipts'])
+        return row
+
+    def freeze_plan(self, user, plan):
         with self.transaction() as db:
+            db.execute("INSERT INTO reflection_plans VALUES(?,?,?,?,?,?)",
+                       (user, plan['plan_id'], plan['from_ordinal'], plan['through_ordinal'], dumps(plan['groups']), '[]'))
+
+    def commit_mutation(self, user, mutation, *, watermark, fingerprint, vectors, context=None, group=None):
+        with self.transaction() as db:
+            if group:
+                plan = db.execute('SELECT * FROM reflection_plans WHERE user_id=? AND plan_id=?', (user, group['plan_id'])).fetchone()
+                if plan is None:
+                    raise MemoryError('reflection_plan_missing', 409)
+                receipts = json.loads(plan['receipts'])
+                if group['index'] != len(receipts) or len(receipts) >= len(json.loads(plan['groups_json'])):
+                    raise MemoryError('reflection_group_out_of_order', 409)
+                receipts.append({'index': group['index'], 'refs': [i['ref'] for i in mutation['items']],
+                                 'mutation_digest': digest(mutation)})
+                watermark = plan['through_ordinal'] if len(receipts) == len(json.loads(plan['groups_json'])) else 0
+                db.execute('UPDATE reflection_plans SET receipts=? WHERE user_id=? AND plan_id=?', (dumps(receipts), user, group['plan_id']))
             for item in mutation["items"]:
                 old = db.execute("SELECT created_at,status FROM nodes WHERE user_id=? AND ref=?", (user, item["ref"])).fetchone()
                 if db.execute("SELECT 1 FROM requests WHERE user_id=? AND episode_ref=?", (user, item["ref"])).fetchone():

@@ -105,8 +105,11 @@ def case_observation_index(registrations, *, catalog, profiles, runs, repo_root)
             if dataset_id != profiles["datasets"][dataset_key]["dataset_id"]:
                 continue
             selection = run.get("dataset_selection") or {}
-            if (binding["record"] not in selection.get("record_ids", [])
-                or binding["task"] not in selection.get("task_ids", [])):
+            # None means an unrestricted selection, as in full-record studies.
+            # The exact planned task and completed report below remain required.
+            record_ids, task_ids = selection.get('record_ids'), selection.get('task_ids')
+            if ((record_ids is not None and binding['record'] not in record_ids)
+                or (task_ids is not None and binding['task'] not in task_ids)):
                 continue
             for planned_case in plan.get("cases", []):
                 for search in planned_case.get("searches", []):

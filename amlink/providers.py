@@ -11,6 +11,7 @@ import httpx
 
 from .errors import MemoryError
 from .text import digest, dumps
+from .narrative import render
 
 
 def tool_body(config, purpose, prompt, payload, tools):
@@ -24,8 +25,7 @@ def tool_body(config, purpose, prompt, payload, tools):
             "tools": [{"type": "function", "function": tool} for tool in tools],
             "tool_choice": "required",
             "messages": [{"role": "system", "content": prompt},
-                         {"role": "user", "content": json.dumps({"purpose": purpose, "data": payload},
-                            ensure_ascii=False, separators=(",", ":"), allow_nan=False)}]}
+                         {"role": "user", "content": render(purpose, payload)}]}
 
 
 class Providers:

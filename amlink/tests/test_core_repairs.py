@@ -34,6 +34,9 @@ class Scripted:
         return [[1.0, 0.0] for _ in texts]
 
     def tool(self, purpose, prompt, payload, tools, deadline):
+        if purpose == 'reflection_plan':
+            return 'reflection_plan', {'groups': [{'title':'Fixture group', 'question':' '.join(r['text'] for r in payload['messages'])[:1200],
+                'positions': list(range(len(payload['messages'])))}]}
         self.calls.append((purpose, payload))
         if purpose == "reflection_review":
             return "review", self.review(payload)
@@ -174,7 +177,7 @@ def test_derived_episode_also_gets_vector_and_workspace_survives(make):
 
 
 def test_select_pages_visit_all_candidates_and_global_order_is_preserved(make):
-    engine, provider = make(select_candidate_limit=2)
+    engine, provider = make()
     candidates = [{"ref": f"memory:fact-{i}", "kind": "fact", "text": f"Topic fact {i}", "source_refs": []}
                   for i in range(5)]
 
@@ -186,11 +189,9 @@ def test_select_pages_visit_all_candidates_and_global_order_is_preserved(make):
     provider.decide = decide
     selected = engine._select_refs("u", "topic", candidates, {"text": "x" * 200000}, time.monotonic() + 30, reason="query")
     calls = [payload for name, payload in provider.calls if name == "select"]
-    assert [len(payload["candidates"]) for payload in calls] == [2, 2, 1, 5]
-    assert [row["position"] for row in calls[2]["candidates"]] == [0]
-    assert [row["position"] for row in calls[3]["candidates"]] == [0, 1, 2, 3, 4]
-    assert {row["ref"] for payload in calls[:3] for row in payload["candidates"]} == {row["ref"] for row in candidates}
-    assert [row["ref"] for row in selected] == ["memory:fact-4", "memory:fact-2", "memory:fact-3", "memory:fact-0", "memory:fact-1"]
+    assert [len(payload["candidates"]) for payload in calls] == [5]
+    assert {row["ref"] for row in calls[0]['candidates']} == {row['ref'] for row in candidates}
+    assert [row['ref'] for row in selected] == [row['ref'] for row in reversed(candidates)]
 
 
 def test_select_empty_is_valid_and_unknown_tool_is_error(make):
@@ -266,7 +267,7 @@ def test_misplaced_root_time_fields_are_observable_and_discarded(make):
     assert mutation["filtered_fields"] == [{"field": "time_start", "reason": "mutation_field_without_item"}]
 
 
-def test_select_merge_fits_with_full_survivor_set_and_heavy_lineage(make):
+def test_select_merge_refuses_to_crop_surviving_originals_silently(make):
     engine, provider = make()
     candidates = [{"ref": f"memory:event-{'semantic-name-' * 5}{i}", "kind": "event",
         "text": (f"Person {i} completed a distinct project in 2023. " * 160),
@@ -276,16 +277,15 @@ def test_select_merge_fits_with_full_survivor_set_and_heavy_lineage(make):
         for i in range(64)]
     provider.decide = lambda purpose, payload: ("select", {
         "positions": [row["position"] for row in payload["candidates"]]})
-    selected = engine._select_refs("u", "Which projects were completed?", candidates, {},
-                                  time.monotonic() + 30, reason="query")
-    assert [row["ref"] for row in selected] == [row["ref"] for row in candidates]
+    with pytest.raises(MemoryError, match='select_merge_budget'):
+        engine._select_refs("u", "Which projects were completed?", candidates, {}, time.monotonic() + 30, reason="query")
     calls = [payload for purpose, payload in provider.calls if purpose == "select"]
-    assert {row['ref'] for row in calls[-1]['candidates']} == {row['ref'] for row in candidates}
+    assert {row['ref'] for call in calls for row in call['candidates']} == {row['ref'] for row in candidates}
     assert all(row["narrative"] and row["ref"] for row in calls[-1]["candidates"])
 
 
 def test_select_compacts_a_single_oversized_candidate(make):
-    engine, provider = make(model_input_chars=12000, select_candidate_limit=24)
+    engine, provider = make(model_input_chars=12000)
     candidate = {"ref": "memory:episode-long", "kind": "episode",
         "text": "A long source message with a date and a subject. " * 1200,
         "source_refs": [f"raw:{i:032d}" for i in range(64)],

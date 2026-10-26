@@ -76,6 +76,19 @@ class ImportTests(unittest.TestCase):
                 profiles={"datasets":{"locomo":{"dataset_id":"locomo-v1"}}},runs=[],repo_root=root)
             self.assertEqual(rows["lm4"],[{"run_id":"archived","search_id":"q1",
                 "system":{"name":"phase1","version":"0.3.0","target":"phase1"},"loaded":False}])
+            for selection, expected in [({'record_ids': None, 'task_ids': None}, 1),
+                                         ({'record_ids': ['conv-42'], 'task_ids': None}, 1),
+                                         ({'record_ids': None, 'task_ids': ['other']}, 0)]:
+                with self.subTest(selection=selection):
+                    report = json.loads((directory/'report.json').read_text(encoding='utf-8'))
+                    report['run']['dataset_selection'] = selection
+                    write(directory/'report.json', report)
+                    indexed = case_observation_index([{'run_id':'archived',
+                        'directory':'benchmark/data/runs/archived','dataset_pack_sha256':'a'*64}],
+                        catalog={'cases':{'lm4':{'data':{'dataset':'locomo','record':'conv-42','task':'qa-1'}}},
+                                 'datasets':{'locomo':{'cases':['lm4']}}},
+                        profiles={'datasets':{'locomo':{'dataset_id':'locomo-v1'}}}, runs=[], repo_root=root)
+                    self.assertEqual(len(indexed['lm4']), expected)
 
     def test_memory_snapshot_is_bounded_and_checks_artifact_hash(self):
         with tempfile.TemporaryDirectory() as tmp:

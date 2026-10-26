@@ -6,7 +6,7 @@
 
 AM-Link 和设计灵感来源 **TinySoul-Agent** 都是 Graygoo7529 的个人原创项目。一期借鉴自己的记忆设计思想，独立实现比赛接口，未直接移植 TinySoul-Agent 代码。
 
-2026-10-26：用户已提交`256fced`，[分步Reflection与原文卡Select](./docs/doing/2026-10-26-live-method-implementation.md)已作为唯一主链路实施，长历史整理与关系语义仍未验收。已按用户确认[备份并清空实验数据库和活动观测](./docs/doing/2026-10-26-observation-reset-and-design-audit.md)，后续实验从新库开始。[自然叙事与局部整理设计](./docs/phase-2/2026-10-26-narrative-local-reflection-design.md)是下一轮讨论稿，尚未修改方法；无部署。
+2026-10-26最新：[自然叙事与局部整理执行计划](./docs/phase-2/2026-10-26-narrative-local-execution-plan.md)已实施为默认主链路，见[实施与真实验证](./docs/doing/2026-10-26-local-narrative-implementation.md)。包含冻结相关组、原子进度与失败恢复、可读模型输入、按实际输入大小分页Select及双端点关系审查。所有实验从清理后的空库开始；短切片改善，长历史整理和图语义仍未验收，无部署。
 
 | 入口 | 内容 |
 | --- | --- |

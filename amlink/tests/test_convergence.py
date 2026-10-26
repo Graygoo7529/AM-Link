@@ -270,4 +270,4 @@ def test_item_tool_exposes_only_new_or_exact_mutable_identities(make):
         'memory:person-maya': {'kind': 'person'}}, 'sources': []}
     prop = engine._mutation_tool_schema(context)['$defs']['ItemChange']['properties']['ref']
     assert prop['anyOf'][0]['pattern'] == '^new:.+$'
-    assert prop['anyOf'][1]['enum'] == ['memory:person-maya']
+    assert prop['anyOf'][1]['enum'] == ['memory:fact-old', 'memory:person-maya']

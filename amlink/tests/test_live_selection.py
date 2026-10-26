@@ -11,8 +11,8 @@ from amlink.evidence import fragment
 def test_model_serialization_preserves_task_before_material_without_changing_hash_format():
     body = tool_body(Config(), 'select', 'Select evidence.', {'question': 'How much?', 'candidates': ['long material']}, [])
     text = body['messages'][1]['content']
-    assert text.index('question') < text.index('candidates')
-    assert json.loads(text)['data']['question'] == 'How much?'
+    assert text.index('QUESTION') < text.index('Card')
+    assert 'QUESTION: How much?' in text
 
 
 def test_select_exposes_independent_passages_and_carries_selected_range_to_pack(make):
