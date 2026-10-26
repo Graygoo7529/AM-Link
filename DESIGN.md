@@ -1,8 +1,8 @@
 # AM-Link Add/Search 当前设计
 
-更新：2026-10-26。本轮起点为`a756122`，方法基线`256fced`。[自然叙事与局部整理执行计划](docs/phase-2/2026-10-26-narrative-local-execution-plan.md)已进入唯一主链路：自然叙事输入、冻结相关组、局部原子提交与恢复凭据、按完整输入大小分页Select。185项回归通过，真实结果与限制见[实施报告](docs/doing/2026-10-26-local-narrative-implementation.md)。代码尚未提交、未部署、未参加官方Smoke；关系语义和长历史整理尚未验收。
+更新：2026-10-26。现行方法已提交为`65bc34a`。[自然叙事与局部整理执行计划](docs/phase-2/2026-10-26-narrative-local-execution-plan.md)已进入唯一主链路：自然叙事输入、冻结相关组、局部原子提交与恢复凭据、按完整输入大小分页Select。185项回归是上一轮验证，真实结果与限制见[实施报告](docs/doing/2026-10-26-local-narrative-implementation.md)。未部署、未参加官方Smoke；关系语义和长历史整理尚未验收。
 
-所有新实验均在[清理后的空库](docs/doing/2026-10-26-observation-reset-and-design-audit.md)构建。历史报告与失败版本保留，不能用Search成功或边数增长代替Add及语义质量验收。
+本轮[备份并清空当前运行数据库与活动登记](docs/doing/2026-10-26-convergence-audit-and-reset.md)，没有方法代码变更。[下一轮整体收敛计划](docs/phase-2/2026-10-26-method-convergence-plan.md)提出局部原文分组、移除纯控制模型调用、小组联合审查和质量/成本联合验收，**尚未实施**；下方流程图仍描述当前代码。历史轨迹与失败版本保留，新实验从新库开始，不能用Search成功或边数增长代替Add及语义质量验收。
 
 ## 边界和对象
 

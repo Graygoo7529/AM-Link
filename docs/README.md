@@ -2,7 +2,7 @@
 
 更新日期：2026-10-26。目标是让新会话快速恢复项目背景和决策依据；旧过程记录留在一期归档中。
 
-最新先读[自然叙事与局部整理实施报告](./doing/2026-10-26-local-narrative-implementation.md)、[完整执行计划](./phase-2/2026-10-26-narrative-local-execution-plan.md)和根DESIGN。用户确认后的方案已实施，组完成凭据和输入叙事进入默认方法；新库真实验证将短切片与完整历史、Add成功与图语义分开报告。
+最新先读[运行清理与成本审读](./doing/2026-10-26-convergence-audit-and-reset.md)、[下一轮方法收敛计划](./phase-2/2026-10-26-method-convergence-plan.md)和根DESIGN。当前代码基线`65bc34a`，本轮无方法代码或真实调用变更；活动运行已备份清零。方案关注局部原文、程序推进、联合审查和证据/成本联合验收，尚未实施。现行方法实测仍见[自然叙事与局部整理实施报告](./doing/2026-10-26-local-narrative-implementation.md)。
 
 | 阅读顺序 | 文档 | 用途 |
 | --- | --- | --- |

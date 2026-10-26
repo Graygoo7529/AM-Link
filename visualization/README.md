@@ -2,7 +2,7 @@
 
 统一展示入口：[独立网页](./index.html)。`view.html` 是同源会话片段；原始样本与轨迹的本地扩展版在被忽略的 `data/local/`。原案例文档仍保留在 [`casestudies/`](../casestudies/README.md)。
 
-2026-10-26先按用户确认[备份并清空旧实验数据库及活动登记](../docs/doing/2026-10-26-observation-reset-and-design-audit.md)，随后已登记新库`local26-*`实验。最新[实施报告](../docs/doing/2026-10-26-local-narrative-implementation.md)连接运行、评注与失败分析；历史轨迹保留用于复盘，旧报告中的数据库不保证仍存在。
+2026-10-26最新按用户要求[再次备份清空当前实验库及活动登记](../docs/doing/2026-10-26-convergence-audit-and-reset.md)，本地页面为11类数据集、26个案例、0次活动运行。`local26-*`的轨迹、报告与评注保留用于复盘，数据库已清除；历史[实施报告](../docs/doing/2026-10-26-local-narrative-implementation.md)不代表当前活动登记。下一轮从新库构建，见[整体收敛计划](../docs/phase-2/2026-10-26-method-convergence-plan.md)。
 
 ## 四个连通视角
 

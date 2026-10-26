@@ -1,9 +1,11 @@
 # 进行中的工作
 
-最新：[自然叙事与局部整理实施核对](./2026-10-26-local-narrative-implementation.md)，包含完整执行计划、新库真实调用台账与未通过的质量门槛。
+最新：[运行清理与整体收敛审读](./2026-10-26-convergence-audit-and-reset.md)，已备份清零活动运行；[下一轮计划](../phase-2/2026-10-26-method-convergence-plan.md)尚未实施。现行方法`65bc34a`的真实结果见[自然叙事与局部整理实施核对](./2026-10-26-local-narrative-implementation.md)。
 
 | 日期 | 计划 | 当前状态 |
 | --- | --- | --- |
+| 2026-10-26 | [运行清理、成本归因与整体收敛](./2026-10-26-convergence-audit-and-reset.md) | done：43个数据库/关联文件备份校验删除，12条登记清零；只做离线分析；[方法收敛计划](../phase-2/2026-10-26-method-convergence-plan.md)待确认/实施 |
+| 2026-10-26 | [自然叙事与局部整理](./2026-10-26-local-narrative-implementation.md) | 已提交65bc34a；185项回归，2189次模型尝试；整体质量及36题扩展未验收 |
 | 2026-10-26 | [观测库清理与设计审读](./2026-10-26-observation-reset-and-design-audit.md) | 用户确认后备份/校验并清空599个数据库及关联文件、251条活动运行登记；网页0运行；[下一轮讨论稿](../phase-2/2026-10-26-narrative-local-reflection-design.md)，无方法代码变更 |
 | 2026-10-26 | [单一主链路：原文卡与局部草案](./2026-10-26-live-method-implementation.md) | 默认实施、174项回归；929次已落盘尝试、16题，失败/中断单列；[台账](./2026-10-26-live-run-ledger.md)、[执行计划](../phase-2/2026-10-26-live-method-plan.md) |
 | 2026-10-26 | [证据窗口与分步Reflection](./2026-10-26-evidence-and-draft-implementation.md) | 默认片段/查询/可见来源修复；分步协议实验实现done、质量未验收；[执行计划](../phase-2/2026-10-26-evidence-and-draft-plan.md) |
