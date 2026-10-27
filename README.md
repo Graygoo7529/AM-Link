@@ -6,7 +6,7 @@
 
 AM-Link 和设计灵感来源 **TinySoul-Agent** 都是 Graygoo7529 的个人原创项目。一期借鉴自己的记忆设计思想，独立实现比赛接口，未直接移植 TinySoul-Agent 代码。
 
-2026-10-26最新：现行方法已提交为`65bc34a`，见[自然叙事与局部整理实施](./docs/doing/2026-10-26-local-narrative-implementation.md)。本轮按用户要求[备份清空活动运行并拆解调用成本](./docs/doing/2026-10-26-convergence-audit-and-reset.md)，网页0次运行；[下一轮整体收敛计划](./docs/phase-2/2026-10-26-method-convergence-plan.md)联合考虑写入稳定、证据完整和调用代价，尚未实施。长历史与图语义未验收，无部署。
+2026-10-27最新：[方法收敛实施与核对](./docs/doing/2026-10-27-convergence-implementation.md)、[执行计划](./docs/phase-2/2026-10-27-convergence-execution.md)。已实施原文范围分组、程序推进、联合审查和检索说明传播；198项回归通过，真实六切片Add11/14、Search6/6，最终完整讨论Add1/4。工程清理已交付，长历史与图语义尚未验收，无部署。
 
 | 入口 | 内容 |
 | --- | --- |

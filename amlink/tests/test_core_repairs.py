@@ -22,9 +22,9 @@ class Scripted:
     def __init__(self):
         self.calls = []
         self.fail_embedding = False
-        self.review = lambda payload: {"reviews": [{"position": u["position"], "action": "keep", "text": None, "detail": "fixture source support",
-            "source_positions": [i for i in u["source_positions"] if payload["sources"][i]["source_ref"] in u["proposal"]["source_refs"]]} for u in payload["units"]]}
-        self.decide = lambda purpose, payload: ("reflection_stop", {}) if purpose == "reflection" else ("bfs_action", {"action": "stop"})
+        self.review = lambda payload: {"resolution": "commit", "reason": "Fixture handles the supplied change.", "reviews": [{"position": u["position"], "action": "keep", "text": None, "detail": "fixture source support",
+            "revised_endpoints": [], "source_positions": [i for i in u["source_positions"] if {s["position"]: s for s in payload["sources"]}[i]["source_ref"] in u["proposal"]["source_refs"]]} for u in payload["units"]]}
+        self.decide = lambda purpose, payload: ("reflection_stop", {"reason": "No additional semantic change is needed in this fixture."}) if purpose == "reflection" else ("bfs_action", {"action": "stop"})
 
     def embed(self, texts, deadline):
         self.calls.append(("embedding", texts))
@@ -36,7 +36,7 @@ class Scripted:
     def tool(self, purpose, prompt, payload, tools, deadline):
         if purpose == 'reflection_plan':
             return 'reflection_plan', {'groups': [{'title':'Fixture group', 'question':' '.join(r['text'] for r in payload['messages'])[:1200],
-                'positions': list(range(len(payload['messages'])))}]}
+                'background_positions': []}], 'primary_groups': {f'p{i}': 0 for i in range(len(payload['messages']))}}
         self.calls.append((purpose, payload))
         if purpose == "reflection_review":
             return "review", self.review(payload)
@@ -103,7 +103,7 @@ def test_batch_failure_retains_exact_watermark_and_replay_only_consumes_tail(mak
         seen.append([row["ordinal"] for row in payload["working"]])
         if len(seen) == 2:
             raise MemoryError("provider_timeout", 504)
-        return "reflection_stop", {}
+        return "reflection_stop", {"reason": "No additional semantic change is needed in this fixture."}
 
     provider.decide = decide
     req = request("batch", [f"Information item {i}" for i in range(5)])
@@ -162,7 +162,6 @@ def test_derived_episode_also_gets_vector_and_workspace_survives(make):
         if purpose == "reflection":
             stage = payload['context']['reflection_control'].get('pending_mutation', {}).get('stage')
             if stage == 'relations': return 'reflection_relations', {'links': []}
-            if stage == 'commit': return 'reflection_commit', {}
             return "reflection_items", {"items": [{"ref": "new:journey", "kind": "episode",
                 "text": "A separate account of the journey", "source_refs": [payload["working"][0]["ref"]]}]}
         return "bfs_action", {"action": "stop"}
@@ -374,8 +373,8 @@ def test_reflection_can_inspect_backlink_and_validate_newly_loaded_old_node(make
     engine._search_refs = lambda *args, **kwargs: [engine.store.get("u", items[0]["ref"])]
     actions = iter([("reflection_backlinks", {"ref": items[0]["ref"]}),
                     ("reflection_inspect", {"ref": items[1]["ref"]}),
-                    ("reflection_inspect", {"ref": items[0]["ref"]}), ("reflection_validate", {}),
-                    ("reflection_relations", {"links": []}), ("reflection_commit", {})])
+                    ("reflection_inspect", {"ref": items[0]["ref"]}),
+                    ("reflection_relations", {"links": []})])
     contexts = []
 
     def decide(purpose, payload):

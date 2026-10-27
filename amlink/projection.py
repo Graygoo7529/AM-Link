@@ -35,7 +35,10 @@ def visible_fragments(projected, working=()):
     for row in projected.get("sources", []):
         add(row.get("text_fragment"), text=row.get("text"))
     for row in working:
-        add(fragment(row, 0, len(row["text"])))
+        if row.get('text_fragment'):
+            add(row['text_fragment'], text=row['text'])
+        else:
+            add(fragment(row, 0, len(row["text"])))
     return list(found.values())
 
 

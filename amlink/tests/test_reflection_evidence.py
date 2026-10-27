@@ -38,9 +38,8 @@ def test_new_identity_queries_old_scope_and_can_commit_without_old_match(make):
         if step==1: return 'reflection_search', {'question':'Maya identity','for_new_ref':'new:maya'}
         if step==2:
             assert 'new:maya' in payload['context']['reflection_control']['identity_queries']
-            return 'reflection_validate', {}
-        if step==3: return 'reflection_relations', {'links':[]}
-        return 'reflection_commit', {}
+            return 'reflection_relations', {'links':[]}
+        raise AssertionError('No control-only call expected')
     provider.decide=decide
     engine.add(request('a',['Speaker: Maya\nMy name is Maya.']))
     assert any(n['kind']=='person' for n in engine.store.nodes('u'))
@@ -56,7 +55,7 @@ def test_missing_identity_query_cannot_be_hidden_by_noop(make):
         if payload['step'] == 0:
             return 'reflection_items', {'no_prior_match': True, 'items': [
                 {'ref': 'new:maya', 'kind': 'person', 'text': 'Maya', 'source_refs': [payload['working'][0]['ref']]}]}
-        return 'reflection_stop', {}
+        return 'reflection_stop', {'reason': 'No additional semantic change is needed in this fixture.'}
     provider.decide = decide
     with pytest.raises(MemoryError, match='model_unknown_tool'):
         engine.add(request('a',['Speaker: Maya']))

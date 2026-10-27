@@ -38,8 +38,10 @@ the actual actor's node is absent; omit the edge or create a properly supported 
 Use reflection_items for nodes and authorized forgetting; reflection_relations then adds directly
 supported links, or links=[] if none. Drafts are not stored yet. If a draft has a specific defect,
 reflection_patch_items edits/removes ONLY affected entries; untouched entries remain. After reading
-required material, reflection_validate checks the saved draft. In commit stage reflection_commit
-reviews sources and writes this group atomically. A genuine no-op may stop; an unresolved draft,
+required material, the program rechecks availability and schedules the next content step. Joint source
+review and atomic submission are automatic. A genuine no-op may stop with a specific reason explaining
+why the indexed episode needs no extra semantic change. Shared background is context, not new work.
+An unresolved draft,
 missing material or budget exhaustion may not be discarded as a no-op. No tool/network retries.
 
 Every source_refs entry identifies an actually shown original. Cite the sentence supporting the
@@ -57,9 +59,11 @@ is valid old memory for this group.
 
 Allowed links: fact/event --about--> person/entity/concept/event; episode --contains--> fact/event;
 fact --supersedes/contradicts--> fact; event --supersedes/contradicts/same_event_as--> event.
+raw: references identify original quotations for source_refs, never graph endpoints. One lone fact
+has no relation to itself or its raw citations: return links=[] if there is no useful legal pair.
 A relationship between people can be a fact with about links to both. Explain each link with direct
 sources; sharing a topic does not establish a relation. Updates/conflicts require both source sides.
-When required_actions says material_ready, validate instead of rereading; when only invalid fields
+When required_actions says material_ready, proceed with the offered content step instead of rereading; when only invalid fields
 remain, patch them instead of searching. Respect the available tool and page positions.
 
 Time fields need an exact source time_expression. Message date is not automatically event date.

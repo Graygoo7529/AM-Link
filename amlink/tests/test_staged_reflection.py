@@ -30,11 +30,11 @@ def test_draft_and_links_are_invisible_until_atomic_commit(make):
         if stage == 'relations': return 'reflection_relations', relations(payload)
         assert control['pending_mutation']['items'] and control['pending_mutation']['links']
         assert control['pending_mutation']['links'][0]['support']
-        return 'reflection_commit', {}
+        raise AssertionError('Unexpected extra model control turn')
     provider.decide = decide
     req = request('a', ['Speaker: Maya\nI like tea.'])
     assert engine.add(req)['success']
-    assert stages == ['initial', 'relations', 'commit']
+    assert stages == ['initial', 'relations']
     fact = next(n for n in engine.store.nodes('u') if n['kind'] == 'fact')
     assert len(engine.store.edges('u', fact['ref'])) == 1
     assert engine.store.state('u')['settled_through'] == 1
@@ -55,7 +55,7 @@ def test_failed_draft_replay_never_partially_writes_or_duplicates_nodes(make):
                 failed = True
                 raise MemoryError('provider_timeout', 504)
             return 'reflection_relations', relations(payload)
-        return 'reflection_commit', {}
+        raise AssertionError('Unexpected extra model control turn')
     provider.decide = decide
     req = request('a', ['Speaker: Maya\nI like tea.'])
     with pytest.raises(MemoryError, match='provider_timeout'): engine.add(req)
@@ -73,6 +73,8 @@ def test_review_defect_can_patch_one_node_without_rewriting_others(make):
         result = ordinary_review(payload)
         if payload['units'][0]['proposal'].get('text') == 'Maya likes coffee.':
             result['reviews'][0].update(action='revise', text='Maya likes tea.', detail='The source says tea, not coffee.')
+            for unit, review in zip(payload['units'], result['reviews']):
+                if unit['kind'] == 'relation': review['revised_endpoints'] = ['new:tea']
         return result
     provider.review = review
     def decide(purpose, payload):
@@ -82,7 +84,7 @@ def test_review_defect_can_patch_one_node_without_rewriting_others(make):
             value['items'][0]['text'] = 'Maya likes coffee.'
             return 'reflection_items', value
         if step == 1: return 'reflection_relations', relations(payload)
-        return 'reflection_commit', {}
+        raise AssertionError('Unexpected extra model control turn')
     provider.decide = decide
     engine.add(request('a', ['Speaker: Maya\nI like tea.']))
     assert len(engine.store.nodes('u')) == 3
@@ -91,7 +93,7 @@ def test_review_defect_can_patch_one_node_without_rewriting_others(make):
 
 def test_uncommitted_draft_cannot_finish_via_stop(make):
     engine, provider = make(reflection_threshold=1)
-    provider.decide = lambda purpose, payload: ('reflection_items', proposal(payload)) if payload['step'] == 0 else ('reflection_stop', {})
+    provider.decide = lambda purpose, payload: ('reflection_items', proposal(payload)) if payload['step'] == 0 else ('reflection_stop', {'reason': 'No additional semantic change is needed in this fixture.'})
     with pytest.raises(MemoryError, match='model_unknown_tool'):
         engine.add(request('a', ['Speaker: Maya\nI like tea.']))
     assert engine.store.state('u')['settled_through'] == 0
@@ -108,7 +110,7 @@ def test_staged_invalid_relation_can_be_removed_but_not_committed(make):
         if payload['step'] == 2:
             assert payload['context']['reflection_control']['last_gate_error']['invalid_links']
             return 'reflection_relations', {'links': []}
-        return 'reflection_commit', {}
+        raise AssertionError('Unexpected extra model control turn')
     provider.decide = decide
     engine.add(request('a', ['Speaker: Maya\nI like tea.']))
     assert len(engine.store.nodes('u')) == 3
@@ -148,8 +150,7 @@ def test_relation_tool_limits_endpoint_kinds_before_model_generation(make):
         return original(purpose, prompt, payload, tools, deadline)
     provider.tool = tool
     provider.decide = lambda purpose, payload: [
-        ('reflection_items', proposal(payload)), ('reflection_relations', relations(payload)),
-        ('reflection_commit', {})][payload['step']]
+        ('reflection_items', proposal(payload)), ('reflection_relations', relations(payload))][payload['step']]
     engine.add(request('a', ['Speaker: Maya\nI like tea.']))
     assert seen
 
@@ -162,7 +163,7 @@ def test_short_chinese_support_is_not_rejected_by_english_length_threshold(make)
             value = relations(payload)
             value['links'][0]['support'] = '本人说爱茶'
             return 'reflection_relations', value
-        return 'reflection_commit', {}
+        raise AssertionError('Unexpected extra model control turn')
     provider.decide = decide
     engine.add(request('a', ['Speaker: Maya\n本人说爱茶。']))
     assert engine.store.state('u')['settled_through'] == 1

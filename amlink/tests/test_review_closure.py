@@ -46,11 +46,11 @@ def test_relation_review_sees_corrected_node_endpoints(make):
             if unit['kind'] == 'item' and unit['proposal']['ref'] == 'new:tea':
                 decision.update(action='revise', text='Maya likes tea.')
             if unit['kind'] == 'relation':
-                assert next(n for n in payload['endpoints'] if n['ref']=='new:tea')['text']=='Maya likes tea.'
+                decision['revised_endpoints'] = ['new:tea']
         return result
     provider.review = review
     result = engine._review_draft(args, {}, [{'ref':'raw:a','text':'Maya likes tea.'}], time.monotonic()+10)
-    assert phases == ['item', 'relation']
+    assert phases == ['item']  # One joint review acknowledges its corrected endpoint.
     assert result['items'][1]['text']=='Maya likes tea.' and result['links']
 
 

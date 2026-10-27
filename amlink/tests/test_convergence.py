@@ -72,11 +72,10 @@ def test_empty_scope_is_database_fact_and_new_person_needs_no_empty_query(make):
         assert control['old_scope']['empty'] and not control['old_scope']['query_performed']
         stage = control.get('pending_mutation', {}).get('stage')
         if stage == 'relations': return 'reflection_relations', {'links': []}
-        if stage == 'commit': return 'reflection_commit', {}
         return 'reflection_items', {'items': [dict(ref='new:maya', kind='person', text='Maya is the speaker.', source_refs=[payload['working'][0]['ref']])]}
     provider.decide = decide
     engine.add(request('a', ['Speaker: Maya\nI am Maya.']))
-    assert len([c for c in provider.calls if c[0]=='reflection']) == 3
+    assert len([c for c in provider.calls if c[0]=='reflection']) == 1  # No legal relation pair.
     assert engine.store.old_scope_empty('u', 1)
     assert not engine.store.old_scope_empty('u', 2)
     assert engine.store.old_scope_empty('another_user', 2)
@@ -95,7 +94,6 @@ def test_invalid_relation_feedback_then_correct_direction_commits_atomically(mak
         assert engine.store.state('u')['settled_through'] == 0
         assert all(n['kind']=='episode' for n in engine.store.nodes('u'))
         if step == 0: return 'reflection_items', {'items': [dict(ref='new:maya',kind='person',text='Maya',source_refs=[source]),dict(ref='new:tea',kind='fact',text='Maya likes tea.',source_refs=[source])]}
-        if step == 3: return 'reflection_commit', {}
         if step == 2: assert payload['context']['reflection_control']['last_gate_error']['invalid_links']
         a,b = ('new:maya','new:tea') if step==1 else ('new:tea','new:maya')
         return 'reflection_relations', {'links':[dict(from_ref=a,to_ref=b,relation='about',source_refs=[source],support='Maya says she likes tea.')]}
@@ -110,9 +108,10 @@ def test_invalid_relation_cannot_finish_by_noop(make):
     engine, provider = make(reflection_threshold=1)
     def decide(purpose,payload):
         source = payload['working'][0]['ref']
-        if payload['step']==0: return 'reflection_items', {'items':[dict(ref='new:e',kind='event',text='A meeting',source_refs=[source])]}
+        if payload['step']==0: return 'reflection_items', {'items':[dict(ref='new:e',kind='event',text='A meeting',source_refs=[source]),
+            dict(ref='new:person',kind='person',text='Maya',source_refs=[source])]}
         if payload['step']==1: return 'reflection_relations', {'links':[dict(from_ref='new:e',to_ref='new:e',relation='same_event_as',source_refs=[source],support='A meeting.')]}
-        return 'reflection_stop', {}
+        return 'reflection_stop', {'reason': 'No additional semantic change is needed in this fixture.'}
     provider.decide=decide
     with pytest.raises(MemoryError,match='model_unknown_tool'): engine.add(request('a',['A meeting.']))
     assert engine.store.state('u')['settled_through']==0
@@ -123,7 +122,6 @@ def test_schema_feedback_repairs_missing_relation_sources(make):
     def decide(purpose,payload):
         source=payload['working'][0]['ref']; step=payload['step']
         if step==0: return 'reflection_items', {'items':[dict(ref='new:f',kind='fact',text='A fact',source_refs=[source]),dict(ref='new:e',kind='entity',text='An entity',source_refs=[source])]}
-        if step==3: return 'reflection_commit', {}
         link=dict(from_ref='new:f',to_ref='new:e',relation='about',support='A fact concerns the entity.')
         if step==2:
             assert payload['context']['reflection_control']['last_gate_error']['code']=='mutation_schema_invalid'
@@ -236,7 +234,6 @@ def test_impossible_old_episode_write_is_repaired_before_reading(make, invalid_k
         step=payload['step']; source=payload['working'][0]['ref']
         node=dict(ref='new:configuration',kind='fact',text='The project now uses a different configuration.',source_refs=[source])
         stage=payload['context']['reflection_control'].get('pending_mutation',{}).get('stage')
-        if stage=='commit': return 'reflection_commit', {}
         if step==0:
             return 'reflection_items', {'items':[{**node,'ref':old['ref'],'kind':'episode'}] if invalid_kind=='overwrite_episode' else [node]}
         if invalid_kind=='overwrite_episode' and step==1:

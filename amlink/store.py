@@ -355,7 +355,7 @@ class Store:
                 if group['index'] != len(receipts) or len(receipts) >= len(json.loads(plan['groups_json'])):
                     raise MemoryError('reflection_group_out_of_order', 409)
                 receipts.append({'index': group['index'], 'refs': [i['ref'] for i in mutation['items']],
-                                 'mutation_digest': digest(mutation)})
+                                 'mutation_digest': digest(mutation), 'completion': group.get('completion', {'outcome': 'mutation'})})
                 watermark = plan['through_ordinal'] if len(receipts) == len(json.loads(plan['groups_json'])) else 0
                 db.execute('UPDATE reflection_plans SET receipts=? WHERE user_id=? AND plan_id=?', (dumps(receipts), user, group['plan_id']))
             for item in mutation["items"]:

@@ -20,8 +20,8 @@ def test_group_commit_survives_failure_and_replay_skips_completed_group(make):
         if purpose == 'reflection_plan':
             planning.append(1)
             return 'reflection_plan', {'groups': [
-                {'title':'quota', 'question':'project quota', 'positions':[0,1]},
-                {'title':'trip', 'question':'trip destination', 'positions':[1,2]}]}
+                {'title':'quota', 'question':'project quota', 'background_positions':[]},
+                {'title':'trip', 'question':'trip destination', 'background_positions':[1]}], 'primary_groups': {'p0':0,'p1':0,'p2':1}}
         return ordinary(purpose, prompt, payload, tools, deadline)
     provider.tool = tool
     failed = False
@@ -32,7 +32,7 @@ def test_group_commit_survives_failure_and_replay_skips_completed_group(make):
         if title == 'trip' and not failed:
             failed = True
             raise MemoryError('provider_timeout', 504)
-        return 'reflection_stop', {}
+        return 'reflection_stop', {'reason': 'No additional semantic change is needed in this fixture.'}
     provider.decide = decide
     req = request('a', ['Quota 1000.', 'Trip planning also mentions quota.', 'Trip to Paris.'])
     with pytest.raises(MemoryError, match='provider_timeout'):
@@ -121,8 +121,8 @@ def test_active_plan_finishes_when_prior_group_forgot_all_remaining_sources(make
     state,_=engine.store.start_add(req)
     engine._ensure_episode(req,state, __import__('json').loads(state['raw_refs']),time.monotonic())
     rows=engine.store.raw('u')
-    plan=freeze_groups({'groups':[dict(title='forget',question='forget',positions=[0,1]),
-                                 dict(title='secret',question='secret',positions=[1])]},rows)
+    plan=freeze_groups({'groups':[dict(title='forget',question='forget',positions=[0],background_positions=[1]),
+                                 dict(title='secret',question='secret',positions=[1],background_positions=[0])]},rows)
     engine.store.freeze_plan('u',plan)
     engine.store.require_reflection('u','a',2)
     engine.store.commit_mutation('u',dict(items=[],links=[],forget=[dict(

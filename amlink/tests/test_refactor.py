@@ -24,18 +24,17 @@ class FakeProviders:
     def tool(self, purpose, prompt, payload, tools, deadline):
         if purpose == 'reflection_plan':
             return 'reflection_plan', {'groups': [{'title':'Fixture group', 'question':' '.join(r['text'] for r in payload['messages'])[:1200],
-                'positions': list(range(len(payload['messages'])))}]}
+                'background_positions': []}], 'primary_groups': {f'p{i}': 0 for i in range(len(payload['messages']))}}
         self.calls.append((purpose, payload))
         if purpose == "reflection":
             if self.reflection:
                 stage = payload['context']['reflection_control'].get('pending_mutation', {}).get('stage')
                 if stage == 'relations': return 'reflection_relations', {'links': []}
-                if stage == 'commit': return 'reflection_commit', {}
                 return "reflection_items", self.reflection(payload)
-            return "reflection_stop", {}
+            return "reflection_stop", {"reason": "No additional semantic change is needed in this fixture."}
         if purpose == 'reflection_review':
-            return 'review', {'reviews': [{'position': u['position'], 'action': 'keep', 'text': None, 'detail': 'fixture',
-                'source_positions': [i for i in u['source_positions'] if payload['sources'][i]['source_ref'] in u['proposal']['source_refs']]} for u in payload['units']]}
+            return 'review', {'resolution': 'commit', 'reason': 'Fixture handles this group.', 'reviews': [{'position': u['position'], 'action': 'keep', 'text': None, 'detail': 'fixture',
+                'source_positions': [i for i in u['source_positions'] if {s['position']: s for s in payload['sources']}[i]['source_ref'] in u['proposal']['source_refs']]} for u in payload['units']]}
         if purpose == "bfs":
             return "bfs_stop", {"action": "stop"}
         raise AssertionError(f"unexpected tool {purpose}")

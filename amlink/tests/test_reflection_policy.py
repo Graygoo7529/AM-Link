@@ -40,7 +40,7 @@ def test_failed_retry_keeps_promised_watermark_after_later_add(make):
     engine.config = replace(engine.config, mode='raw')
     engine.add(request('c', ['Later note']))
     engine.config = replace(engine.config, mode='graph')
-    provider.decide = lambda *a: ('reflection_stop', {})
+    provider.decide = lambda *a: ('reflection_stop', {'reason': 'No additional semantic change is needed in this fixture.'})
     engine.add(req)
     assert engine.store.state('u')['settled_through'] == 2
     assert [r['ordinal'] for r in engine.store.raw('u', pending=True)] == [3]

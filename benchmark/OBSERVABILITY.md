@@ -77,3 +77,10 @@ links 的方向固定为 `from_id` 指向 `to_id`：memory derived_from source�
 2. 未记录用量是未知，实际零模型调用需在完整 trace 下计数确认；token/费用仅汇总 model span。
 3. 错误、无结果、跳过、缓存重放可区分；失败尝试不会从耗时/费用中消失。
 4. 引用完整性和传输成功与回答正确性分别报告；抽取内部不可见时不得自动归因。
+
+
+## 2026-10-27 收敛链路观测
+
+沿用v1 span，无新顶层协议。`reflection local plan/group`记录v2原文范围、主归属与共享背景；`reflection program advance`是程序检查，`model_read_receipt=false`，不能计作模型已读。`statement source review`保存联合审查实际输入、修改/撤销、重审端点与保留提案的来源对应；审查分页的来源位置仍是全局表位置。`reviewed draft`区分commit与episode_only，原子组凭据保留完成理由；显式遗忘导致的空组为forgotten。
+
+`query vector reused`、`unchanged body vectors reused`记录模型调用为0，只复用向量、不复用候选结果。Select的coverage绑定所选ref和fragment，非法辅助说明计入omitted；它是模型导航说明，不是事实证据。图探索context更新增加new_reference_refs/new_read_ranges，实际新增范围与语义增益分开；后者仍为unknown_requires_review。网页沿用产物预览显示这些内容，完整材料可回查。
