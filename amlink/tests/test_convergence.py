@@ -113,7 +113,8 @@ def test_invalid_relation_cannot_finish_by_noop(make):
         if payload['step']==1: return 'reflection_relations', {'links':[dict(from_ref='new:e',to_ref='new:e',relation='same_event_as',source_refs=[source],support='A meeting.')]}
         return 'reflection_stop', {'reason': 'No additional semantic change is needed in this fixture.'}
     provider.decide=decide
-    with pytest.raises(MemoryError,match='model_unknown_tool'): engine.add(request('a',['A meeting.']))
+    assert engine.add(request('a',['A meeting.']))['success']
+    assert any(p.get('error') == 'model_unknown_tool' for plan in engine.store.reflection_plans('u') for p in plan['progress'].values())
     assert engine.store.state('u')['settled_through']==0
 
 
@@ -139,7 +140,8 @@ def test_rephrasing_unrelated_item_is_not_progress_on_same_invalid_edge(make):
         if payload['step']==0: return 'reflection_items', {'items':[dict(ref='new:p',kind='person',text='Maya',source_refs=[source]),dict(ref='new:f',kind='fact',text='Maya likes tea.',source_refs=[source])]}
         return 'reflection_relations', {'links':[dict(from_ref='new:p',to_ref='new:f',relation='about',source_refs=[source],support='Maya likes tea.')]}
     provider.decide=decide
-    with pytest.raises(MemoryError,match='reflection_no_evidence_progress'): engine.add(request('a',['Speaker: Maya\nI like tea.']))
+    assert engine.add(request('a',['Speaker: Maya\nI like tea.']))['success']
+    assert any(p.get('error') == 'reflection_no_evidence_progress' for plan in engine.store.reflection_plans('u') for p in plan['progress'].values())
     assert len(provider.calls)==3 and engine.store.state('u')['settled_through']==0
 
 
@@ -255,7 +257,8 @@ def test_relation_repair_cannot_drop_a_nonempty_link_list_silently(make):
         if payload['step']==0: return 'reflection_items', {'items':[dict(ref='new:p',kind='person',text='Maya',source_refs=[source]),dict(ref='new:f',kind='fact',text='Maya likes tea.',source_refs=[source])]}
         return 'reflection_relations', {'drop_invalid':True,'links':[dict(from_ref='new:p',to_ref='new:f',relation='about',source_refs=[source],support='Maya likes tea.')]}
     provider.decide=decide
-    with pytest.raises(MemoryError,match='reflection_relation_output_invalid'): engine.add(request('new',['Maya likes tea.']))
+    assert engine.add(request('new',['Maya likes tea.']))['success']
+    assert any(p.get('error') == 'reflection_relation_output_invalid' for plan in engine.store.reflection_plans('u') for p in plan['progress'].values())
     assert engine.store.state('u')['settled_through']==0
 
 

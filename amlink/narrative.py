@@ -53,6 +53,7 @@ def context_text(context):
         gate = control.get('last_gate_error') or {}
         if gate:
             out.append('VALIDATION TO RESOLVE: ' + str(gate.get('code')))
+            out.extend('Remaining work after review: ' + task for task in gate.get('tasks', []))
             for need in control.get('required_actions', gate.get('missing', [])):
                 out.append(f"Need {need.get('need')} for {need.get('ref')}; ready: {need.get('material_ready', False)}; "
                            f"location: {need.get('reference_position')}; pages: {dumps(need.get('pages', []))}")
@@ -111,6 +112,7 @@ def render(purpose, payload):
             'same_event_as': 'FROM and TO describe the SAME event occurrence, not two similar events.'}
         out.append('DRAFT STATEMENTS TO CHECK')
         for unit in payload['units']:
+            out.append('Required review key: ' + unit.get('review_key', f"u{unit['position']}"))
             proposal = unit['proposal']
             out.append(f"Proposal {unit['position']} — {unit['kind']}")
             if unit['kind'] == 'relation':
@@ -125,6 +127,9 @@ def render(purpose, payload):
             out.append('Available source positions: ' + ', '.join(map(str, unit.get('source_positions', []))))
         out.append('ACTUALLY VISIBLE ORIGINALS\n' + '\n\n'.join(
             f"Source position {r['position']}\n" + material(r) for r in payload.get('sources', [])))
+    elif payload.get('sources'):
+        out.append('ORIGINAL MESSAGES TO READ\n' + '\n\n'.join(
+            f"Source position {r.get('position', i)}\n" + material(r) for i, r in enumerate(payload['sources'])))
     handled = {'question','query','task','local_group','decision','instruction','remaining_decisions','prefix_overview',
                'working','messages','context','candidates','result_limit','units','sources','endpoints','old_targets','identity_targets','step','watermark'}
     for key, value in payload.items():

@@ -95,7 +95,7 @@ def attach_spans(run: dict, path: Path, request_scope: dict) -> None:
     ordered = sorted(events, key=lambda e: (datetime.fromisoformat(e["started_at"]), e["span_id"]))
     # Only the explicit local method artifact format is projected as text. Other
     # producers retain references; a response is not an invitation to read files.
-    previews = {}
+    previews, delivery = {}, {}
     native = run["system"].get("target") == "native"
     if run["system"].get("target") == "lexical" or native:
         verified = set()
@@ -134,6 +134,12 @@ def attach_spans(run: dict, path: Path, request_scope: dict) -> None:
                         detail = json.loads(content)
                     except (ValueError, TypeError):
                         detail = None
+                    if isinstance(detail, dict) and event['name'] in {
+                            'add delivery outcome', 'add receipt replay', 'search final pack'}:
+                        delivery[event['request_id']] = {k: detail[k] for k in (
+                            'intake', 'reflection', 'maintenance_error', 'progress', 'replay', 'completion', 'stop_reason') if k in detail}
+                        preview['evidence_panel'] = {'title': '接口交付与内部完成状态', 'rows': [delivery[event['request_id']]],
+                                                     'shown': 1, 'total': 1}
                     if isinstance(detail, dict) and detail.get("format_version") == 1:
                         panel = evidence_panel(detail)
                         if panel:
@@ -144,6 +150,11 @@ def attach_spans(run: dict, path: Path, request_scope: dict) -> None:
         requests = {query["search_id"]} | {a["id"] for a in query["adds"]}
         query["spans"] = [e for e in ordered if e["request_id"] in requests]
         query["span_previews"] = {key: value for key, value in previews.items() if key in {s["span_id"] for s in query["spans"]}}
+        query['delivery'] = delivery.get(query['search_id'])
+        query['internal_errors'] = sum(e['status'] == 'error' for e in query['spans'])
+        for add in query['adds']:
+            add['delivery'] = delivery.get(add['id'])
+            add['internal_errors'] = sum(e['status'] == 'error' and e['request_id'] == add['id'] for e in query['spans'])
         if run["system"].get("target") == "mem0-research":
             for add in query["adds"]:
                 outputs = [ref for e in query["spans"] if e["operation"] == "add" and e["request_id"] == add["id"]

@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS requests(
  user_id TEXT,request_id TEXT,payload_hash TEXT NOT NULL,status TEXT NOT NULL,
  response TEXT NOT NULL,session_id TEXT NOT NULL,raw_refs TEXT NOT NULL DEFAULT '[]',
- episode_ref TEXT,reflection_watermark INTEGER NOT NULL DEFAULT 0,
+ episode_ref TEXT,
  PRIMARY KEY(user_id,request_id));
 CREATE TABLE IF NOT EXISTS raw_events(
  user_id TEXT,ref TEXT,request_id TEXT,session_id TEXT,ordinal INTEGER,
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS edges(
 CREATE INDEX IF NOT EXISTS edges_in ON edges(user_id,to_ref,relation);
 CREATE TABLE IF NOT EXISTS reflection_plans(
  user_id TEXT,plan_id TEXT,from_ordinal INTEGER,through_ordinal INTEGER,
- groups_json TEXT NOT NULL,receipts TEXT NOT NULL DEFAULT '[]',
+ groups_json TEXT NOT NULL,receipts TEXT NOT NULL DEFAULT '[]',progress TEXT NOT NULL DEFAULT '{}',
  PRIMARY KEY(user_id,plan_id));
 CREATE TABLE IF NOT EXISTS vectors(user_id TEXT,ref TEXT,fingerprint TEXT,vector TEXT,
  PRIMARY KEY(user_id,ref));
@@ -82,10 +82,10 @@ class Store:
             self.db.execute("PRAGMA foreign_keys=ON")
             version = self.db.execute("PRAGMA user_version").fetchone()[0]
             tables = self.db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-            if version not in (0, 2) or (version == 0 and tables):
+            if version not in (0, 3) or (version == 0 and tables):
                 raise MemoryError("incompatible_database", 503)
             self.db.executescript(SCHEMA)
-            self.db.execute("PRAGMA user_version=2")
+            self.db.execute("PRAGMA user_version=3")
             self.db.commit()
         except BaseException:
             self.close()
@@ -145,47 +145,56 @@ class Store:
         with self.transaction() as db:
             db.execute("INSERT OR IGNORE INTO working(user_id) VALUES(?)", (user,))
 
-    def start_add(self, request):
+    def prepare_add(self, request):
+        """Prepare a write without exposing any material before indexing succeeds."""
         user, rid = request.user_id, request.request_id
         signature = digest(request.model_dump())
         response = {"success": True, "request_id": rid, "user_id": user, "session_id": request.session_id}
-        with self.transaction() as db:
-            old = db.execute("SELECT * FROM requests WHERE user_id=? AND request_id=?", (user, rid)).fetchone()
+        with self.mutex:
+            old = self.one("SELECT * FROM requests WHERE user_id=? AND request_id=?", (user, rid))
             if old:
                 if old["payload_hash"] != signature:
                     raise MemoryError("idempotency_payload_conflict", 422)
-                return dict(old), "cached" if old["status"] == "done" else "resumed"
-            state = db.execute("SELECT * FROM working WHERE user_id=?", (user,)).fetchone()
-            if state is None:
-                db.execute("INSERT INTO working(user_id) VALUES(?)", (user,))
-                state = db.execute("SELECT * FROM working WHERE user_id=?", (user,)).fetchone()
-            start = db.execute("SELECT COALESCE(MAX(ordinal),0) FROM raw_events WHERE user_id=?", (user,)).fetchone()[0]
-            raw_refs = []
+                return dict(old), []
+            start = self.one("SELECT COALESCE(MAX(ordinal),0) AS n FROM raw_events WHERE user_id=?", (user,))["n"]
+            sources = []
             for index, message in enumerate(request.messages):
                 ref = "raw:" + digest([user, rid, index])[:32]
-                raw_refs.append(ref)
+                sources.append(dict(user_id=user, ref=ref, request_id=rid, session_id=request.session_id,
+                    ordinal=start + index + 1, role=message.role, text=message.content,
+                    source_time=message.timestamp, created_at=now(), kind='raw', source_refs=[ref]))
+        return dict(user_id=user, request_id=rid, payload_hash=signature, status='prepared',
+                    response=dumps(response), session_id=request.session_id, raw_refs=dumps([s['ref'] for s in sources])), sources
+
+    def accept_add(self, prepared, sources, episode, vector, fingerprint, *, forgetting=()):
+        """The receipt, original, buffer and both indexes have ONE commit point."""
+        user, rid = prepared['user_id'], prepared['request_id']
+        with self.transaction() as db:
+            old = db.execute('SELECT payload_hash FROM requests WHERE user_id=? AND request_id=?', (user, rid)).fetchone()
+            if old:
+                if old[0] != prepared['payload_hash']:
+                    raise MemoryError('idempotency_payload_conflict', 422)
+                return
+            db.execute('INSERT OR IGNORE INTO working(user_id) VALUES(?)', (user,))
+            for source in sources:
                 db.execute("INSERT INTO raw_events(user_id,ref,request_id,session_id,ordinal,role,text,source_time,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
-                           (user, ref, rid, request.session_id, start + index + 1, message.role,
-                            message.content, message.timestamp, now()))
-                self._index(db, user, ref, message.content)
-            accepted = start + len(request.messages)
-            db.execute("INSERT INTO requests(user_id,request_id,payload_hash,status,response,session_id,raw_refs) VALUES(?,?,?,?,?,?,?)",
-                       (user, rid, signature, "accepted", dumps(response), request.session_id, dumps(raw_refs)))
+                           tuple(source[k] for k in ('user_id','ref','request_id','session_id','ordinal','role','text','source_time','created_at')))
+            db.execute("INSERT INTO nodes VALUES(?,?,?,?,?,?,?,?,?,?,?)", (user, episode['ref'], 'episode', episode['text'],
+                       dumps(episode['source_refs']), 'active', None, None, None, now(), now()))
+            self._index(db, user, episode['ref'], episode['text'])
+            if vector:
+                db.execute('INSERT INTO vectors VALUES(?,?,?,?)', (user, episode['ref'], fingerprint, dumps(vector)))
+            db.execute("INSERT INTO requests(user_id,request_id,payload_hash,status,response,session_id,raw_refs,episode_ref) VALUES(?,?,?,?,?,?,?,?)",
+                       (user, rid, prepared['payload_hash'], 'done', prepared['response'], prepared['session_id'], prepared['raw_refs'], episode['ref']))
             db.execute("UPDATE working SET accepted_through=?,last_session=? WHERE user_id=?",
-                       (accepted, request.session_id, user))
-            row = db.execute("SELECT * FROM requests WHERE user_id=? AND request_id=?", (user, rid)).fetchone()
-        return dict(row), "none"
+                       (sources[-1]['ordinal'], prepared['session_id'], user))
+            self._forget(db, user, forgetting)
 
     def request(self, user, rid):
         row = self.one("SELECT * FROM requests WHERE user_id=? AND request_id=?", (user, rid))
         if row:
             row["raw_refs"] = json.loads(row["raw_refs"])
         return row
-
-    def require_reflection(self, user, rid, watermark):
-        with self.transaction() as db:
-            db.execute("UPDATE requests SET reflection_watermark=MAX(reflection_watermark,?) WHERE user_id=? AND request_id=?",
-                       (watermark, user, rid))
 
     def is_minimum_episode(self, user, ref):
         return self.one("SELECT 1 FROM requests WHERE user_id=? AND episode_ref=?", (user, ref)) is not None
@@ -197,11 +206,6 @@ class Store:
             JOIN raw_events r ON r.ref=s.value AND r.user_id=n.user_id
             WHERE n.user_id=? AND n.status!='tombstoned' AND r.blocked=0
             AND r.ordinal<? LIMIT 1""", (user, before)) is None
-
-    def request_complete(self, user, rid, episode_ref, watermark=0):
-        with self.transaction() as db:
-            db.execute("UPDATE requests SET status='done',episode_ref=?,reflection_watermark=? WHERE user_id=? AND request_id=?",
-                       (episode_ref, watermark, user, rid))
 
     def raw(self, user, refs=None, *, pending=False):
         args = [user]
@@ -234,19 +238,6 @@ class Store:
             if fields:
                 values.append(user)
                 db.execute(f"UPDATE working SET {','.join(fields)} WHERE user_id=?", values)
-
-    def commit_episode(self, user, rid, episode, vector, fingerprint):
-        with self.transaction() as db:
-            existing = db.execute("SELECT ref FROM nodes WHERE user_id=? AND ref=?", (user, episode["ref"])).fetchone()
-            if existing is None:
-                db.execute("INSERT INTO nodes VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                           (user, episode["ref"], episode["kind"], episode["text"], dumps(episode["source_refs"]),
-                            "active", None, None, None, now(), now()))
-                self._index(db, user, episode["ref"], episode["text"])
-            db.execute("INSERT OR REPLACE INTO vectors VALUES(?,?,?,?)",
-                       (user, episode["ref"], fingerprint, dumps(vector)))
-            db.execute("UPDATE requests SET episode_ref=? WHERE user_id=? AND request_id=?",
-                       (episode["ref"], user, rid))
 
     def get(self, user, ref, *, include_blocked=False):
         if not isinstance(ref, str) or not re.fullmatch(r"(?:raw|memory):[\w-]+", ref):
@@ -333,17 +324,74 @@ class Store:
     def source_states(self, user, source_ref):
         return [self._node(row) for row in self.rows("SELECT DISTINCT n.* FROM nodes n,json_each(n.sources) s WHERE n.user_id=? AND s.value=? AND n.status IN ('superseded','conflict')", (user, source_ref))]
 
-    def reflection_plan(self, user):
-        row = self.one("SELECT * FROM reflection_plans WHERE user_id=? AND through_ordinal>(SELECT settled_through FROM working WHERE user_id=?) ORDER BY from_ordinal LIMIT 1", (user, user))
-        if row:
+    def reflection_plan(self, user, plan_id=None):
+        plans = self.reflection_plans(user)
+        return next((p for p in plans if p['plan_id'] == plan_id), None) if plan_id else next(
+            (p for p in plans if len(p['receipts']) < len(p['groups'])), None)
+
+    def reflection_plans(self, user):
+        rows = self.rows('SELECT * FROM reflection_plans WHERE user_id=? ORDER BY from_ordinal', (user,))
+        for row in rows:
             row['groups'] = json.loads(row.pop('groups_json'))
             row['receipts'] = json.loads(row['receipts'])
-        return row
+            row['progress'] = json.loads(row['progress'])
+        return rows
+
+    def unplanned(self, user):
+        assigned = {ref for p in self.reflection_plans(user) for g in p['groups'] for ref in g['source_refs']}
+        return [row for row in self.raw(user, pending=True) if row['ref'] not in assigned]
+
+    def maintenance_summary(self, user):
+        plans = self.reflection_plans(user)
+        return {'groups_completed': sum(len(p['receipts']) for p in plans),
+                'groups_unfinished': sum(len(p['groups']) - len(p['receipts']) for p in plans),
+                'unplanned_messages': len(self.unplanned(user)),
+                'settled_through': self.state(user)['settled_through']}
+
+    def group_progress(self, user, group, progress):
+        with self.transaction() as db:
+            row = db.execute('SELECT progress FROM reflection_plans WHERE user_id=? AND plan_id=?',
+                             (user, group['plan_id'])).fetchone()
+            if row is None:
+                raise MemoryError('reflection_plan_missing', 503)
+            values = json.loads(row[0])
+            values[str(group['index'])] = progress
+            db.execute('UPDATE reflection_plans SET progress=? WHERE user_id=? AND plan_id=?',
+                       (dumps(values), user, group['plan_id']))
 
     def freeze_plan(self, user, plan):
         with self.transaction() as db:
-            db.execute("INSERT INTO reflection_plans VALUES(?,?,?,?,?,?)",
-                       (user, plan['plan_id'], plan['from_ordinal'], plan['through_ordinal'], dumps(plan['groups']), '[]'))
+            db.execute('INSERT INTO reflection_plans VALUES(?,?,?,?,?,?,?)',
+                       (user, plan['plan_id'], plan['from_ordinal'], plan['through_ordinal'], dumps(plan['groups']), '[]', '{}'))
+
+    @staticmethod
+    def _forget(db, user, removals):
+        for removal in removals:
+            blocked = set(removal['source_refs']) | set(removal['instruction_refs'])
+            for ref in blocked:
+                db.execute('INSERT OR IGNORE INTO blocks VALUES(?,?,?)', (user, ref, dumps(removal['instruction_refs'])))
+                db.execute('UPDATE raw_events SET blocked=1 WHERE user_id=? AND ref=?', (user, ref))
+                db.execute('DELETE FROM lexical WHERE user_id=? AND ref=?', (user, ref))
+            memories = set(removal['memory_refs'])
+            for node in db.execute('SELECT ref,sources FROM nodes WHERE user_id=?', (user,)).fetchall():
+                if blocked.intersection(json.loads(node['sources'])):
+                    memories.add(node['ref'])
+            for ref in memories:
+                db.execute("UPDATE nodes SET status='tombstoned' WHERE user_id=? AND ref=?", (user, ref))
+                db.execute('DELETE FROM lexical WHERE user_id=? AND ref=?', (user, ref))
+                db.execute('DELETE FROM vectors WHERE user_id=? AND ref=?', (user, ref))
+
+    def _advance_watermark(self, db, user):
+        # Completed groups above a gap stay complete, but never conceal the gap.
+        settled = db.execute('SELECT settled_through FROM working WHERE user_id=?', (user,)).fetchone()[0]
+        for plan in db.execute('SELECT * FROM reflection_plans WHERE user_id=? AND through_ordinal>? ORDER BY from_ordinal', (user, settled)):
+            if len(json.loads(plan['receipts'])) != len(json.loads(plan['groups_json'])):
+                break
+            if db.execute('SELECT 1 FROM raw_events WHERE user_id=? AND blocked=0 AND ordinal>? AND ordinal<? LIMIT 1',
+                          (user, settled, plan['from_ordinal'])).fetchone():
+                break
+            settled = plan['through_ordinal']
+        return settled
 
     def commit_mutation(self, user, mutation, *, watermark, fingerprint, vectors, context=None, group=None):
         with self.transaction() as db:
@@ -352,12 +400,16 @@ class Store:
                 if plan is None:
                     raise MemoryError('reflection_plan_missing', 409)
                 receipts = json.loads(plan['receipts'])
-                if group['index'] != len(receipts) or len(receipts) >= len(json.loads(plan['groups_json'])):
-                    raise MemoryError('reflection_group_out_of_order', 409)
+                if (type(group['index']) is not int or not 0 <= group['index'] < len(json.loads(plan['groups_json']))
+                        or any(r['index'] == group['index'] for r in receipts)):
+                    raise MemoryError('reflection_group_already_committed_or_invalid', 409)
                 receipts.append({'index': group['index'], 'refs': [i['ref'] for i in mutation['items']],
                                  'mutation_digest': digest(mutation), 'completion': group.get('completion', {'outcome': 'mutation'})})
-                watermark = plan['through_ordinal'] if len(receipts) == len(json.loads(plan['groups_json'])) else 0
-                db.execute('UPDATE reflection_plans SET receipts=? WHERE user_id=? AND plan_id=?', (dumps(receipts), user, group['plan_id']))
+                progress = json.loads(plan['progress'])
+                progress.pop(str(group['index']), None)
+                db.execute('UPDATE reflection_plans SET receipts=?,progress=? WHERE user_id=? AND plan_id=?',
+                           (dumps(receipts), dumps(progress), user, group['plan_id']))
+                watermark = self._advance_watermark(db, user)
             for item in mutation["items"]:
                 old = db.execute("SELECT created_at,status FROM nodes WHERE user_id=? AND ref=?", (user, item["ref"])).fetchone()
                 if db.execute("SELECT 1 FROM requests WHERE user_id=? AND episode_ref=?", (user, item["ref"])).fetchone():
@@ -379,39 +431,9 @@ class Store:
                                (user, edge["from_ref"], edge["to_ref"]))
             for ref, vector in vectors.items():
                 db.execute("INSERT OR REPLACE INTO vectors VALUES(?,?,?,?)", (user, ref, fingerprint, dumps(vector)))
-            for removal in mutation["forget"]:
-                blocked = set(removal["source_refs"]) | set(removal["instruction_refs"])
-                for ref in blocked:
-                    db.execute("INSERT OR IGNORE INTO blocks VALUES(?,?,?)", (user, ref, dumps(removal["instruction_refs"])))
-                    db.execute("UPDATE raw_events SET blocked=1 WHERE user_id=? AND ref=?", (user, ref))
-                    db.execute("DELETE FROM lexical WHERE user_id=? AND ref=?", (user, ref))
-                blocked_memories = set(removal["memory_refs"])
-                for node in db.execute("SELECT ref,sources FROM nodes WHERE user_id=?", (user,)).fetchall():
-                    if blocked.intersection(json.loads(node["sources"])):
-                        blocked_memories.add(node["ref"])
-                for ref in blocked_memories:
-                    db.execute("UPDATE nodes SET status='tombstoned' WHERE user_id=? AND ref=?", (user, ref))
-                    db.execute("DELETE FROM lexical WHERE user_id=? AND ref=?", (user, ref))
-                    db.execute("DELETE FROM vectors WHERE user_id=? AND ref=?", (user, ref))
+            self._forget(db, user, mutation["forget"])
             db.execute("UPDATE working SET settled_through=MAX(settled_through,?),state='stopped',context=? WHERE user_id=?",
                        (watermark, dumps(context or {}), user))
-
-    def finish_minimum(self, user, rid, watermark=0, *, require_vector=False):
-        with self.transaction() as db:
-            row = db.execute("SELECT * FROM requests WHERE user_id=? AND request_id=?", (user, rid)).fetchone()
-            node = db.execute("SELECT * FROM nodes WHERE user_id=? AND ref=?", (user, row["episode_ref"])).fetchone() if row else None
-            if not node:
-                raise MemoryError("minimum_episode_incomplete", 503)
-            if node["status"] != "tombstoned":
-                if not db.execute("SELECT 1 FROM lexical WHERE user_id=? AND ref=?", (user, node["ref"])).fetchone():
-                    raise MemoryError("minimum_index_incomplete", 503)
-                vector = db.execute("SELECT vector FROM vectors WHERE user_id=? AND ref=?", (user, node["ref"])).fetchone()
-                if require_vector and (not vector or not json.loads(vector[0])):
-                    raise MemoryError("minimum_index_incomplete", 503)
-            state = db.execute("SELECT settled_through FROM working WHERE user_id=?", (user,)).fetchone()
-            if state[0] < max(row["reflection_watermark"], watermark):
-                raise MemoryError("reflection_incomplete", 503)
-            db.execute("UPDATE requests SET status='done' WHERE user_id=? AND request_id=?", (user, rid))
 
     def snapshot(self, user):
         state = self.state(user)

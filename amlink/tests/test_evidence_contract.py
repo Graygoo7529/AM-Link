@@ -115,7 +115,7 @@ def test_final_pack_keeps_all_short_sources_when_the_card_has_room(packing_engin
     assert len(decision["evidence_units"]) == 6
 
 
-def test_final_pack_records_reused_and_unavailable_sources(packing_engine):
+def test_final_pack_records_reuse_but_rejects_unavailable_sources(packing_engine):
     engine, observer = packing_engine
     engine.add(AddRequest(request_id="one", user_id="u", session_id="s",
                          messages=[{"role": "user", "content": "The parcel is red."}]))
@@ -127,14 +127,14 @@ def test_final_pack_records_reused_and_unavailable_sources(packing_engine):
               "source_refs": ["raw:missing"]}]
     engine.store.commit_mutation("u", {"items": items, "links": [], "forget": []},
                                  watermark=1, fingerprint="test", vectors={})
-    engine._assemble("u", "parcel", [episode, *items], 3, "parcel")
+    engine._assemble("u", "parcel", [episode, items[0]], 3, "parcel")
     decisions = observer.outputs["evidence packing decisions"]["decisions"]
     reused = decisions[1]["evidence_units"]
     assert len(reused) == 1 and reused[0]["source_ref"] == raw_ref
     assert reused[0]["complete"] and reused[0]["reused_from"] == episode["ref"]
     assert decisions[1]["closure"] == "complete"
-    assert decisions[2]["closure"] == "partial"
-    assert decisions[2]["evidence_units"][0]["reason"] == "source_unavailable"
+    with pytest.raises(MemoryError, match='search_evidence_integrity'):
+        engine._assemble("u", "parcel", [episode, *items], 3, "parcel")
 
 
 def test_reflection_gate_rejects_an_unrelated_explored_ref_for_an_update():

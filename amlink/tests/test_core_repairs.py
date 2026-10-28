@@ -35,11 +35,17 @@ class Scripted:
 
     def tool(self, purpose, prompt, payload, tools, deadline):
         if purpose == 'reflection_plan':
-            return 'reflection_plan', {'groups': [{'title':'Fixture group', 'question':' '.join(r['text'] for r in payload['messages'])[:1200],
-                'background_positions': []}], 'primary_groups': {f'p{i}': 0 for i in range(len(payload['messages']))}}
+            return 'reflection_plan', {'assignments': {f'p{i}': {
+                'question': ' '.join(r['text'] for r in payload['messages'])[:1200], 'background_positions': []}
+                for i in range(len(payload['messages']))}}
+
         self.calls.append((purpose, payload))
         if purpose == "reflection_review":
-            return "review", self.review(payload)
+            output = self.review(payload)
+            return 'review', {'remaining_work': output.get('remaining_work', []),
+                'no_change_reason': output.get('no_change_reason') or (output.get('reason') if output.get('resolution') == 'episode_only' else None),
+                'reviews': {f"u{r['position']}": {k: v for k, v in r.items() if k != 'position'} for r in output['reviews']}}
+
         assert len(dumps(tool_body(self.engine.config, purpose, prompt, payload, tools))) <= self.engine.config.model_input_chars
         if purpose == "select":
             positions = [row["position"] for row in payload["candidates"]]
@@ -85,7 +91,7 @@ def test_failed_episode_not_completed_by_later_reflection(make):
     with pytest.raises(MemoryError, match="provider_timeout"):
         engine.add(first)
     engine.add(request("next", ["Maple notebooks are orange"]))
-    assert engine.store.request("u", "failed")["status"] == "accepted"
+    assert engine.store.request("u", "failed") is None
     before = len(provider.calls)
     assert engine.add(first)["success"]
     assert len(provider.calls) > before
@@ -107,14 +113,13 @@ def test_batch_failure_retains_exact_watermark_and_replay_only_consumes_tail(mak
 
     provider.decide = decide
     req = request("batch", [f"Information item {i}" for i in range(5)])
-    with pytest.raises(MemoryError, match="provider_timeout"):
-        engine.add(req)
-    assert engine.store.state("u")["settled_through"] == 2
-    assert engine.store.request("u", "batch")["status"] == "accepted"
     assert engine.add(req)["success"]
-    assert seen == [[1, 2], [3, 4], [3, 4], [5]]
+    assert engine.store.state("u")["settled_through"] == 2
+    assert engine.store.request("u", "batch")["status"] == "done"
+    assert engine.add(req)["success"]
+    assert seen == [[1, 2], [3, 4], [5]]
     assert len(engine.store.raw("u")) == 5
-    assert engine.store.state("u")["settled_through"] == 5
+    assert engine.store.state("u")["settled_through"] == 2
     assert engine.store.state("u")["context"]["items"]
 
 

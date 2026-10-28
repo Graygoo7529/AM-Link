@@ -79,8 +79,27 @@ links 的方向固定为 `from_id` 指向 `to_id`：memory derived_from source�
 4. 引用完整性和传输成功与回答正确性分别报告；抽取内部不可见时不得自动归因。
 
 
-## 2026-10-27 收敛链路观测
+## 2026-10-27 收敛链路观测（此前阶段）
 
 沿用v1 span，无新顶层协议。`reflection local plan/group`记录v2原文范围、主归属与共享背景；`reflection program advance`是程序检查，`model_read_receipt=false`，不能计作模型已读。`statement source review`保存联合审查实际输入、修改/撤销、重审端点与保留提案的来源对应；审查分页的来源位置仍是全局表位置。`reviewed draft`区分commit与episode_only，原子组凭据保留完成理由；显式遗忘导致的空组为forgotten。
 
 `query vector reused`、`unchanged body vectors reused`记录模型调用为0，只复用向量、不复用候选结果。Select的coverage绑定所选ref和fragment，非法辅助说明计入omitted；它是模型导航说明，不是事实证据。图探索context更新增加new_reference_refs/new_read_ranges，实际新增范围与语义增益分开；后者仍为unknown_requires_review。网页沿用产物预览显示这些内容，完整材料可回查。
+
+## 2026-10-27 接收与整理分离（当前）
+
+仍使用 v1 span/artifact。新增或调整的语义如下：
+
+| 事件/产物 | 含义 |
+| --- | --- |
+| `add atomic intake` | 同一事务的 raw/episode/双索引/成功凭据，及必要遗忘；输出 committed 才说明提交完成 |
+| `add receipt replay` | 已成功请求重放，模型调用为 0；不能推断 Reflection 已完成 |
+| `add delivery outcome` | intake、reflection（buffered/completed/unfinished）、maintenance_error 和 progress；组完成/未完成、未分组消息、连续水位分开 |
+| `reflection local plan/group` | v3 自然问题分组、逐组凭据；有完成缺口时水位不越过 |
+| `resume local draft` | 版本核验后恢复同组草案；未完成不等于新请求失败 |
+| `statement source review` | `uN` 对象绑定的合法修订、剩余事项；应用到草案不等于提交；替代依据需可核对原句 |
+| `search exploration transaction` | 临时语境中的一次决策/读取/筛选，成功才合入；错误步骤不贡献证据 |
+| `search partial completion` | 局部停止原因、丢弃本步、保留引用数量；子错误仍保留 |
+| `search final pack` | completion/stop_reason 与实际结果；complete 指有界流程结束，不代表证据充分或答案正确 |
+| `evidence packing decisions` | 已选范围、重复卡复用、预算遗漏、路径闭合及 omitted_edges；来源完整性失败显式抛错 |
+
+网页在 Add 与 Search 摘要中显示这些状态以及内部错误步骤数。该数含嵌套 span，不是独立模型失败次数；模型尝试按 model span 单独计数。旧轨迹缺少字段时显示未知，不根据父级 HTTP 200 补推。中途观测写入失败仍不能声明采集完整。HTTP 默认不启用内部 recorder，native 靶场完整采集。

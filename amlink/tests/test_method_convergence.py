@@ -36,9 +36,9 @@ def test_long_source_is_lossless_and_groups_preserve_global_ranges():
 
 def test_complete_assignment_cannot_use_shared_background_as_primary_coverage():
     rows=[dict(ref='raw:a',text='First.',ordinal=1),dict(ref='raw:b',text='Second.',ordinal=2)]
-    result=dict(groups=[dict(title='both',question='both',background_positions=[1])],primary_groups={'p0':0})
+    result={'assignments': {'p0':dict(question='both',background_positions=[1])}}
     with pytest.raises(MemoryError,match='reflection_plan_incomplete'): decode_plan(result,rows)
-    result['primary_groups']['p1']=0
+    result['assignments']['p1']=dict(question='both',background_positions=[])
     plan=decode_plan(result,rows)
     assert all(v['primary'] for v in plan['groups'][0]['ranges'])
 
@@ -50,9 +50,7 @@ def test_split_source_replay_skips_finished_ranges_without_advancing_whole_messa
     def tool(purpose,prompt,payload,tools,deadline):
         if purpose=='reflection_plan':
             planned.append(1)
-            return 'reflection_plan', {'groups':[
-                dict(title='first',question='first',background_positions=[]),
-                dict(title='rest',question='rest',background_positions=[])], 'primary_groups': {f'p{i}':min(i,1) for i in range(len(payload['messages']))}}
+            return 'reflection_plan', {'assignments': {f'p{i}':dict(question='first' if i == 0 else 'rest',background_positions=[]) for i in range(len(payload['messages']))}}
         return original(purpose,prompt,payload,tools,deadline)
     provider.tool=tool
     fail=True
@@ -66,14 +64,15 @@ def test_split_source_replay_skips_finished_ranges_without_advancing_whole_messa
     provider.decide=decide
     text='Hello again.\n'*180
     req=request('long',[text])
-    with pytest.raises(MemoryError,match='provider_timeout'): engine.add(req)
+    assert engine.add(req)['success']
+    assert any(p.get('error') == 'provider_timeout' for plan in engine.store.reflection_plans('u') for p in plan['progress'].values())
     receipt=engine.store.reflection_plan('u')['receipts'][0]
     assert receipt['completion']['outcome']=='episode_only' and receipt['completion']['reason']
     assert engine.store.state('u')['settled_through']==0
     engine.add(req)
-    assert len(planned)==1 and [v[0] for v in seen]==['first','rest','rest']
+    assert len(planned)==1 and [v[0] for v in seen]==['first','rest']
     assert all(len(r['text'])<len(text) for _,rows in seen for r in rows)
-    assert engine.store.state('u')['settled_through']==1
+    assert engine.store.state('u')['settled_through']==0
 
 
 def test_control_tools_removed_and_noop_receipt_is_explained(make):
@@ -91,8 +90,8 @@ def test_control_tools_removed_and_noop_receipt_is_explained(make):
     engine.add(request('a',['Hello again.']))
     assert len(provider.calls) == before
     provider.decide = lambda p, data: ('reflection_stop', {})
-    with pytest.raises(MemoryError, match='reflection_completion_invalid'):
-        engine.add(request('b',['Hello again.']))
+    assert engine.add(request('b',['Hello again.']))['success']
+    assert any(p.get('error') == 'reflection_completion_invalid' for plan in engine.store.reflection_plans('u') for p in plan['progress'].values())
     assert engine.store.state('u')['settled_through'] == 1
 
 
@@ -116,7 +115,7 @@ def test_review_protocol_requires_replacement_text_for_revision():
     payload=review_payload({'items':[dict(ref='new:a',kind='fact',text='Maya likes coffee.',source_refs=['raw:a'])]},
                           {},[dict(ref='raw:a',text='Maya likes tea.')])
     schema=review_schema(payload)
-    choices=schema['properties']['reviews']['items']['anyOf']
+    choices=schema['properties']['reviews']['properties']['u0']['anyOf']
     revised=next(c['properties'] for c in choices if c['properties']['action']['enum']==['revise'])
     assert revised['text']['type']=='string' and revised['text']['minLength']==1
     with pytest.raises(MemoryError,match='reflection_review_invalid'):

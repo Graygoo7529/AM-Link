@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from copy import deepcopy
 import threading
 import time
 
@@ -14,7 +15,8 @@ from .evidence import _excerpt_with_range
 from .projection import Choices, visible_fragments, range_receipt, range_is_visible
 from .reflection_policy import plan_prefix
 from .grounding import missing_material
-from .drafts import patch_items, review_payload, check_review, review_schema, REVIEW_PROMPT
+from .intake import prepare_forgetting
+from .drafts import patch_items, review_payload, check_review, decode_review, review_schema, REVIEW_PROMPT
 from .local_reflection import PLAN_PROMPT, decode_plan, group_rows, completion, passages as source_passages
 from .packing import freeze_pack, pack_frozen
 from .providers import tool_body
@@ -140,8 +142,9 @@ class Engine:
             refs = {ref: row for ref, row in refs.items() if ref in active}
             items = {ref: row for ref, row in items.items() if ref in active}
         priority = [v.get("item_ref") for v in result["disclosures"] if v.get("item_ref")]
-        omitted = []
-        for ref in dict.fromkeys([*sorted(protected), *priority, *reversed(items), *refs]):
+        omitted, omitted_selected = [], []
+        selected_refs = [r for r in refs if refs[r].get("selected_evidence")]
+        for ref in dict.fromkeys([*sorted(protected), *selected_refs, *priority, *reversed(items), *refs]):
             reference = dict(refs.get(ref, {}))
             if not reference and ref in items:
                 reference = self._reference(items[ref], result["question"], "context")
@@ -149,7 +152,7 @@ class Engine:
                 continue
             reference["narrative"] = excerpt(str(reference.get("narrative", "")), 500, result["question"])
             reference["evidence_fragments"] = [dict(v) if reference.get("selected_evidence") else shrink_fragment(v, 520)
-                for v in reference.get("evidence_fragments", [])[:4] if "content_digest" in v]
+                for v in reference.get("evidence_fragments", []) if "content_digest" in v]
             for v in reference["evidence_fragments"]:
                 v["model_projection"] = {"source_text_chars": v["source_chars"], "shown_chars": len(v["text"]), "complete": v["complete"]}
             if reference["evidence_fragments"]:
@@ -159,6 +162,8 @@ class Engine:
                 reference["shown_ranges"] = [v["shown_range"] for v in reference["evidence_fragments"]]
             result["references"][ref] = reference
             if len(dumps(result)) > limit - 1000:
+                if reference.get("selected_evidence"):
+                    omitted_selected.extend(v["fragment_id"] for v in reference.get("evidence_fragments", []))
                 result["references"][ref] = {key: reference.get(key) for key in ("ref", "kind", "label", "narrative")}
                 result["references"][ref]["narrative"] = excerpt(reference["narrative"], 160)
                 if len(dumps(result)) > limit - 600:
@@ -184,7 +189,7 @@ class Engine:
         result["frontier"] = [ref for ref in context.get("frontier", []) if ref in visible]
         result["depths"] = {ref: depth for ref, depth in context.get("depths", {}).items() if ref in visible}
         result["explored"] = [entry for entry in context.get("explored", []) if entry[0] in visible]
-        result["projection"] = {"omitted_refs": omitted, "reason": "context_budget"}
+        result["projection"] = {"omitted_refs": omitted, "omitted_selected_fragments": omitted_selected, "reason": "context_budget"}
         # Optional navigation metadata may be folded, but required material never is.
         for key in ("explored", "depths", "frontier"):
             if len(dumps(result)) > limit:
@@ -214,71 +219,80 @@ class Engine:
         total_chars = sum(len(message.content) for message in request.messages)
         if total_chars > self.config.max_request_chars or len(request.messages) > self.config.max_request_messages:
             raise MemoryError("add_payload_too_large", 413)
-        with self.observer.span("store", "raw commit", inputs=request.model_dump()) as event:
-            row, replay = self.store.start_add(request)
-            self.observer.output(event, {"request_id": request.request_id, "replay": replay,
-                                         "raw_refs": json_load(row.get("raw_refs", "[]"))}, kind="source", title="RawEvent 持久化")
-        if replay == "cached" and row.get("episode_ref") and self.store.get(request.user_id, row["episode_ref"], include_blocked=True):
-            root = self.observer.current.get()
-            if root is not None:
-                root["replay"] = "cached"
-            return self._response(request)
-        if time.monotonic() - started >= self.config.request_seconds:
-            raise MemoryError("request_deadline", 504)
-        raw_refs = json_load(row.get("raw_refs", "[]"))
-        episode = self._ensure_episode(request, row, raw_refs, started)
-        pending = self.store.raw(request.user_id, pending=True)
-        required = row.get("reflection_watermark", 0)
-        raw = self.store.raw(request.user_id, raw_refs)
-        request_end = max((source["ordinal"] for source in raw), default=required)
-        decision = plan_prefix(pending, request_end, required,
-                               self.store.state(request.user_id)["settled_through"], self.config)
-        active_plan = self.store.reflection_plan(request.user_id)
-        if active_plan:
-            decision = {**decision, 'trigger': True,
-                        'target': max(decision['target'], active_plan['through_ordinal']),
-                        'resume_reason': 'unfinished_local_plan'}
-        trigger = self.config.mode == "graph" and (decision["trigger"] or active_plan is not None)
-        with self.observer.span("reflection", "reflection prefix policy", inputs={"request_id": request.request_id}) as event:
-            self.observer.output(event, {"format_version": 1, **decision}, kind="context")
-        self._observe_add_state(request, pending, trigger, episode)
-        if not trigger:
-            self._check_deadline(deadline)
-            self.store.finish_minimum(request.user_id, request.request_id, require_vector=self.config.embedding_enabled)
-            return self._response(request)
-        target = max(decision["target"], active_plan['through_ordinal'] if active_plan else 0)
-        self.store.require_reflection(request.user_id, request.request_id, target)
-        batches = 0
-        while active_plan or (pending and pending[0]["ordinal"] <= target):
+        user = request.user_id
+        row, sources = self.store.prepare_add(request)
+        if row['status'] == 'done':
+            with self.observer.span('store', 'add receipt replay', inputs={'request_id': request.request_id}) as event:
+                self.observer.output(event, {'intake': 'committed', 'replay': 'cached', 'model_calls': 0}, kind='context')
+            return json_load(row['response'])
+        # All provider work is prepared before the single intake transaction.
+        forgetting = self._prepare_forgetting(user, sources, deadline)
+        episode, vector = self._prepare_episode(sources, deadline)
+        self._check_deadline(deadline)
+        with self.observer.span('store', 'add atomic intake', inputs={'request_id': request.request_id}) as event:
+            self.store.accept_add(row, sources, episode, vector, self.providers.embedding_fingerprint, forgetting=forgetting)
+            self.observer.output(event, {'intake': 'committed', 'raw_refs': episode['source_refs'],
+                'episode_ref': episode['ref'], 'lexical': True, 'vector': bool(vector),
+                'forgetting': forgetting, 'reflection': 'not_yet_completed'}, kind='memory', title='Add 接收与索引原子完成')
+        outcome, error_code, progress = 'buffered', None, None
+        try:
+            with self.observer.span('reflection', 'add bounded maintenance', inputs={'request_id': request.request_id}) as event:
+                try:
+                    outcome = self._maintain(request, started - min(5.0, self.config.request_seconds / 10))
+                finally:
+                    self.store.save_workspace(user, state='stopped')
+                progress = self.store.maintenance_summary(user)
+                self.observer.output(event, {'reflection': outcome}, kind='context')
+        except Exception as error:
+            # Intake has committed. No later maintenance failure can retract its
+            # durable receipt or turn the caller's replay into another mutation.
+            outcome, error_code = 'unfinished', getattr(error, 'code', type(error).__name__)
+        with self.observer.span('store', 'add delivery outcome', inputs={'request_id': request.request_id}) as event:
+            self.observer.output(event, {'intake': 'committed', 'reflection': outcome,
+                'maintenance_error': error_code, 'progress': progress, 'external_success': True}, kind='result', title='接收成功与整理结果分别记录')
+        return json_load(row['response'])
+
+    def _maintain(self, request, started):
+        user, deadline = request.user_id, started + self.config.request_seconds
+        pending = self.store.unplanned(user)
+        state = self.store.state(user)
+        decision = plan_prefix(pending, state['accepted_through'], 0, state['settled_through'], self.config)
+        with self.observer.span('reflection', 'reflection prefix policy', inputs={'request_id': request.request_id}) as event:
+            self.observer.output(event, {**decision, 'intake_already_committed': True}, kind='context')
+        if self.config.mode != 'graph':
+            return 'buffered'
+        incomplete = False
+        # Each unfinished group is considered at most once in this request. A
+        # stable failed input is skipped, not retried because another Add arrived.
+        for plan in self.store.reflection_plans(user):
+            if len(plan['receipts']) < len(plan['groups']):
+                self._check_deadline(deadline)
+                incomplete |= not self._run_reflection(request, [], started, plan=plan)
+        if not decision['trigger']:
+            return 'unfinished' if incomplete else 'buffered'
+        target, batches = decision['target'], 0
+        pending = self.store.unplanned(user)
+        while pending and pending[0]['ordinal'] <= target:
             self._check_deadline(deadline)
             if batches >= self.config.max_batches:
-                raise MemoryError("reflection_batch_budget", 504)
+                raise MemoryError('reflection_batch_budget', 504)
             batch, chars = [], 0
             for source in pending:
-                if source["ordinal"] > target:
+                if source['ordinal'] > target:
                     break
                 size = len(dumps(self._view(source)))
                 if batch and (len(batch) >= self.config.batch_messages or chars + size > self.config.batch_chars):
                     break
-                batch.append(source)
-                chars += size
-            if active_plan:
-                frozen_refs = list(dict.fromkeys(ref for group in active_plan['groups'] for ref in group['source_refs']))
-                batch = self.store.raw(request.user_id, frozen_refs)
-                chars = sum(len(dumps(self._view(row))) for row in batch)
-            with self.observer.span("reflection", "reflection batch", inputs={
-                    "target_watermark": target, "from_ordinal": active_plan['from_ordinal'] if active_plan else batch[0]["ordinal"],
-                    "through_ordinal": active_plan['through_ordinal'] if active_plan else batch[-1]["ordinal"],
-                    "count": len(batch), "serialized_chars": chars}) as event:
-                self._run_reflection(request, batch, started)
-                self.observer.output(event, {"settled_through": self.store.state(request.user_id)['settled_through'],
-                    "remaining": len(self.store.raw(request.user_id, pending=True))}, kind="context")
+                batch.append(source); chars += size
+            with self.observer.span('reflection', 'reflection batch', inputs={
+                    'from_ordinal': batch[0]['ordinal'], 'through_ordinal': batch[-1]['ordinal'],
+                    'count': len(batch), 'serialized_chars': chars}) as event:
+                incomplete |= not self._run_reflection(request, batch, started)
+                self.observer.output(event, {'settled_through': self.store.state(user)['settled_through'],
+                    'unfinished_groups': incomplete}, kind='context')
             batches += 1
-            pending = self.store.raw(request.user_id, pending=True)
-            active_plan = self.store.reflection_plan(request.user_id)
-        self._check_deadline(deadline)
-        self.store.finish_minimum(request.user_id, request.request_id, target, require_vector=self.config.embedding_enabled)
-        return self._response(request)
+            pending = self.store.unplanned(user)
+        return 'unfinished' if incomplete else ('buffered' if pending else 'completed')
 
     @staticmethod
     def _check_deadline(deadline):
@@ -367,73 +381,97 @@ class Engine:
             "description": "True after a successful empty identity query or the supplied database old_scope.empty receipt."}
         return schema
 
-    def _ensure_episode(self, request, row, raw_refs, started):
-        if row.get("episode_ref"):
-            return self.store.get(request.user_id, row["episode_ref"])
-        sources = [self.store.get(request.user_id, ref) for ref in raw_refs]
-        sources = [source for source in sources if source]
-        if not sources:
-            raise MemoryError("raw_source_missing", 503)
-        first, last = sources[0]["ordinal"], sources[-1]["ordinal"]
+    def _prepare_episode(self, sources, deadline):
+        raw_refs = [row['ref'] for row in sources]
+        first, last = sources[0]['ordinal'], sources[-1]['ordinal']
         label = slug(episode_label(sources), 64)
         ref = f"memory:episode-{label}-{first}-{digest(raw_refs)[:10]}"
         text = episode_text(sources)
-        episode = {"ref": ref, "kind": "episode", "text": text, "source_refs": raw_refs,
-                   "ordinal_start": first, "ordinal_end": last}
+        episode = {'ref': ref, 'kind': 'episode', 'text': text, 'source_refs': raw_refs,
+                   'ordinal_start': first, 'ordinal_end': last}
+        vector = []
         if self.config.embedding_enabled:
-            with self.observer.span("index", "episode embedding", inputs=episode) as event:
-                vector = self.providers.embed([text], started + self.config.request_seconds)[0]
-                self.observer.output(event, {"ref": ref, "dimensions": len(vector)}, kind="memory", title="最小 episode 向量")
-        else:
-            vector = []
-        with self.observer.span("extract", "minimum episode projection", inputs=episode) as event:
-            self.store.commit_episode(request.user_id, request.request_id, episode, vector, self.providers.embedding_fingerprint)
-            self.observer.output(event, episode, kind="memory", title="逐 Add 可检索 episode")
-        return self.store.get(request.user_id, ref)
+            with self.observer.span('index', 'episode embedding', inputs=episode) as event:
+                vector = self.providers.embed([text], deadline)[0]
+                if not vector:
+                    raise MemoryError('minimum_index_incomplete', 503)
+                self.observer.output(event, {'ref': ref, 'dimensions': len(vector)}, kind='memory')
+        return episode, vector
+
+    def _prepare_forgetting(self, user, sources, deadline):
+        return prepare_forgetting(self, user, sources, deadline, _tool)
 
     def _observe_add_state(self, request, pending, trigger, episode):
         with self.observer.span("extract", "reflection trigger decision", inputs={"pending": len(pending), "episode": episode and episode.get("ref")}) as event:
             self.observer.output(event, {"trigger": trigger, "pending_count": len(pending),
                                          "pending_chars": sum(len(row["text"]) for row in pending)}, kind="context", title="Reflection 触发判断")
 
-    def _run_reflection(self, request, pending, started):
+    def _run_reflection(self, request, pending, started, plan=None):
         user = request.user_id
         deadline = started + self.config.request_seconds
-        plan = self.store.reflection_plan(user)
         if plan is None:
             payload = {'task': 'Plan related changes before writing memory.',
                        'messages': [{'position': row['position'], **self._view(row)} for row in source_passages(pending)]}
+            chars = sum(len(r['text']) for r in pending)
+            payload['instruction'] = (f'This batch has {chars} original characters. Aim for about '
+                f'{max(1, round(chars / 4500))} coherent groups. Many short attribute rows about the same person '
+                'MUST reuse one identical question; do not give each pN key a different question merely because it is a separate passage.')
             passage_positions = list(range(len(payload['messages'])))
-            schema = {'type': 'object', 'properties': {
-                'groups': {'type': 'array', 'minItems': 1, 'maxItems': min(12, len(passage_positions)),
-                    'items': {'type': 'object', 'properties': {'title': {'type': 'string'}, 'question': {'type': 'string'},
-                        'background_positions': {'type': 'array', 'items': {'type': 'integer', 'enum': passage_positions}}}}},
-                'primary_groups': {'type': 'object', 'description': 'Assign EVERY passage to one group index. p0 means passage 0, not group 0. Background assignment does not replace this primary assignment.',
-                    'properties': {f'p{i}': {'type': 'integer', 'minimum': 0, 'maximum': min(11,len(passage_positions)-1)} for i in passage_positions}}}}
+            schema = {'type': 'object', 'properties': {'assignments': {'type': 'object', 'properties': {
+                f'p{i}': {'type': 'object', 'properties': {
+                    'question': {'type': 'string', 'minLength': 1, 'maxLength': 1200},
+                    'background_positions': {'type': 'array', 'items': {'type': 'integer', 'enum': passage_positions}}}}
+                for i in passage_positions}}}}
             with self.observer.span('reflection', 'reflection local plan', inputs=payload) as event:
                 _, result = self._call_tool('reflection_plan', PLAN_PROMPT, payload,
                     [_tool('reflection_plan', 'Assign each original passage once to related work; shared background may overlap.', schema)], deadline)
                 plan = decode_plan(result, pending)
                 self.store.freeze_plan(user, plan)
                 self.observer.output(event, plan, kind='context')
-            plan = self.store.reflection_plan(user)
-        for index in range(len(plan['receipts']), len(plan['groups'])):
+            plan = self.store.reflection_plan(user, plan['plan_id'])
+        completed = {r['index'] for r in plan['receipts']}
+        for index, specification in enumerate(plan['groups']):
+            if index in completed:
+                continue
             self._check_deadline(deadline)
-            group = {**plan['groups'][index], 'plan_id': plan['plan_id'], 'index': index,
+            group = {**specification, 'plan_id': plan['plan_id'], 'index': index,
                      'from_ordinal': plan['from_ordinal'], 'through_ordinal': plan['through_ordinal']}
             rows = group_rows(group, self.store.raw(user, group['source_refs']))
-            with self.observer.span('reflection', 'reflection local group', inputs=group) as event:
-                if any(row['primary'] for row in rows):
-                    self._run_reflection_group(request, rows, started, group)
-                else:
-                    # All material was explicitly forgotten by an earlier group.
-                    self.store.commit_mutation(user, {'items': [], 'links': [], 'forget': []}, watermark=0,
-                        fingerprint=self.providers.embedding_fingerprint, vectors={},
-                        group={**group, 'completion': {'outcome': 'forgotten',
-                            'reason': 'All primary sources were explicitly forgotten by a completed group.'}},
-                        context=self.store.state(user)['context'])
-                self.observer.output(event, {'index': index, 'committed': True,
-                    'settled_through': self.store.state(user)['settled_through']}, kind='context')
+            relevant = self.store.lexical(user, group['question'], self.config.old_candidates, before=group['from_ordinal'])
+            committed_refs = {ref for p in self.store.reflection_plans(user) for r in p['receipts'] for ref in r['refs']}
+            relevant.extend(node for ref in sorted(committed_refs) if (node := self.store.get(user, ref))
+                            and set(terms(group['question'])).intersection(terms(node['text'])))
+            previous = plan['progress'].get(str(index), {})
+            signature = digest([group, [(r['ref'], r['text']) for r in rows],
+                                [(r['ref'], r['text'], r['status']) for r in relevant]])
+            same_dependencies = all((node := self.store.get(user, ref)) and
+                digest([node['text'], node['source_refs'], node['status']]) == version
+                for ref, version in previous.get('versions', {}).items())
+            if previous.get('error') and previous.get('input_signature') == signature and same_dependencies:
+                with self.observer.span('reflection', 'unchanged unfinished group', inputs={'group': group}) as event:
+                    self.observer.output(event, {'reason': previous['error'], 'model_calls': 0,
+                        'outcome': 'waiting_for_new_evidence'}, kind='context')
+                continue
+            group['input_signature'] = signature
+            try:
+                with self.observer.span('reflection', 'reflection local group', inputs=group) as event:
+                    if any(row['primary'] for row in rows):
+                        self._run_reflection_group(request, rows, started, group)
+                    else:
+                        self.store.commit_mutation(user, {'items': [], 'links': [], 'forget': []}, watermark=0,
+                            fingerprint=self.providers.embedding_fingerprint, vectors={},
+                            group={**group, 'completion': {'outcome': 'forgotten',
+                                'reason': 'All primary sources were explicitly forgotten.'}},
+                            context=self.store.state(user)['context'])
+                    self.observer.output(event, {'index': index, 'committed': True,
+                        'settled_through': self.store.state(user)['settled_through']}, kind='context')
+            except MemoryError as error:
+                latest = self.store.reflection_plan(user, plan['plan_id'])['progress'].get(str(index), {})
+                self.store.group_progress(user, group, {**latest, 'input_signature': signature, 'error': error.code})
+                if error.code in {'request_deadline', 'provider_timeout', 'provider_network'}:
+                    break
+        current = self.store.reflection_plan(user, plan['plan_id'])
+        return len(current['receipts']) == len(current['groups'])
 
     @staticmethod
     def _relation_pairs(kinds):
@@ -450,9 +488,9 @@ class Engine:
         watermark = group['through_ordinal']
         context = self._reflection_context(user, pending, deadline, group=group)
         context['_local_group'] = group
-        context["prefix_overview"] = [{'title': g['title'], 'completed': i < group['index']}
-            for i, g in enumerate(self.store.reflection_plan(user)['groups'])]
-        context["draft_stage"] = "items"
+        context["prefix_overview"] = [{'title': g['title'], 'completed': i in {r['index'] for r in self.store.reflection_plan(user, group['plan_id'])['receipts']}}
+            for i, g in enumerate(self.store.reflection_plan(user, group['plan_id'])['groups'])]
+        context.setdefault("draft_stage", "items")
         self._save_workspace(user, state="maintenance", context=context)
         def reflection_tools(choices, source_refs=None, projected_gate=None):
             gate = projected_gate if projected_gate is not None else context.get("last_gate_error")
@@ -543,7 +581,7 @@ class Engine:
                 # changing the rejected proposal. Material-oriented failures
                 # still expose exploration tools until their missing ranges are
                 # actually visible.
-                if not gate.get("missing"):
+                if not gate.get("missing") and gate.get("code") != "reflection_review_remaining":
                     allowed_repairs = {"reflection_items", "reflection_patch_items"}
                     if relation_repair or relation_stage:
                         allowed_repairs = {"reflection_relations", "reflection_patch_items"}
@@ -573,7 +611,8 @@ class Engine:
                 visible_sources.update(value["origin_ref"] for value in visible_fragments(payload["context"])
                                        if value["origin_ref"].startswith("raw:"))
                 visible_sources = {ref for ref in visible_sources if (source := self.store.get(user, ref))
-                                   and source.get("ordinal", watermark + 1) <= watermark}
+                                   and (source.get("ordinal", watermark + 1) <= watermark
+                                        or source['ref'] in context.get('local_source_refs', []))}
                 context["visible_source_refs"] = sorted(visible_sources)
                 if self._advance_available_draft(context, payload["context"], payload["working"]):
                     continue  # Rebuild the next content-bearing model input.
@@ -587,8 +626,9 @@ class Engine:
                             self.observer.output(event, {'links': [], 'model_calls': 0,
                                 'reason': 'No distinct endpoints satisfy any supported relation direction.'}, kind='context')
                 if context.get('draft_stage') == 'review':
-                    self._finish_reflection(user, group, context, payload, deadline)
-                    return
+                    if self._finish_reflection(user, group, context, payload, deadline):
+                        return
+                    continue
                 tools = reflection_tools(choices, sorted(visible_sources),
                     payload["context"].get("reflection_control", {}).get("last_gate_error"))
                 if not tools:
@@ -616,6 +656,8 @@ class Engine:
                     context.setdefault("identity_queries", {})[arguments["for_new_ref"]] = {
                         "question": question, "refs": [row["ref"] for row in refs]}
                 self._add_context_refs(user, context, refs, deadline)
+                if refs and context.get('last_gate_error', {}).get('code') == 'reflection_review_remaining':
+                    context['last_gate_error'] = {'code': 'reflection_orientation_required', 'missing': []}
                 self._save_workspace(user, state="maintenance", context=context)
                 continue
             if name in {"reflection_inspect", "reflection_backlinks"}:
@@ -626,6 +668,8 @@ class Engine:
                 ref = choices.resolve(position, action)
                 self._explore(user, ref, action, context, context["question"], deadline, arguments.get("page_position"))
                 self._reflection_action(context, action, ref=ref)
+                if context.get('last_gate_error', {}).get('code') == 'reflection_review_remaining':
+                    context['last_gate_error'] = {'code': 'reflection_orientation_required', 'missing': []}
                 self._refresh_context(user, context, pending)
                 self._save_workspace(user, state="maintenance", context=context)
                 continue
@@ -702,8 +746,8 @@ class Engine:
                             "items": context["pending_mutation"].get("items", []), "links": context.get("pending_links", [])}, kind="context")
                     self._save_workspace(user, state="maintenance", context=context)
                     if relation_submission:
-                        self._finish_reflection(user, group, context, payload, deadline)
-                        return
+                        if self._finish_reflection(user, group, context, payload, deadline):
+                            return
                     continue
             if name == "reflection_stop":
                 if context.get("last_gate_error") or context.get("pending_mutation"):
@@ -749,6 +793,23 @@ class Engine:
                                               event, step, "reflection_invalid_relations")
                     return None
             except MemoryError as error:
+                if error.code == 'mutation_duplicate_ref':
+                    # Different assertions sharing a proposed identity cannot be
+                    # silently overwritten, merged, or assigned random suffixes.
+                    duplicates = {ref for ref in [i['ref'] for i in arguments.get('items', [])]
+                        if sum(i['ref'] == ref for i in arguments.get('items', [])) > 1}
+                    self._reflection_feedback(user, context, arguments, [], [{
+                        'reason': error.code,
+                        'colliding_items': [i for i in arguments.get('items', []) if i['ref'] in duplicates],
+                        'instruction': 'Distinguish separate events/subjects in meaningful new: labels (e.g. both opponents and date). '
+                            'Combine only genuinely identical assertions. Resubmit this local group; no item has been written.'}],
+                        event, step, error.code)
+                    # An ambiguous identity map cannot serve as a patch base.
+                    context.pop('pending_mutation', None)
+                    context.pop('pending_links', None)
+                    context['draft_stage'] = 'items'
+                    self._save_workspace(user, state='maintenance', context=context)
+                    return None
                 if error.code == "mutation_schema_invalid":
                     # A malformed tool payload is a repairable proposal
                     # error while the current Reflection budget remains.
@@ -791,6 +852,8 @@ class Engine:
         return prepared
 
     def _advance_available_draft(self, context, projected, working):
+        if context.get('last_gate_error', {}).get('code') == 'reflection_review_remaining':
+            return False
         gate = context.get('last_gate_error') or {}
         if gate.get('code') != 'reflection_orientation_required' or not context.get('pending_mutation'):
             return False
@@ -811,18 +874,33 @@ class Engine:
     def _finish_reflection(self, user, group, context, payload, deadline):
         arguments = {**context['pending_mutation'], 'links': context.get('pending_links', [])}
         arguments = self._review_draft(arguments, payload['context'], payload['working'], deadline, context=context)
+        context['pending_mutation'] = {k: v for k, v in arguments.items() if k != 'links'}
+        context['pending_links'] = arguments.get('links', [])
+        if context.get('review_remaining'):
+            signature = digest([arguments, context['review_remaining'], context.get('read_ranges', [])])
+            if signature == context.get('last_review_unfinished'):
+                raise MemoryError('reflection_no_evidence_progress', 409)
+            context['last_review_unfinished'] = signature
+            context['draft_stage'] = 'items'
+            context['last_gate_error'] = {'code': 'reflection_review_remaining',
+                'missing': [], 'tasks': context['review_remaining']}
+            self._save_workspace(user, state='maintenance', context=context)
+            return False
         with self.observer.span('reflection', 'final reviewed material check', inputs={'proposal': arguments}) as event:
             missing = missing_material(arguments, context)
             self.observer.output(event, {'missing': missing, 'accepted': not missing}, kind='context')
             if missing:
-                raise MemoryError('reflection_orientation_required', 409)
+                context['draft_stage'] = 'items'
+                context['last_gate_error'] = {'code': 'reflection_orientation_required', 'missing': missing}
+                self._save_workspace(user, state='maintenance', context=context)
+                return False
         prepared = prepare_mutation(arguments, user=user, request_id=group['plan_id'], number=group['index'],
                                     context=context, store=self.store)
         if prepared['filtered_links']:
             raise MemoryError('reflection_review_relation_invalid', 502)
-        context.pop('pending_mutation', None)
         self._save_workspace(user, state='mutation', context=context)
         self._commit_reflection(user, prepared, group['through_ordinal'], deadline, context)
+        return True
 
     def _review_draft(self, arguments, projected, working, deadline, *, context=None):
         identities = []
@@ -847,7 +925,7 @@ class Engine:
             refs.update(full['identity_refs'])
             positions = {i for u in page for i in u['source_positions']}
             return {'task': 'Correct this small group as a coherent submission; final relations must match final statements.',
-                'units': page, 'sources': [v for v in full['sources'] if v['position'] in positions],
+                'units': [{**u, 'review_key': f"u{u['position']}"} for u in page], 'sources': [v for v in full['sources'] if v['position'] in positions],
                 'old_targets': [v for v in full['old_targets'] if v['ref'] in refs],
                 'identity_targets': [endpoints[ref] for ref in full['identity_refs'] if ref in endpoints],
                 'endpoints': [node for ref, node in endpoints.items() if ref in refs]}
@@ -887,10 +965,7 @@ class Engine:
             with self.observer.span('reflection', 'statement source review', inputs=payload) as event:
                 _, output = self._call_tool('reflection_review', REVIEW_PROMPT, payload,
                     [_tool('review', 'Revise statements, evaluate final relations and resolve the group.', review_schema(payload))], deadline)
-                if output.get('resolution') not in {'commit', 'episode_only', 'needs_revision'} or not str(output.get('reason') or '').strip():
-                    raise MemoryError('reflection_review_resolution_invalid', 502)
-                if output['resolution'] == 'needs_revision':
-                    raise MemoryError('reflection_review_unresolved', 409)
+                output = decode_review(payload, output)
                 resolutions.append(output)
                 edits, evidence = check_review(payload, output)
                 decisions.extend(edits); receipts.extend(evidence)
@@ -922,20 +997,23 @@ class Engine:
         links = [d['after'] for d in decisions if d['kind'] == 'relation' and d['after']
                  and not removed.intersection((d['after']['from_ref'], d['after']['to_ref']))]
         empty = not items and not links and not arguments.get('forget')
-        if empty:
-            if len(pages) != 1 or not resolutions or resolutions[0]['resolution'] != 'episode_only':
+        remaining = list(dict.fromkeys(t for r in resolutions for t in r['remaining_work']))
+        if empty and not remaining:
+            reasons = [r['no_change_reason'] for r in resolutions if r.get('no_change_reason')]
+            if len(pages) != 1 or not reasons:
                 raise MemoryError('reflection_review_empty', 409)
-            decision = completion(resolutions[0]['reason'], unresolved=arguments.get('basis') in {'update_existing', 'resolve_conflict'})
+            decision = completion(reasons[0], unresolved=arguments.get('basis') in {'update_existing', 'resolve_conflict'})
             if context is not None:
                 context['_completion'] = decision
-        elif any(r['resolution'] != 'commit' for r in resolutions):
-            raise MemoryError('reflection_review_resolution_invalid', 502)
+        if context is not None:
+            context['review_remaining'] = remaining
         if context is not None:
             self._record_visible(context, {'disclosures': list({v['fragment_id']: v for v in shown}.values())}, 'reflection_review_pages')
             context['visible_source_refs'] = sorted({v['origin_ref'] for v in shown if v['origin_ref'].startswith('raw:')})
         with self.observer.span('reflection', 'reviewed draft', inputs={'proposed': arguments}) as event:
             self.observer.output(event, {'items': items, 'links': links, 'dropped_endpoint_refs': sorted(removed),
-                'source_receipts': receipts, 'resolution': 'episode_only' if empty else 'commit'}, kind='memory')
+                'source_receipts': receipts, 'remaining_work': remaining,
+                'outcome': 'unfinished' if remaining else 'episode_only' if empty else 'ready'}, kind='memory')
         return {**arguments, 'items': items, 'links': links}
 
     @staticmethod
@@ -1020,7 +1098,7 @@ class Engine:
                     self.observer.output(event, {"refs": list(vectors), "dimensions": self.config.embedding_dimensions}, kind="memory", title="结构化节点向量")
         with self.observer.span("store", "reflection mutation commit", inputs=prepared) as event:
             self._check_deadline(deadline)
-            retained = context or {}
+            retained = deepcopy(context or {})
             # Retain navigation and old/new items, not the completed raw batch.
             for item in prepared["items"]:
                 retained.setdefault("items", {})[item["ref"]] = item
@@ -1055,6 +1133,22 @@ class Engine:
     def _reflection_context(self, user, pending, deadline, group=None):
         # Orientation is a bounded discovery expression, never the entire backlog.
         query = group['question'] if group else excerpt("\n".join(row["text"] for row in pending), min(4000, self.config.batch_chars))
+        saved = (self.store.reflection_plan(user, group['plan_id']) or {}).get('progress', {}).get(str(group['index']), {}) if group else {}
+        resume = saved.get('context')
+        if resume and all((node := self.store.get(user, ref)) and digest([node['text'], node['source_refs'], node['status']]) == version
+                          for ref, version in saved.get('versions', {}).items()):
+            context = deepcopy(resume)
+            context['_local_group'] = group
+            context['local_committed_refs'] = [ref for p in self.store.reflection_plans(user) for r in p['receipts'] for ref in r['refs']]
+            context['local_source_refs'] = list(dict.fromkeys(ref for n in context['local_committed_refs']
+                if (node := self.store.get(user, n)) for ref in node['source_refs']))
+            context['old_scope']['empty'] = self.store.old_scope_empty(user, context['old_before']) and not context['local_committed_refs']
+            self._refresh_context(user, context, pending)
+            refs = self._search_refs(user, query, context, deadline, mode='reflection')
+            self._add_context_refs(user, context, refs[:self.config.old_candidates], deadline)
+            with self.observer.span('reflection', 'resume local draft', inputs={'group': group}) as event:
+                self.observer.output(event, {'stage': context.get('draft_stage'), 'pending': bool(context.get('pending_mutation'))}, kind='context')
+            return context
         context = self.store.state(user).get("context") or {"references": {}, "items": {}, "edges": []}
         if context.get("format_version", 0) not in (0, 1, 2):
             raise MemoryError("workspace_version_unknown", 503)
@@ -1064,7 +1158,7 @@ class Engine:
         context["format_version"] = 2
         context.setdefault("read_ranges", [])
         before = group['from_ordinal'] if group else pending[0]['ordinal']
-        context['local_committed_refs'] = [ref for receipt in (self.store.reflection_plan(user) or {}).get('receipts', []) for ref in receipt['refs']]
+        context['local_committed_refs'] = [ref for p in self.store.reflection_plans(user) for receipt in p['receipts'] for ref in receipt['refs']]
         context['local_source_refs'] = list(dict.fromkeys(ref for node_ref in context['local_committed_refs']
             if (node := self.store.get(user, node_ref)) for ref in node['source_refs']))
         context["old_before"] = before
@@ -1188,6 +1282,12 @@ class Engine:
         for ref in context.get("references", {}):
             node = self.store.get(user, ref)
             if node:
+                old = context['references'][ref]
+                if old.get('selected_evidence'):
+                    selected = [v for v in old.get('evidence_fragments', [])
+                        if (origin := self.store.get(user, v['origin_ref']))
+                        and digest(origin['text']) == v['content_digest']]
+                    node = {**node, 'selected_fragments': selected}
                 refs[ref] = self._reference(node, context.get("question", ""), "context", user, context.get("old_before"))
         context["references"] = refs
         sources = {row["ref"]: self._view(row) for row in pending}
@@ -1279,8 +1379,15 @@ class Engine:
     def _save_workspace(self, user, *, state=None, context=None):
         if context is not None:
             self._bound_workspace(context)
-            context = {**{k: v for k, v in context.items() if not k.startswith("_")}, "sources": [v for v in context.get("sources", [])
-                       if v["ref"] not in context.get("new_refs", [])]}
+            group = context.get('_local_group')
+            if group:
+                versions = {ref: digest([node['text'], node['source_refs'], node['status']])
+                    for ref in context.get('items', {}) if (node := self.store.get(user, ref))}
+                saved = {k: v for k, v in context.items() if k not in {'_query_vectors', '_page_choices'}}
+                self.store.group_progress(user, group, {'context': deepcopy(saved), 'versions': versions,
+                    'input_signature': group.get('input_signature')})
+            context = {**{k: v for k, v in context.items() if not k.startswith('_')}, 'sources': [v for v in context.get('sources', [])
+                       if v['ref'] not in context.get('new_refs', [])]}
         self.store.save_workspace(user, state=state, context=context)
 
     def _model_json(self, purpose, payload, deadline, fallback_prompt):
@@ -1399,8 +1506,13 @@ class Engine:
                 row["kind"] == "episode" and self.store.is_minimum_episode(user, row["ref"])) else [row]
             if context.get("old_before"):
                 origins = [r for r in origins if not r["ref"].startswith("raw:") or r["ordinal"] < context["old_before"]]
-            values, _ = complementary_passages(origins, branches, max(160, self.config.preview_chars * 3),
-                max(1, min(4, max(len(branches), len(origins)))))
+            # Share a bounded input allowance across refs; window count follows
+            # actual evidence/branch contributions, never a fixed four-card cap.
+            allowance = max(600, self.config.model_input_chars // max(2, min(12, len(candidates))))
+            values, coverage = complementary_passages(origins, branches, allowance, max_fragments=None)
+            with self.observer.span('select', 'select source coverage', inputs={'ref': row['ref'], 'branches': branches}) as event:
+                self.observer.output(event, {'coverage': coverage, 'input_allowance': allowance,
+                    'fragments': values}, kind='context')
             for value in values:
                 cards.append({"row": row, "fragment": value})
         if not cards:
@@ -1516,14 +1628,31 @@ class Engine:
         pool = {row["ref"]: row for row in candidates}
         context["query_roots"] = list(pool)
         for step in range(self.config.search_steps):
-            self._check_deadline(deadline)
             done = {tuple(entry) for entry in context["explored"]}
             context["frontier"] = [ref for ref in context["references"]
                 if self._page_options(request.user_id, ref, context) or (ref, "backlinks") not in done]
             if not context["frontier"]:
                 break
             context["terminal_step"] = step == self.config.search_steps - 1
-            action = self._next_bfs_action(request.user_id, request.query, context, deadline)
+            staged = deepcopy(context)
+            try:
+                with self.observer.span('retrieve', 'search exploration transaction', inputs={'step': step}) as transaction:
+                    self._check_deadline(deadline)
+                    action = self._next_bfs_action(request.user_id, request.query, staged, deadline)
+                    neighbors = [] if action.action == 'stop' else self._explore(
+                        request.user_id, action.ref, action.action, staged, request.query, deadline, action.page_position)
+                    self.observer.output(transaction, {'applied': True, 'action': action.model_dump()}, kind='context')
+            except MemoryError as error:
+                if not (error.code.startswith(('provider_', 'model_', 'selection_', 'reference_')) or error.code in {
+                        'request_deadline', 'protected_context_budget', 'bfs_action_invalid', 'bfs_terminal_action',
+                        'selection_output_invalid', 'select_merge_budget'}):
+                    raise
+                context['bfs_terminal_reason'] = error.code
+                with self.observer.span('retrieve', 'search partial completion', inputs={'step': step}) as terminal:
+                    self.observer.output(terminal, {'reason': error.code, 'discarded_step': True,
+                        'retained_reference_count': len(context['references'])}, kind='context')
+                break
+            context = staged
             if action.action == "stop":
                 break
             ref = action.ref
@@ -1531,20 +1660,36 @@ class Engine:
                 with self.observer.span("retrieve", "bfs invalid or repeated action", inputs=action.model_dump()) as event:
                     self.observer.output(event, {"handled": "stop", "reason": "unknown_or_repeated_operation"}, kind="context")
                 break
-            neighbors = self._explore(request.user_id, ref, action.action, context, request.query, deadline, action.page_position)
             for row in neighbors:
-                pool.setdefault(row["ref"], {**row, "score": pool.get(ref, {}).get("score", 0.01) * 0.8})
+                if row['ref'] in pool and row.get('selected_fragments'):
+                    pool[row['ref']]['selected_fragments'] = list({v['fragment_id']: v for v in [
+                        *pool[row['ref']].get('selected_fragments', []), *row['selected_fragments']]}.values())
+                else:
+                    pool.setdefault(row["ref"], {**row, "score": pool.get(ref, {}).get("score", 0.01) * 0.8})
             with self.observer.span("retrieve", "bfs step", inputs={"step": step, "action": action.model_dump()}) as event:
                 self.observer.output(event, {"explored": context["explored"],
                     "references": list(context["references"]), "edges": context["edges"],
                     "depths": context["depths"]}, kind="context", title="BFS 上下文增量")
         with self.observer.span("context", "search final pack", inputs={"candidates": list(pool)}) as event:
             rows = self._assemble(request.user_id, request.query, list(pool.values()), request.top_k, request.query, context=context)
-            self.observer.output(event, {"data": rows, "explored": context["explored"]}, kind="result", title="Search 最终证据装箱")
+            if pool and not rows:
+                raise MemoryError('search_evidence_pack_empty', 503)
+            self.observer.output(event, {"data": rows, "explored": context["explored"],
+                "completion": "partial" if context.get('bfs_terminal_reason') else "complete",
+                "stop_reason": context.get('bfs_terminal_reason')}, kind="result", title="Search 最终证据装箱")
         return {"data": rows}
 
     def _explore(self, user, ref, action, context, query, deadline, page_position=None):
         """Shared graph reads; Reflection and standard Search keep separate state."""
+        staged = deepcopy(context)
+        result = self._explore_step(user, ref, action, staged, query, deadline, page_position)
+        context.clear()
+        context.update(staged)
+        return result
+
+    def _explore_step(self, user, ref, action, context, query, deadline, page_position=None):
+        if ref not in context.get('references', {}):
+            raise MemoryError('reference_invalid_position', 502)
         self._check_deadline(deadline)
         before_ranges = list(context.get('read_ranges', []))
         before_refs = set(context.get('references', {}))
@@ -1634,71 +1779,22 @@ class Engine:
                     tools.append(_tool("bfs_" + action, "Choose one allowed reference position. Inspect target binds a reference to its offered pages; page_position=null reads next relevant unread page. Backlinks takes only frontier_position and reason.",
                         {"type": "object", "properties": properties}))
         with self.observer.span("retrieve", "bfs action", inputs={"query": query, "context": context}) as event:
-            try:
-                name, data = self._call_tool("bfs", "Explore the supplied memory graph. Return exactly ONE tool call and no prose. Choose a numbered context.choices entry and an allowed action. Inspect page_position=null reads the next query-relevant unread page; other positions refer to that choice's pages. Each choice shows incoming/outgoing relation counts: these are navigation metadata, not evidence. When a needed attribute is still missing, use Backlinks to discover facts about an already identified subject, or Inspect to follow its outgoing links, rather than repeatedly reading long source pages about information already established. Do not assume a matching time/event supplies a missing place, person or amount. Stop when evidence is sufficient or reachable material is exhausted; the last decision must stop. Never answer.", {"query": query, "context": projected}, tools, deadline)
-            except MemoryError as error:
-                # A malformed structured decision is local to optional graph
-                # expansion. Preserve query/Inspect evidence already in hand;
-                # provider, timeout, and other dependency errors still fail.
-                if error.code != "model_tool_output_invalid":
-                    raise
-                context["bfs_terminal_reason"] = error.code
-                with self.observer.span("retrieve", "bfs terminalized", inputs={
-                        "reason": error.code}) as terminal:
-                    self.observer.output(terminal, {"handled": "stop",
-                        "reason": error.code, "evidence_preserved": True},
-                        kind="context", title="BFS 结构化决策无效，保留已有证据")
-                return BfsAction(action="stop", reason="invalid structured decision; preserve current evidence")
-            self._record_visible(context, projected, "bfs")
-            if name == "bfs_inspect":
-                data = {**{k: v for k, v in data.items() if k != "target"}, **data.get("target", {})}
+            name, data = self._call_tool("bfs", "Explore the supplied memory graph. Return exactly ONE tool call and no prose. Choose a numbered context.choices entry and an allowed action. Inspect page_position=null reads the next query-relevant unread page; other positions refer to that choice's pages. Each choice shows incoming/outgoing relation counts: these are navigation metadata, not evidence. When a needed attribute is still missing, use Backlinks to discover facts about an already identified subject, or Inspect to follow its outgoing links, rather than repeatedly reading long source pages about information already established. Do not assume a matching time/event supplies a missing place, person or amount. Stop when evidence is sufficient or reachable material is exhausted; the last decision must stop. Never answer.", {"query": query, "context": projected}, tools, deadline)
+            self._record_visible(context, projected, 'bfs')
+            if name == 'bfs_inspect':
+                data = {**{k: v for k, v in data.items() if k != 'target'}, **data.get('target', {})}
             try:
                 action = BfsAction.model_validate(data)
             except ValidationError:
-                # A malformed follow-up decision must not discard the query
-                # candidates already collected.  The public Search contract
-                # returns evidence, so terminate this bounded exploration and
-                # keep the observable failure reason instead of retrying the
-                # model or turning a useful partial result into a 502.
-                context["bfs_terminal_reason"] = "bfs_action_invalid"
-                with self.observer.span("retrieve", "bfs terminalized", inputs={
-                        "reason": "bfs_action_invalid", "data": data}) as terminal:
-                    self.observer.output(terminal, {"handled": "stop",
-                        "reason": "bfs_action_invalid", "evidence_preserved": True},
-                        kind="context", title="BFS 动作异常后保留已有证据")
-                return BfsAction(action="stop", reason="invalid model action; preserve current evidence")
-            if name != "bfs_" + action.action:
-                context["bfs_terminal_reason"] = "bfs_action_invalid"
-                with self.observer.span("retrieve", "bfs terminalized", inputs={
-                        "reason": "bfs_action_invalid", "tool": name,
-                        "action": action.model_dump()}) as terminal:
-                    self.observer.output(terminal, {"handled": "stop",
-                        "reason": "bfs_action_invalid", "evidence_preserved": True},
-                        kind="context", title="BFS 工具与动作不一致")
-                return BfsAction(action="stop", reason="tool/action mismatch; preserve current evidence")
-            if action.action == "stop":
-                action = action.model_copy(update={"ref": None})
+                raise MemoryError('bfs_action_invalid', 502) from None
+            if name != 'bfs_' + action.action:
+                raise MemoryError('bfs_action_invalid', 502)
+            if action.action == 'stop':
+                action = action.model_copy(update={'ref': None})
             else:
-                if context.get("terminal_step"):
-                    raise MemoryError("bfs_terminal_action", 502)
-                try:
-                    resolved = choices.resolve(data.get("frontier_position"), action.action)
-                except MemoryError as error:
-                    # The model may repeat a stale choice after the preceding
-                    # Inspect changed the unread-page set.  This is a local
-                    # protocol miss, not a provider dependency failure: stop
-                    # the graph walk with the query/Inspect evidence intact.
-                    if error.code not in {"reference_invalid_position", "reference_action_not_allowed"}:
-                        raise
-                    context["bfs_terminal_reason"] = error.code
-                    with self.observer.span("retrieve", "bfs terminalized", inputs={
-                            "reason": error.code, "action": action.model_dump(),
-                            "frontier": choices.rows}) as terminal:
-                        self.observer.output(terminal, {"handled": "stop",
-                            "reason": error.code, "evidence_preserved": True},
-                            kind="context", title="BFS 过期选择后保留已有证据")
-                    return BfsAction(action="stop", reason=f"{error.code}; preserve current evidence")
-                action = action.model_copy(update={"ref": resolved})
+                if context.get('terminal_step'):
+                    raise MemoryError('bfs_terminal_action', 502)
+                action = action.model_copy(update={'ref': choices.resolve(data.get('frontier_position'), action.action)})
             self.observer.output(event, action.model_dump(), kind="context", title="BFS 模型决策")
             return action
 

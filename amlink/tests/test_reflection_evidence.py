@@ -57,8 +57,8 @@ def test_missing_identity_query_cannot_be_hidden_by_noop(make):
                 {'ref': 'new:maya', 'kind': 'person', 'text': 'Maya', 'source_refs': [payload['working'][0]['ref']]}]}
         return 'reflection_stop', {'reason': 'No additional semantic change is needed in this fixture.'}
     provider.decide = decide
-    with pytest.raises(MemoryError, match='model_unknown_tool'):
-        engine.add(request('a',['Speaker: Maya']))
+    assert engine.add(request('a',['Speaker: Maya']))['success']
+    assert any(p.get('error') == 'model_unknown_tool' for plan in engine.store.reflection_plans('u') for p in plan['progress'].values())
     assert engine.store.state('u')['settled_through'] == 1
 
 

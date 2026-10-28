@@ -8,7 +8,8 @@ from .errors import MemoryError
 
 def freeze_pack(store, user, query, rows, context, config):
     nodes = {row["ref"]: store.get(user, row["ref"]) for row in rows}
-    nodes = {ref: node for ref, node in nodes.items() if node}
+    if any(node is None for node in nodes.values()):
+        raise MemoryError('search_evidence_integrity', 503)
     roots = context.get("query_roots", list(nodes))
     metadata = {row["ref"]: row for row in rows}
     rank = {ref: index for index, ref in enumerate(roots)}
@@ -48,7 +49,15 @@ def freeze_pack(store, user, query, rows, context, config):
         source_refs = list(dict.fromkeys([r for node in group_nodes for r in node["source_refs"]] +
                                         [r for edge in edges for r in edge["source_refs"]]))
         sources = [store.get(user, ref) for ref in source_refs]
-        sources = [source for source in sources if source]
+        if any(source is None for source in sources):
+            raise MemoryError('search_evidence_integrity', 503)
+        # A retained context fragment is evidence only for this user's current
+        # source version. Do not silently skip missing or stale provenance.
+        origins = {source['ref']: source for source in sources + group_nodes}
+        for edge in edges:
+            if not any(all(edge[k] == saved[k] for k in ('from_ref', 'to_ref', 'relation', 'source_refs'))
+                       for saved in store.edges(user, edge['from_ref'])):
+                raise MemoryError('search_evidence_integrity', 503)
         queries = list(dict.fromkeys([query] + [entry["branch"] for row in rows if row["ref"] in members
                                                for entry in row.get("lineage", []) if entry.get("branch")]))
         preferred = [value for ref in members for value in metadata.get(ref, {}).get("selected_fragments", [])]
@@ -69,6 +78,12 @@ def freeze_pack(store, user, query, rows, context, config):
             if not store.is_minimum_episode(user, node["ref"]):
                 values, _ = complementary_passages([node], queries, min(2000, config.result_chars // 3), max(1, len(queries)))
                 bodies.extend(values)
+        for value in bodies + units:
+            origin = origins.get(value['origin_ref'])
+            if (not origin or value['content_digest'] != digest(origin['text'])
+                    or not 0 <= value['start'] <= value['end'] <= len(origin['text'])
+                    or value['text'] != origin['text'][value['start']:value['end']]):
+                raise MemoryError('search_evidence_integrity', 503)
         groups.append({"ref": root, "members": members, "nodes": group_nodes,
                        "edges": edges, "source_refs": source_refs,
                        "fragments": bodies + units, "paths": [p for ref in useful for p in routes[ref]]})
@@ -95,6 +110,17 @@ def pack_frozen(frozen, top_k):
         decision = {"ref": group["ref"], "members": group["members"], "included": False,
                     "reason": "top_k", "evidence_units": []}
         decisions.append(decision)
+        prior_units = [v for _, admitted, _ in chosen for v in admitted]
+        if (not group['edges'] and group['fragments']
+                and all(n['kind'] == 'episode' for n in group['nodes'])
+                and all(v['origin_ref'].startswith('raw:') and any(
+                    p['origin_ref'] == v['origin_ref'] and p['content_digest'] == v['content_digest']
+                    and p['start'] <= v['start'] and v['end'] <= p['end'] for p in prior_units)
+                    for v in group['fragments'])):
+            decision.update(reason='source_ranges_already_returned',
+                reused_from=[g['ref'] for g, admitted, _ in chosen if any(
+                    v['origin_ref'] == p['origin_ref'] for v in group['fragments'] for p in admitted)])
+            continue
         if len(chosen) >= top_k:
             continue
         by_origin = {}
@@ -150,6 +176,11 @@ def pack_frozen(frozen, top_k):
         shown_nodes = {v["origin_ref"] for v in admitted if v["origin_kind"] == "item"}
         path_closed = required_relation_sources.issubset(shown_sources) and all(
             ref in shown_nodes for edge in group["edges"] for ref in (edge["from_ref"], edge["to_ref"]))
+        if not path_closed:
+            # Return supported standalone material, never present an unclosed
+            # navigation route as if the missing endpoints had been delivered.
+            decision['omitted_edges'] = group['edges']
+            content = header({**group, 'edges': []}) + '\n' + '\n'.join(text_parts)
         decision.update(chars=len(content), closure="complete" if decision["evidence_units"] and all(
             v["complete"] for v in decision["evidence_units"]) else "partial",
             fragments=admitted, path_closed=path_closed,

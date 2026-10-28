@@ -121,7 +121,14 @@ class Providers:
                 raise ValueError("expected exactly one tool call")
             function = calls[0]["function"]
             name = function["name"]
-            arguments = json.loads(function["arguments"])
+            def unique_pairs(pairs):
+                value = {}
+                for key, item in pairs:
+                    if key in value:
+                        raise ValueError('duplicate tool key')
+                    value[key] = item
+                return value
+            arguments = json.loads(function['arguments'], object_pairs_hook=unique_pairs)
             if not isinstance(name, str) or not isinstance(arguments, dict):
                 raise ValueError("invalid tool call")
             return name, arguments

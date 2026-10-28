@@ -19,9 +19,8 @@ def test_group_commit_survives_failure_and_replay_skips_completed_group(make):
     def tool(purpose, prompt, payload, tools, deadline):
         if purpose == 'reflection_plan':
             planning.append(1)
-            return 'reflection_plan', {'groups': [
-                {'title':'quota', 'question':'project quota', 'background_positions':[]},
-                {'title':'trip', 'question':'trip destination', 'background_positions':[1]}], 'primary_groups': {'p0':0,'p1':0,'p2':1}}
+            return 'reflection_plan', {'assignments': {'p0': {'question':'quota','background_positions':[]},
+                'p1': {'question':'quota','background_positions':[]}, 'p2': {'question':'trip','background_positions':[1]}}}
         return ordinary(purpose, prompt, payload, tools, deadline)
     provider.tool = tool
     failed = False
@@ -35,15 +34,15 @@ def test_group_commit_survives_failure_and_replay_skips_completed_group(make):
         return 'reflection_stop', {'reason': 'No additional semantic change is needed in this fixture.'}
     provider.decide = decide
     req = request('a', ['Quota 1000.', 'Trip planning also mentions quota.', 'Trip to Paris.'])
-    with pytest.raises(MemoryError, match='provider_timeout'):
-        engine.add(req)
+    assert engine.add(req)['success']
+    assert any(p.get('error') == 'provider_timeout' for plan in engine.store.reflection_plans('u') for p in plan['progress'].values())
     plan = engine.store.reflection_plan('u')
     assert len(plan['receipts']) == 1
     assert engine.store.state('u')['settled_through'] == 0
-    assert engine.store.request('u','a')['status'] == 'accepted'
+    assert engine.store.request('u','a')['status'] == 'done'
     engine.add(req)
-    assert groups == ['quota', 'trip', 'trip'] and len(planning) == 1
-    assert engine.store.state('u')['settled_through'] == 3
+    assert groups == ['quota', 'trip'] and len(planning) == 1
+    assert engine.store.state('u')['settled_through'] == 0
     before = len(provider.calls)
     engine.add(req)
     assert len(provider.calls) == before
@@ -52,7 +51,8 @@ def test_group_commit_survives_failure_and_replay_skips_completed_group(make):
 def test_plan_and_graph_commit_are_atomic_and_persist_after_reopen(tmp_path):
     path = tmp_path / 'progress.sqlite3'
     store = Store(path)
-    store.start_add(request('a', ['first', 'second']))
+    prepared, sources = store.prepare_add(request('a', ['first', 'second']))
+    store.accept_add(prepared, sources, dict(ref='memory:episode-test',text='first second',source_refs=[r['ref'] for r in sources]), [], 'x')
     rows = store.raw('u')
     plan = freeze_groups({'groups':[{'title':'first','question':'first','positions':[0]},
                                    {'title':'second','question':'second','positions':[1]}]}, rows)
@@ -60,15 +60,15 @@ def test_plan_and_graph_commit_are_atomic_and_persist_after_reopen(tmp_path):
     item = dict(ref='memory:fact-first', kind='fact', text='first', source_refs=[rows[0]['ref']])
     mutation = dict(items=[item], links=[], forget=[])
     group = dict(plan_id=plan['plan_id'],index=0)
-    with pytest.raises(MemoryError, match='reflection_group_out_of_order'):
-        store.commit_mutation('u',mutation,watermark=2,fingerprint='x',vectors={},group={**group,'index':1})
-    assert not store.nodes('u') and not store.reflection_plan('u')['receipts']
+    with pytest.raises(MemoryError, match='reflection_group_already_committed_or_invalid'):
+        store.commit_mutation('u',mutation,watermark=2,fingerprint='x',vectors={},group={**group,'index':2})
+    assert len(store.nodes('u')) == 1 and not store.reflection_plan('u')['receipts']
     store.commit_mutation('u',mutation,watermark=2,fingerprint='x',vectors={},group=group)
     store.close()
     store = Store(path)
     assert len(store.reflection_plan('u')['receipts']) == 1
     assert store.state('u')['settled_through'] == 0
-    assert len(store.nodes('u')) == 1
+    assert len(store.nodes('u')) == 2
     store.close()
 
 
@@ -83,7 +83,7 @@ def test_local_committed_nodes_are_found_by_next_group_without_future_episode(ma
     engine.store.commit_mutation('u',dict(items=[node],links=[],forget=[]),watermark=0,fingerprint='x',vectors={},
         group=dict(plan_id=plan['plan_id'],index=0))
     context=engine._reflection_context('u',[rows[1]],time.monotonic()+10,
-        group={**plan['groups'][1], 'from_ordinal':1, 'through_ordinal':2})
+        group={**plan['groups'][1], 'plan_id':plan['plan_id'],'index':1, 'from_ordinal':1, 'through_ordinal':2})
     assert node['ref'] in context['references']
     assert not context['old_scope']['empty']
     assert engine.store.request('u','a')['episode_ref'] not in context['orientation_refs']
@@ -118,18 +118,19 @@ def test_narrative_preserves_exact_material_and_omits_internal_hashes():
 def test_active_plan_finishes_when_prior_group_forgot_all_remaining_sources(make):
     engine,provider=make(reflection_threshold=1)
     req=request('a',['Please forget this secret.','Secret material.'])
-    state,_=engine.store.start_add(req)
-    engine._ensure_episode(req,state, __import__('json').loads(state['raw_refs']),time.monotonic())
+    state,sources=engine.store.prepare_add(req)
+    episode,vector=engine._prepare_episode(sources,time.monotonic()+10)
+    engine.store.accept_add(state,sources,episode,vector,'x')
     rows=engine.store.raw('u')
     plan=freeze_groups({'groups':[dict(title='forget',question='forget',positions=[0],background_positions=[1]),
                                  dict(title='secret',question='secret',positions=[1],background_positions=[0])]},rows)
     engine.store.freeze_plan('u',plan)
-    engine.store.require_reflection('u','a',2)
     engine.store.commit_mutation('u',dict(items=[],links=[],forget=[dict(
         source_refs=[r['ref'] for r in rows],instruction_refs=[rows[0]['ref']],memory_refs=[])]),
         watermark=0,fingerprint='x',vectors={},group=dict(plan_id=plan['plan_id'],index=0))
     assert engine.store.raw('u',pending=True)==[]
     assert engine.add(req)['success']
+    engine._maintain(request('later',['Note']), time.monotonic())
     assert engine.store.state('u')['settled_through']==2
     assert not provider.calls
 
@@ -138,8 +139,8 @@ def test_active_plan_finishes_when_prior_group_forgot_all_remaining_sources(make
 def test_malformed_node_output_is_explicit_error_without_advancing_group(make, bad_item):
     engine, provider = make(reflection_threshold=1)
     provider.decide = lambda purpose, payload: ('reflection_items', {'items': [bad_item]})
-    with pytest.raises(MemoryError, match='reflection_item_draft_invalid'):
-        engine.add(request('malformed', ['Maya likes tea.']))
+    assert engine.add(request('malformed', ['Maya likes tea.']))['success']
+    assert any(p.get('error') == 'reflection_item_draft_invalid' for plan in engine.store.reflection_plans('u') for p in plan['progress'].values())
     assert engine.store.state('u')['settled_through'] == 0
     assert engine.store.reflection_plan('u')['receipts'] == []
     assert all(node['kind'] == 'episode' for node in engine.store.nodes('u'))

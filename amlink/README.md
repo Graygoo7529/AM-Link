@@ -6,7 +6,7 @@ AM-Link 只提供官方要求的 Add/Search，Search 返回证据，不生成最
 
 **核心工程修复已实施，方法质量继续验证。** [核心审计](../docs/doing/2026-10-11-amlink-core-audit.md)保存0.2.0失败基线；[0.2.1修复报告](../docs/doing/2026-10-11-amlink-core-repairs.md)区分工程回归、真实小样本和待讨论的方法改进。尚未部署或参加官方 Smoke。
 
-2026-10-27最新：[收敛实施核对](../docs/doing/2026-10-27-convergence-implementation.md)、[执行计划](../docs/phase-2/2026-10-27-convergence-execution.md)。默认按原文范围冻结相关组，由程序推进节点/关系草案到联合审查与原子提交；Stop保存具体理由，Select覆盖说明进入语境，同语境查询向量及未改正文向量可精确复用。工程回归与真实诊断分别验收，长历史和图语义仍需独立验证。
+2026-10-27最新：[交付边界实施核对](../docs/doing/2026-10-27-delivery-contract-implementation.md)、[执行计划](../docs/phase-2/2026-10-27-add-search-contract-and-convergence-plan.md)。Add 可靠接收与 Reflection 进度独立；Search 可交付最后完成步骤的合法证据。当前数据库版本3，旧库显式拒绝，新实验必须新库。历史实现报告保留原始结论，当前流程以根 DESIGN 为准。
 
 2026-10-23接入P0/P1：显式可见位置、精确多窗口、Inspect续页与回放保护、路径证据组、逐项Reflection依据、跨Add积累与冻结会话前缀。当前实现总览以[DESIGN](../DESIGN.md)为准；[实施核对](../docs/doing/2026-10-23-evidence-loop-implementation.md)保留工程测试、真实失败和方法限制。新工具接口不等于质量验收完成。
 
@@ -16,14 +16,14 @@ AM-Link 只提供官方要求的 Add/Search，Search 返回证据，不生成最
 
 ## 核心边界
 
-- 每个成功 Add 先保存不可变 `RawEvent`，再生成保留角色、会话、顺序、来源日期和原文的最小 `episode`，完成 BM25 与 embedding 索引。触发 Reflection 时，还要等待本请求目标水位内的全部批次终结才返回200；其他请求推进水位不能替代该请求的episode/索引检查。
-- Add 可以先停在 `WorkingMemory`。达到条数/字符阈值、出现更新/遗忘信号或会话切换时，Reflection 才消费这一批工作记忆；同一用户的 Reflection 按水位串行。
-- Reflection 先阅读本批完整WorkingMemory，冻结最多12组相关变化；原文保真切段，主要归属恰好一次，背景可共享；组内只展开选中范围、全批概览与相关旧记忆。模型可以Query/Select、Inspect、Backlink、Evict、节点/关系草案或真正no-op。程序调度小组联合审查，模型可修正文和撤销边；每组节点/关系/向量与带理由的完成凭据同事务提交，全部组完成才推进原文水位；失败重放继续未完成组。最低episode不可摘要覆盖。旧fact/event可保持正文和时间不变而追加真实支持来源。
-- 标准 Search 每次创建独立语境，只检索结构化 `MemoryItem`（包括最小 episode），不读取 WorkingMemory，也不与 Reflection 共用 loop。Query 是 BM25+embedding（复杂问题可先做查询扩展），多个分支合并后统一 `select`；之后由模型决定 Inspect、Backlink 或停止，按深度/节点/邻居预算进行 BFS。
-- `select` 同时筛选排序，不另设 `rerank`；输入仅question与自包含References，候选超过5引用触发，按原文片段卡分页后对保留内容统一精炼。Reference 预览保留互补来源片段、shown range 和省略原因；最终装箱按同一顺序做确定性证据闭合，逐来源记录 evidence units 和裁剪原因。模型选中的范围直接优先进入确定性装箱；历史受限模型装箱工具仅供靶场研究对照。
-- 模型调用只尝试一次；依赖失败显式返回错误，不伪装为成功。官方调用方负责约定内重试。
+- Add 在模型准备完成后，用一个短事务提交原文、Working、不可变 episode、BM25/向量、必要遗忘屏蔽和成功凭据。必要接收失败本轮不生效；提交后的 Reflection 未完成不撤回接收结果。成功重放零模型调用。
+- Reflection 按积累或会话边界触发，请求内有界执行。分组直接填写自然问题；逐组完成凭据允许后组先完成，保留版本有效的草案和待办，不重复相同失败输入。联合审查可以真正修改节点、撤销边，再补具体剩余工作。
+- 标准 Search 每次独立语境，只查结构化 MemoryItem，包括最低 episode，不读 Working、不触发 Reflection。Query 分支合并后 Select，模型选择 Inspect/Backlink/Stop 多跳；每步完整成功后才合入语境。
+- 首次 Query/必要 Select 失败仍失败；后续模型或协议失败记录局部停止，交付已有合法证据。存储/完整性失败不能伪装成功，无法装箱不能伪装正常空集。
+- Select 以 question＋可读片段为输入，共用 80000 字符预算，按大小分页；不固定每 ref 四段。选中范围沿语境和装箱传递。确定性装箱去掉纯重复 episode 卡，路径不闭合时不输出该关系陈述。Search 始终不代答。
+- 公开响应不增加整理状态字段；native 观测/网页分别展示接收、整理进度、内部错误与局部检索完成。HTTP 默认不采集内部轨迹。
 
-默认本地总期限1740秒（Add含排队）、模型单次120秒、整包输入80000字符；Reflection规划批32条/18000字符、最多64批，每组16轮且共享Add期限。普通积累需至少2个Add且达到8条/6000字符；容量为64条或36000序列化字符。Select按完整输入大小分页，删除旧`select_candidate_limit`配置；每ref最多4段、默认总预览3600字符。全局保留集装不下时显式失败，不静默裁短。阈值仍需质量校准；完整并发追加协调器未实现，仍使用同用户锁。配置见[.env.example](./.env.example)。新增`reflection_plans`表由本地建表过程创建；旧库不会自动重建记忆，新验证全部从空库开始。
+默认请求期限1740秒（含Add排队），整理提前最多5秒收束；模型单次120秒、输入80000字符。Reflection规划批32条/18000字符、最多64批、每组16次主决策。普通积累至少2个Add且达到8条/6000字符；容量为64条或36000序列化字符。仍使用同用户串行锁，不新建后台队列、网络重试或隐藏降级开关。配置见[.env.example](./.env.example)。数据库3、冻结计划v3，旧库只读研究不作为新实验起点。
 
 ## 本地验证
 

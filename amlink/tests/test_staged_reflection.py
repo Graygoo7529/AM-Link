@@ -58,12 +58,18 @@ def test_failed_draft_replay_never_partially_writes_or_duplicates_nodes(make):
         raise AssertionError('Unexpected extra model control turn')
     provider.decide = decide
     req = request('a', ['Speaker: Maya\nI like tea.'])
-    with pytest.raises(MemoryError, match='provider_timeout'): engine.add(req)
+    assert engine.add(req)['success']
+    assert any(p.get('error') == 'provider_timeout' for plan in engine.store.reflection_plans('u') for p in plan['progress'].values())
     assert engine.store.state('u')['settled_through'] == 0
     assert all(n['kind'] == 'episode' for n in engine.store.nodes('u'))
+    calls = len(provider.calls)
     engine.add(req)
+    assert len(provider.calls) == calls
     assert len(engine.store.raw('u')) == 1
-    assert len([n for n in engine.store.nodes('u') if n['kind'] == 'fact']) == 1
+    assert not [n for n in engine.store.nodes('u') if n['kind'] == 'fact']
+    progress = engine.store.reflection_plan('u')['progress']['0']
+    assert progress['context']['pending_mutation']['items']
+    assert progress['context']['draft_stage'] == 'relations'
 
 
 def test_review_defect_can_patch_one_node_without_rewriting_others(make):
@@ -94,8 +100,8 @@ def test_review_defect_can_patch_one_node_without_rewriting_others(make):
 def test_uncommitted_draft_cannot_finish_via_stop(make):
     engine, provider = make(reflection_threshold=1)
     provider.decide = lambda purpose, payload: ('reflection_items', proposal(payload)) if payload['step'] == 0 else ('reflection_stop', {'reason': 'No additional semantic change is needed in this fixture.'})
-    with pytest.raises(MemoryError, match='model_unknown_tool'):
-        engine.add(request('a', ['Speaker: Maya\nI like tea.']))
+    assert engine.add(request('a', ['Speaker: Maya\nI like tea.']))['success']
+    assert any(p.get('error') == 'model_unknown_tool' for plan in engine.store.reflection_plans('u') for p in plan['progress'].values())
     assert engine.store.state('u')['settled_through'] == 0
 
 
@@ -120,8 +126,8 @@ def test_staged_invalid_relation_can_be_removed_but_not_committed(make):
 def test_accepted_nodes_cannot_be_silently_rewritten_in_relation_stage(make):
     engine, provider = make(reflection_threshold=1)
     provider.decide = lambda purpose, payload: ('reflection_items', proposal(payload))
-    with pytest.raises(MemoryError, match='model_unknown_tool'):
-        engine.add(request('a', ['Speaker: Maya\nI like tea.']))
+    assert engine.add(request('a', ['Speaker: Maya\nI like tea.']))['success']
+    assert any(p.get('error') == 'model_unknown_tool' for plan in engine.store.reflection_plans('u') for p in plan['progress'].values())
     assert engine.store.state('u')['settled_through'] == 0
 
 

@@ -186,10 +186,10 @@ def complementary_passages(sources, queries, limit, max_fragments=4):
     # One proposal per query before taking a second from the same query.
     pairs = [group[i] for i in range(len(sources)) for group in ranked if i < len(group)]
     fragments, used = [], 0
-    per_fragment = max(100, limit // max(1, max_fragments))
+    per_fragment = min(900, max(300, limit // max(1, len(sources)))) if max_fragments is None else max(100, limit // max(1, max_fragments))
     for _, index, query in pairs:
         source = sources[index]
-        if len(fragments) >= max_fragments:
+        if max_fragments is not None and len(fragments) >= max_fragments:
             continue
         header = source_header(source) + f" [query={excerpt(query, 120)}] "
         room = limit - used - len(header) - 1

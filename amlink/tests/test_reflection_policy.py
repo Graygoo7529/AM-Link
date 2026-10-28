@@ -25,7 +25,7 @@ def test_boundary_only_consumes_previous_contiguous_session(make):
         engine.add(req.model_copy(update={'session_id': session}))
     assert engine.store.state('u')['settled_through'] == 2
     assert [r['ordinal'] for r in engine.store.raw('u', pending=True)] == [3]
-    assert engine.store.request('u', 'two')['reflection_watermark'] == 1
+    assert engine.store.request('u', 'two')['status'] == 'done'
 
 
 def test_failed_retry_keeps_promised_watermark_after_later_add(make):
@@ -33,17 +33,16 @@ def test_failed_retry_keeps_promised_watermark_after_later_add(make):
     engine.add(request('a', ['A note']))
     provider.decide = lambda *a: (_ for _ in ()).throw(MemoryError('provider_timeout', 504))
     req = request('b', ['Another note'])
-    with pytest.raises(MemoryError):
-        engine.add(req)
-    assert engine.store.request('u','b')['reflection_watermark'] == 2
+    assert engine.add(req)['success']
+    assert engine.store.request('u','b')['status'] == 'done'
     # A subsequent accepted request is not silently adopted by this retry.
     engine.config = replace(engine.config, mode='raw')
     engine.add(request('c', ['Later note']))
     engine.config = replace(engine.config, mode='graph')
     provider.decide = lambda *a: ('reflection_stop', {'reason': 'No additional semantic change is needed in this fixture.'})
     engine.add(req)
-    assert engine.store.state('u')['settled_through'] == 2
-    assert [r['ordinal'] for r in engine.store.raw('u', pending=True)] == [3]
+    assert engine.store.state('u')['settled_through'] == 0
+    assert [r['ordinal'] for r in engine.store.raw('u', pending=True)] == [1,2,3]
 
 
 def test_single_add_capacity_and_noninstruction_forget():
