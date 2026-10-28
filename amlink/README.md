@@ -1,5 +1,7 @@
 # AM-Link 二期重构实现
 
+2026-10-28：[节点保真与简明审查](../docs/doing/2026-10-28-memory-integrity-implementation.md)已进入默认方法。全部旧 episode/fact/event 正文与时间受保护；Reflection 不新建摘要 episode；可变导航节点仅继承当前支持；审查直接填写最终正文，校验时间原句/年份并提供具体修订反馈。258 回归＋3 子测试通过。最终三切片接口与来源成功，但 LM04 整理仅 1/3，复杂审查/图质量未验收。
+
 当前目录是二期重构的实验实现，版本 `0.2.1`。一期代码保存在
 `archive/phase-1/`；重构前的二期实现保存在 `archive/phase-2/amlink-0.1.0/`。
 AM-Link 只提供官方要求的 Add/Search，Search 返回证据，不生成最终答案。

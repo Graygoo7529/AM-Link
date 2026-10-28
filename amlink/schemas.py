@@ -1,14 +1,31 @@
 from __future__ import annotations
 
 from datetime import date
+import re
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from .errors import MemoryError
 
 Text = Annotated[str, Field(min_length=1)]
 Kind = Literal["episode", "person", "entity", "concept", "event", "fact"]
 Relation = Literal["about", "contains", "supersedes", "contradicts", "same_event_as"]
 DateText = Annotated[str, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")]
+
+
+def check_source_time(expression, passages, start=None, end=None):
+    """Necessary quotation/year support, not a complete temporal reasoner."""
+    if expression is None:
+        return
+    normalize = lambda text: ' '.join(text.split()).casefold()
+    if (not isinstance(expression, str) or not expression.strip()
+            or not any(normalize(expression) in normalize(text) for text in passages)):
+        raise MemoryError('mutation_time_not_quoted', 409)
+    years = {value[:4] for value in (start, end) if isinstance(value, str)}
+    if any(not any(re.search(r'(?<!\d)' + re.escape(year) + r'(?!\d)', text) for text in passages)
+           for year in years):
+        raise MemoryError('mutation_time_precision', 409)
 
 
 class StrictModel(BaseModel):

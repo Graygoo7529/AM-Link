@@ -115,9 +115,8 @@ def test_review_protocol_requires_replacement_text_for_revision():
     payload=review_payload({'items':[dict(ref='new:a',kind='fact',text='Maya likes coffee.',source_refs=['raw:a'])]},
                           {},[dict(ref='raw:a',text='Maya likes tea.')])
     schema=review_schema(payload)
-    choices=schema['properties']['reviews']['properties']['u0']['anyOf']
-    revised=next(c['properties'] for c in choices if c['properties']['action']['enum']==['revise'])
-    assert revised['text']['type']=='string' and revised['text']['minLength']==1
+    fields=schema['properties']['u0']['properties']
+    assert fields['text']['type']==['string','null'] and 'anyOf' not in schema['properties']['u0']
     with pytest.raises(MemoryError,match='reflection_review_invalid'):
         check_review(payload,{'reviews':[dict(position=0,action='revise',text=None,
             detail='Maya likes tea.',source_positions=[0])]})

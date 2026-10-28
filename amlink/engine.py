@@ -329,8 +329,9 @@ class Engine:
                                   if editable else dict(new_ref))
         item_properties['ref']['description'] = (
             'New or changed assertions use a meaningful new: label. To attach new supporting sources to the SAME '
-            'old fact/event, use its listed ref and preserve its exact body/time fields. Do not duplicate a paraphrase. '
-            'Other listed navigation nodes may be updated after reading. Never rewrite minimum episodes.')
+            'old episode/fact/event, use its listed ref and preserve its exact body/time fields. Do not duplicate a paraphrase. '
+            'Only person/entity/concept nodes may change content, with sources supporting all CURRENT claims. '
+            'Never rewrite an episode or create another episode summary.')
         link_properties = definitions.get("LinkChange", {}).get("properties", {})
         for endpoint in ("from_ref", "to_ref"):
             link_properties[endpoint] = {"type": "string", "pattern": "^(new:.+|memory:.+)$",
@@ -340,9 +341,11 @@ class Engine:
             "supersedes/contradicts connect same-type fact/event; same_event_as connects events. "
             "A person is the TO endpoint of about, never its FROM endpoint.")
         if "kind" in item_properties:
-            item_properties["kind"]["enum"] = ["episode", "person", "entity", "concept", "event", "fact"]
+            item_properties["kind"]["enum"] = (["episode"] if any(
+                context['items'][ref]['kind'] == 'episode' for ref in editable) else []) + ["person", "entity", "concept", "event", "fact"]
             item_properties["kind"]["description"] = (
-                "MemoryItem kind. The system-created minimum episode is immutable; only a distinct derived episode may be added.")
+                "New items are person/entity/concept/event/fact. Add already creates faithful episodes. "
+                "An existing episode may only be reused with its exact body/time fields.")
         if "time_start" in item_properties:
             item_properties["time_start"]["description"] = (
                 "Optional normalized event date. Never copy the source message timestamp here.")
@@ -822,18 +825,30 @@ class Engine:
                             if node_submission else "Correct only links with reflection_relations. Endpoints must be offered memory:/new: nodes, NEVER raw: sources. relation must be an offered relation type, not a reference. Include nonempty source_refs. If no legal pair exists, return links=[]; do not rewrite nodes or reread sources.")
                     }], event, step, error.code)
                     return None
-                if error.code in {"mutation_fact_overwrite", "minimum_episode_immutable", "mutation_invalid_identity"}:
+                if error.code in {"mutation_fact_overwrite", "minimum_episode_immutable", "mutation_invalid_identity",
+                                  "mutation_episode_overwrite", "mutation_episode_creation", "mutation_time_not_quoted", "mutation_time_precision"}:
                     bad_refs = []
                     for item in arguments.get("items", []):
                         ref = item.get("ref") if isinstance(item, dict) else None
                         if isinstance(ref, str) and ref.startswith("memory:") and ref not in context.get("items", {}) and ref not in context.get("references", {}):
                             bad_refs.append(ref)
-                    instruction = "Reference unchanged old items without re-emitting them. New facts/events use new: refs; minimum episodes cannot be rewritten."
+                    instruction = "Reference unchanged old items without re-emitting them. New facts/events use new: refs; all episodes are immutable and Add already creates them. Do not create another episode summary."
+                    if error.code == 'mutation_time_not_quoted':
+                        instruction = ("The quoted time_expression is NOT present in the cited original. On the affected NEW draft, "
+                            "set time_expression=null AND time_start=null AND time_end=null, preserving the statement's supported wording. "
+                            "Alternatively copy an EXACT time phrase from the original. Changing only reason or resubmitting the same "
+                            "time_expression is not a repair. Do not modify a stored episode/fact/event.")
+                    if error.code == 'mutation_time_precision':
+                        instruction = "The normalized year is absent from the cited original text. Set time_start/time_end to null; preserve the original time_expression and its precision in text. Message timestamps and ref names do not establish that year. Patch only the affected new draft, not stored episode/fact/event content."
                     if error.code == "mutation_invalid_identity" and bad_refs:
                         instruction = ("These memory refs are not loaded old nodes: " + ", ".join(bad_refs[:8]) + ". "
                             "Use a new: semantic placeholder for each genuinely new or changed node, or inspect/load the exact existing memory ref before referencing it. Do not invent memory: identifiers.")
-                    self._reflection_feedback(user, context, arguments, [], [{"reason": error.code,
-                        "instruction": instruction}],
+                    diagnostic = {"reason": error.code, "instruction": instruction}
+                    if error.code in {'mutation_time_not_quoted', 'mutation_time_precision'}:
+                        diagnostic['draft_time_fields'] = [{key: item.get(key) for key in
+                            ('ref', 'time_expression', 'time_start', 'time_end', 'source_refs')}
+                            for item in arguments.get('items', []) if item.get('time_expression') is not None]
+                    self._reflection_feedback(user, context, arguments, [], [diagnostic],
                         event, step, error.code)
                     return None
                 if error.code != "reflection_orientation_required":

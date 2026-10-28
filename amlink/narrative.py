@@ -99,6 +99,11 @@ def render(purpose, payload):
             out.append(f"Card {r.get('position', i)} | {r.get('label', r.get('ref', 'candidate'))}\n" + material(r) +
                        f"\nSource complete: {r.get('complete_source')}; retrieval: {r.get('retrieval', '')}")
     if 'units' in payload:
+        review_sources = {s['position']: s for s in payload.get('sources', [])}
+        # Read evidence before the potentially defective draft, using the same
+        # frozen source positions. Do not make the proposal the apparent source.
+        out.append('ORIGINAL EVIDENCE — read these before judging the drafts\n' + '\n\n'.join(
+            f"Source position {r['position']}\n" + material(r) for r in payload.get('sources', [])))
         for target in payload.get('old_targets', []):
             out.append('EXISTING MEMORY BEFORE THE PROPOSED CHANGE\n' + material(target))
         for target in payload.get('identity_targets', []):
@@ -125,8 +130,14 @@ def render(purpose, payload):
                 out.append('Event time: ' + dumps({k:proposal.get(k) for k in ('time_expression','time_start','time_end')}))
             out.append('Proposed supporting originals: ' + ', '.join(proposal.get('source_refs', [])))
             out.append('Available source positions: ' + ', '.join(map(str, unit.get('source_positions', []))))
-        out.append('ACTUALLY VISIBLE ORIGINALS\n' + '\n\n'.join(
-            f"Source position {r['position']}\n" + material(r) for r in payload.get('sources', [])))
+            cited = [review_sources[p] for p in unit.get('source_positions', [])
+                     if p in review_sources and review_sources[p]['source_ref'] in proposal.get('source_refs', [])]
+            out.append('COMPARE THIS DRAFT WITH ITS CITED ORIGINALS (the draft is NOT evidence):\n' + '\n'.join(
+                f"Source position {s['position']} | {s['source_ref']}\n{s['text']}" for s in cited))
+            if unit['kind'] == 'item':
+                out.append('Write the supported final statement, including possibilities/undecided status when present. '
+                           'If the draft is too strong, correct its text; use null only if no supported claim remains. '
+                           'Do not add a calendar year absent from the event evidence; message date is not event date.')
     elif payload.get('sources'):
         out.append('ORIGINAL MESSAGES TO READ\n' + '\n\n'.join(
             f"Source position {r.get('position', i)}\n" + material(r) for i, r in enumerate(payload['sources'])))

@@ -6,7 +6,7 @@ import re
 from pydantic import ValidationError
 
 from .errors import MemoryError
-from .schemas import Mutation
+from .schemas import Mutation, check_source_time
 from .text import FORGET, digest, dumps
 
 REFLECTION_PROMPT = """You maintain source-grounded memory. Work on the named LOCAL GROUP, using the batch
@@ -46,9 +46,12 @@ missing material or budget exhaustion may not be discarded as a no-op. No tool/n
 
 Every source_refs entry identifies an actually shown original. Cite the sentence supporting the
 assertion, not merely a message mentioning the person. Preserve conditions, quantities, uncertainty,
-negation and attribution. Source review can revise or withdraw a draft. Minimum episodes are immutable.
-Existing fact/event bodies cannot change: use a new node for a changed assertion, reuse an exact old
-body for additional support. A same-version Inspect and visible body are required for old write targets
+negation and attribution. 'Might return' is a possibility, not a plan; a suggestion is not a commitment.
+Add already stores faithful episodes: do not create another episode summary. Existing episode/fact/event
+bodies and time fields cannot change: use a new fact/event for new information, reuse an exact old
+body only for additional support. Updated person/entity/concept text needs sources supporting its CURRENT
+claims; historical citations are not automatically evidence for changed content.
+A same-version Inspect and visible body are required for old write targets
 or relation endpoints. Backlinks is discovery, not proof of reading. Evict only removes active context.
 
 New nodes use descriptive new: placeholders. Old refs must be supplied, never invented. If the
@@ -66,7 +69,10 @@ sources; sharing a topic does not establish a relation. Updates/conflicts requir
 When required_actions says material_ready, proceed with the offered content step instead of rereading; when only invalid fields
 remain, patch them instead of searching. Respect the available tool and page positions.
 
-Time fields need an exact source time_expression. Message date is not automatically event date.
+Time fields need an exact source time_expression, never an inferred year added to a quotation.
+Normalized date years must occur in the cited original text, not only in timestamp metadata or ref names.
+Message date is not automatically event date. Do not fill missing year/month/day or turn 'recently'
+into an exact date; keep unknown date fields null and preserve the original temporal wording.
 Forget only under an explicit NEW user instruction with known scope. Never erase inconvenient
 contradictions. This group completes only after a validated commit or a genuine no-op.
 """
@@ -114,6 +120,8 @@ def preflight_mutation(value, *, user, store):
         if item.ref.startswith('memory:') and (not old or old['kind'] != item.kind):
             raise MemoryError('mutation_invalid_identity', 502)
         if not old:
+            if item.kind == 'episode':
+                raise MemoryError('mutation_episode_creation', 502)
             continue
         changed = any(getattr(item, field) != old.get(field) for field in
                       ('text', 'time_expression', 'time_start', 'time_end'))
@@ -122,6 +130,8 @@ def preflight_mutation(value, *, user, store):
             raise MemoryError('minimum_episode_immutable', 502)
         if old['kind'] in {'fact', 'event'} and changed:
             raise MemoryError('mutation_fact_overwrite', 502)
+        if old['kind'] == 'episode' and changed:
+            raise MemoryError('mutation_episode_overwrite', 502)
     invalid = []
     for link in mutation.links:
         endpoints = []
@@ -143,6 +153,8 @@ def _relation_kinds_valid(left, right, relation):
 
 
 def prepare_mutation(value, *, user, request_id, number, context, store):
+    # The reviewed proposal must obey the same identity rules as the first draft.
+    preflight_mutation(value, user=user, store=store)
     mutation, filtered_fields = parse_mutation(value)
     sources = {row["ref"]: row for row in context["sources"]}
     # A source may have been shown in a Reference/disclosed page while its
@@ -171,10 +183,12 @@ def prepare_mutation(value, *, user, request_id, number, context, store):
             raise MemoryError("mutation_duplicate_ref", 502)
         refs = checked(item.source_refs)
         existing = old.get(item.ref)
-        if existing and existing["kind"] == item.kind:
-            # The model only needs to cite this round's visible sources. Keep
-            # prior provenance in the system so context projection cannot
-            # silently force a rewrite to drop older source links.
+        same_statement = existing and existing['kind'] == item.kind and all(
+            getattr(item, field) == existing.get(field)
+            for field in ('text', 'time_expression', 'time_start', 'time_end'))
+        if same_statement:
+            # Previously accepted support remains valid for an UNCHANGED
+            # statement. Changed navigation content uses reviewed sources only.
             for ref in existing["source_refs"]:
                 if not store.get(user, ref, include_blocked=True):
                     raise MemoryError("mutation_unknown_source", 502)
@@ -194,15 +208,12 @@ def prepare_mutation(value, *, user, request_id, number, context, store):
             if store.is_minimum_episode(user, item.ref):
                 if item.text != old[item.ref]["text"] or set(refs) != set(old[item.ref]["source_refs"]):
                     raise MemoryError("minimum_episode_immutable", 502)
-            if not set(old[item.ref]["source_refs"]).issubset(refs):
-                raise MemoryError("mutation_drops_provenance", 502)
-            if item.kind in {"fact", "event"} and any(
-                getattr(item, field) != old[item.ref].get(field)
-                for field in ("text", "time_expression", "time_start", "time_end")):
-                raise MemoryError("mutation_fact_overwrite", 502)
             ref = item.ref
         else:
             raise MemoryError("mutation_invalid_identity", 502)
+        check_source_time(item.time_expression, [
+            (sources.get(source_ref) or store.get(user, source_ref, include_blocked=True))['text']
+            for source_ref in refs], item.time_start, item.time_end)
         aliases[item.ref] = ref
         unchanged = ref in old and set(refs) == set(old[ref]["source_refs"]) and all(
             getattr(item, field) == old[ref].get(field)

@@ -8,6 +8,7 @@ from amlink.errors import MemoryError
 from amlink.observation import Observer
 from amlink.schemas import AddRequest, SearchRequest
 from amlink.store import Store
+from review_fixture import review_output
 
 
 class FakeProviders:
@@ -35,8 +36,8 @@ class FakeProviders:
                 return "reflection_items", self.reflection(payload)
             return "reflection_stop", {"reason": "No additional semantic change is needed in this fixture."}
         if purpose == 'reflection_review':
-            return 'review', {'remaining_work': [], 'no_change_reason': None, 'reviews': {f"u{u['position']}": { 'action': 'keep', 'text': None, 'detail': 'fixture',
-                'source_positions': [i for i in u['source_positions'] if {s['position']: s for s in payload['sources']}[i]['source_ref'] in u['proposal']['source_refs']]} for u in payload['units']}}
+            return 'review', review_output(payload, {'reviews': [{'position': u['position'], 'action': 'keep', 'text': None, 'detail': 'fixture',
+                'source_positions': [i for i in u['source_positions'] if {s['position']: s for s in payload['sources']}[i]['source_ref'] in u['proposal']['source_refs']]} for u in payload['units']]})
         if purpose == "bfs":
             return "bfs_stop", {"action": "stop"}
         raise AssertionError(f"unexpected tool {purpose}")

@@ -14,6 +14,7 @@ from amlink.schemas import AddRequest, SearchRequest
 from amlink.store import Store
 from amlink.text import dumps
 from amlink.projection import visible_fragments
+from review_fixture import review_output
 
 
 class Scripted:
@@ -42,9 +43,7 @@ class Scripted:
         self.calls.append((purpose, payload))
         if purpose == "reflection_review":
             output = self.review(payload)
-            return 'review', {'remaining_work': output.get('remaining_work', []),
-                'no_change_reason': output.get('no_change_reason') or (output.get('reason') if output.get('resolution') == 'episode_only' else None),
-                'reviews': {f"u{r['position']}": {k: v for k, v in r.items() if k != 'position'} for r in output['reviews']}}
+            return 'review', review_output(payload, output)
 
         assert len(dumps(tool_body(self.engine.config, purpose, prompt, payload, tools))) <= self.engine.config.model_input_chars
         if purpose == "select":
@@ -160,14 +159,14 @@ def test_minimum_episode_cannot_be_replaced_with_summary(make):
     assert engine.store.get("u", item["ref"])["text"] == item["text"]
 
 
-def test_derived_episode_also_gets_vector_and_workspace_survives(make):
+def test_derived_event_also_gets_vector_and_workspace_survives(make):
     engine, provider = make(embedding_enabled=True, embedding_dimensions=2, reflection_threshold=1)
 
     def decide(purpose, payload):
         if purpose == "reflection":
             stage = payload['context']['reflection_control'].get('pending_mutation', {}).get('stage')
             if stage == 'relations': return 'reflection_relations', {'links': []}
-            return "reflection_items", {"items": [{"ref": "new:journey", "kind": "episode",
+            return "reflection_items", {"items": [{"ref": "new:journey", "kind": "event",
                 "text": "A separate account of the journey", "source_refs": [payload["working"][0]["ref"]]}]}
         return "bfs_action", {"action": "stop"}
 
@@ -310,7 +309,7 @@ def test_reflection_schema_explains_event_time_and_episode_semantics(make):
     item = schema["$defs"]["ItemChange"]["properties"]
     assert "Never copy the source message timestamp" in item["time_start"]["description"]
     assert "Exact time phrase" in item["time_expression"]["description"]
-    assert "minimum episode is immutable" in item["kind"]["description"]
+    assert 'episode' not in item['kind']['enum']  # Add owns new episodes; this workspace has no old episode.
 
 
 def test_about_episode_link_is_filtered_without_dropping_grounded_nodes(make):

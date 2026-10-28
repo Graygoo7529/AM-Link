@@ -1,5 +1,9 @@
 # 进行中的工作
 
+当前交付：[节点保真与简明审查实施核对](./2026-10-28-memory-integrity-implementation.md)、[执行计划](../phase-2/2026-10-28-memory-integrity-review-plan.md)。工程 done；258 回归＋3 子测试，236 次真实调用。最终三切片来源齐全，但 LM04 整理仅 1/3，协议与图语义仍未验收。下方审读是实施前记录。
+
+最新审读：[切实可行的改进点](./2026-10-28-practical-improvement-audit.md)。基线 `ff706cb`；旧 episode 换题覆盖、来源审查/提交不一致、review 错嵌已用真实轨迹确认。建议尚未实施，本轮没有模型调用或方法变更。
+
 2026-10-28 最新：[v4 / 1024 迁移实施](./2026-10-28-embedding-v4-migration.md)。默认切换与清理 done；231 项回归＋3 子测试、两个新库切片和 4 次长度探测。长文本多片段索引仍为设计，图质量未验收。Add/Search 交付边界见[前轮核对](./2026-10-27-delivery-contract-implementation.md)，下方为历史索引。
 
 最新：[方法收敛实施核对](./2026-10-27-convergence-implementation.md)及[执行清单](../phase-2/2026-10-27-convergence-execution.md)。工程清理done，198项回归通过；真实长历史、图语义及成本质量联合验收未通过。

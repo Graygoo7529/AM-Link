@@ -1,5 +1,7 @@
 # AM-Link 研究可视化
 
+2026-10-28 后续：[节点保真与审查实测](../docs/doing/2026-10-28-memory-integrity-implementation.md)增加 12 个新库诊断档案，最终为 `integrity28-lm4-r6`、`integrity28-p2-r6`、`integrity28-l1-r6`，每个案例已有持久评注。仍是三个案例切片，不是完整历史；来源齐不代表整理完整或图正确。下方仅两个运行是迁移完成时的历史状态。
+
 统一展示入口：[独立网页](./index.html)。`view.html` 是同源会话片段；原始样本与轨迹的本地扩展版在被忽略的 `data/local/`。原案例文档仍保留在 [`casestudies/`](../casestudies/README.md)。
 
 2026-10-28：[v4 迁移](../docs/doing/2026-10-28-embedding-v4-migration.md)已清理旧库及活动登记，历史轨迹/报告保留供离线研究。当前活动运行仅 `v4-1024-20261028-lm4`、`v4-1024-20261028-p2`，均使用新库、text-embedding-v4 / 1024 维；页面仍为 11 数据集、26 案例。下方 contract27 记录是清理前历史状态。
