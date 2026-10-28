@@ -106,9 +106,8 @@ def test_review_noncontiguous_source_positions_and_endpoint_revision():
     result['reviews'][0].update(action='revise',text='Maya likes tea.')
     edits,receipts=check_review(payload,result)
     assert edits[0]['after']['text']=='Maya likes tea.'
-    assert edits[-1]['after'] is None and all(r['kind']=='item' for r in receipts)
-    result['reviews'][-1]['revised_endpoints']=['new:tea']
-    assert check_review(payload,result)[0][-1]['after'] is not None
+    assert edits[-1]['after'] is not None
+    # Endpoint version invalidation is owned by the review session, not a model acknowledgement.
 
 
 def test_review_protocol_requires_replacement_text_for_revision():

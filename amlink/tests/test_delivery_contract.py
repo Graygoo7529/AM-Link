@@ -180,7 +180,8 @@ def test_review_keys_cannot_repeat_or_silently_omit_proposals():
     data = {'choices': [{'finish_reason': 'tool_calls', 'message': {'tool_calls': [{'function': {
         'name': 'review', 'arguments': '{"reviews":{"u3":{},"u3":{}}}'}}]}}]}
     with pytest.raises(MemoryError, match='model_tool_output_invalid'):
-        Providers._parse_tool(data)
+        from amlink.tool_contract import parse_tool
+        parse_tool(data, [{'name': 'review', 'parameters': {'type': 'object'}}])
 
 
 def test_review_sources_merge_overlap_without_inventing_gap():
@@ -194,7 +195,7 @@ def test_review_applies_corrections_then_local_patch_completes_remaining_work(ma
     default_review, seen = provider.review, []
     def review(payload):
         result = default_review(payload)
-        if len(payload['units']) == 1:
+        if len(payload['units']) == 1 and payload['units'][0]['proposal']['ref'] == 'new:tea':
             result['reviews'][0].update(action='revise', text='Maya likes tea.')
             result['remaining_work'] = ['Also retain the explicitly stated Paris visit.']
         return result

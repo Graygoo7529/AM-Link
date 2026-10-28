@@ -89,22 +89,14 @@ def _semantic_ref(user: str, request_id: str, number: int, label: str, kind: str
 
 def parse_mutation(value):
     """Validate tool output before either the exploration gate or mutation work."""
-    filtered_fields = []
-    if isinstance(value, dict):
-        # Some tool providers occasionally place an ItemChange field at the
-        # Mutation root. It has no unambiguous target item, so discard only
-        # these known misplaced fields and keep the fact observable. Unknown
-        # root fields remain a schema error.
-        value = dict(value)
-        for field in ("time_expression", "time_start", "time_end"):
-            if field in value:
-                filtered_fields.append({"field": field, "reason": "mutation_field_without_item"})
-                value.pop(field)
     try:
         mutation = Mutation.model_validate(value)
-    except ValidationError:
+    except ValidationError as error:
+        if all(e['type'] == 'value_error' and len(e['loc']) == 2 and e['loc'][0] == 'items'
+               for e in error.errors()):
+            raise MemoryError('mutation_time_invalid', 409) from None
         raise MemoryError("mutation_schema_invalid", 502) from None
-    return mutation, filtered_fields
+    return mutation, []
 
 
 def preflight_mutation(value, *, user, store):

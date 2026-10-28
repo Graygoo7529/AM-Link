@@ -1,5 +1,13 @@
 # AM-Link 研究可视化
 
+2026-10-28最新：[工具协议与局部整理修订](../docs/doing/2026-10-28-tool-repair-implementation.md)、[18份档案台账](../docs/doing/2026-10-28-tool-repair-run-ledger.md)。新增失败层、实际输出额度、逐项审查前后、撤销依据与持久支持、未提交待办的展示。6个案例已有本地持久评注；当前本地页突出`tool28-lm4-r3`与`tool28-pv4-r3`：前者来源3/4，后者长历史因研究预算只接收32/41 Add、Search未执行，不能记为方法通过。页面11数据集/26案例，每题最多80个span，省略数量明确显示，完整轨迹仍在运行目录；可改选其他档案重新生成。
+
+```powershell
+.\.venv\Scripts\python.exe -m visualization.build --local --workspace --workspace-run tool28-lm4-r3 --workspace-run tool28-pv4-r3 --max-spans 80 --web
+```
+
+下方为此前阶段的展示快照，不代表当前活动登记只有两条。
+
 2026-10-28 后续：[节点保真与审查实测](../docs/doing/2026-10-28-memory-integrity-implementation.md)增加 12 个新库诊断档案，最终为 `integrity28-lm4-r6`、`integrity28-p2-r6`、`integrity28-l1-r6`，每个案例已有持久评注。仍是三个案例切片，不是完整历史；来源齐不代表整理完整或图正确。下方仅两个运行是迁移完成时的历史状态。
 
 统一展示入口：[独立网页](./index.html)。`view.html` 是同源会话片段；原始样本与轨迹的本地扩展版在被忽略的 `data/local/`。原案例文档仍保留在 [`casestudies/`](../casestudies/README.md)。

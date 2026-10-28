@@ -103,3 +103,15 @@ links 的方向固定为 `from_id` 指向 `to_id`：memory derived_from source�
 | `evidence packing decisions` | 已选范围、重复卡复用、预算遗漏、路径闭合及 omitted_edges；来源完整性失败显式抛错 |
 
 网页在 Add 与 Search 摘要中显示这些状态以及内部错误步骤数。该数含嵌套 span，不是独立模型失败次数；模型尝试按 model span 单独计数。旧轨迹缺少字段时显示未知，不根据父级 HTTP 200 补推。中途观测写入失败仍不能声明采集完整。HTTP 默认不启用内部 recorder，native 靶场完整采集。
+
+
+## 2026-10-28 工具交付与局部审查
+
+标准事件仍为amlink.observation.v1。以下细节进入已有可显示artifact：
+
+- 协议诊断format_version=1：layer（dependency/incomplete/protocol/business）、finish_reason、call_id/response_id、schema_fingerprint、字段/约束路径。公开错误不包含原文，私有轨迹可核对实际请求和返回；请求ID未报告时保持null。
+- 调用协议format_version=1：实际max_completion_tokens、schema指纹及HTTP请求ID；模型span仍是一份真实尝试，用量缺失保持null。不要累加父/子error span当作额外模型调用。
+- 局部审查format_version=2：round、committed=false、decisions的before/after/evidence_positions、source_receipts、issues/remaining_work。撤销依据不出现在持久支持中；recheck_required表示端点变化后必须重审。reviewed draft展示暂存而非完成凭据。
+- 完成仍以reflection mutation commit和group receipt为准；Add 200只说明必要接收已提交。网页展示“本组局部审查（尚未提交）”，将撤销依据与写入支持分列；旧事件缺失的新字段不能推断为成功。
+
+工具往返仅本轮离线对照，未进入生产，不生成虚构的跨请求对话/缓存成功事件。实际对照与完整历史质量门槛见本轮实施报告。

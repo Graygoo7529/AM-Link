@@ -78,7 +78,6 @@ def review_case():
     output = review_output(payload, {'reviews': [dict(position=u['position'], action='keep', text=None,
         source_positions=[0], detail='Supported.') for u in payload['units']]})
     output['u0'].update(text='Maya might return on April 20th.', time_expression='April 20th')
-    output['u2']['revised_endpoints'] = ['new:visit']
     return payload, output
 
 
@@ -102,10 +101,10 @@ def test_invalid_flat_review_never_guessed_or_partially_accepted(fault):
     if fault == 'nested': output['u0']['u1'] = output.pop('u1')
     if fault == 'missing': output.pop('u1')
     if fault == 'extra': output['u0']['position'] = 0
-    if fault == 'unknown_source': output['u0']['source_positions'] = [99]
-    if fault == 'boolean_source': output['u0']['source_positions'] = [False]
-    if fault == 'duplicate_source': output['u0']['source_positions'] = [0, 0]
-    if fault == 'empty_revision': output['u0']['text'] = None
+    if fault == 'unknown_source': output['u0']['evidence_positions'] = [99]
+    if fault == 'boolean_source': output['u0']['evidence_positions'] = [False]
+    if fault == 'duplicate_source': output['u0']['evidence_positions'] = [0, 0]
+    if fault == 'empty_revision': output['u0']['text'] = ''
     if fault == 'keep_rewrite': output['u0']['action'] = 'keep'
     if fault == 'edge_revision': output['u2']['action'] = 'revise'
     if fault == 'foreign_endpoint': output['u2']['revised_endpoints'] = ['memory:other']

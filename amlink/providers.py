@@ -1,10 +1,10 @@
 """One HTTP attempt per model operation. No SDK, retries, or failover."""
 from __future__ import annotations
 
-import json
 import math
 import threading
 import time
+from dataclasses import replace
 from urllib.parse import urlsplit
 
 import httpx
@@ -12,6 +12,7 @@ import httpx
 from .errors import MemoryError
 from .text import digest, dumps
 from .narrative import render
+from .tool_contract import parse_tool, ToolResult
 
 
 def tool_body(config, purpose, prompt, payload, tools):
@@ -20,11 +21,21 @@ def tool_body(config, purpose, prompt, payload, tools):
     Storage hashes use sorted keys; the model reads the explicitly composed
     question/decision before its material, so model input must not sort keys.
     """
+    contract = ('\nTOOL DELIVERY: Return exactly one tool call. Include every required property, even when its value is null, false or []. '
+                'Send only argument properties; schema keywords such as maxItems/type/required are NOT output fields.\n')
+    contract += '\n'.join(tool['name'] + ' top-level argument fields: ' +
+                          ', '.join(tool['parameters'].get('properties', {})) for tool in tools)
+    if purpose == 'reflection':
+        contract += ('\nEach proposed item must include ref, kind, text, source_refs, time_expression, time_start and time_end. '
+                     'Unknown time fields are explicit null. Always include no_prior_match in reflection_items; do not omit false. '
+                     'Each reflection_relations link must include from_ref, to_ref, relation, source_refs and support. '
+                     'In support explain what the cited original says about THIS connection; do not omit this field.')
     return {"model": config.llm_model, "temperature": 0,
-            "max_tokens": config.model_max_tokens, "parallel_tool_calls": False,
+            "max_completion_tokens": min(config.model_max_tokens, 1024) if purpose in {"bfs", "query_expansion"} else config.model_max_tokens,
+            "parallel_tool_calls": False,
             "tools": [{"type": "function", "function": tool} for tool in tools],
-            "tool_choice": "required",
-            "messages": [{"role": "system", "content": prompt},
+            "tool_choice": {"type": "function", "function": {"name": tools[0]["name"]}} if len(tools) == 1 else "required",
+            "messages": [{"role": "system", "content": prompt + contract},
                          {"role": "user", "content": render(purpose, payload)}]}
 
 
@@ -94,46 +105,11 @@ class Providers:
             if time.monotonic() >= deadline:
                 raise MemoryError("request_deadline", 504)
             self.observer.output(event, data, kind="memory", title="模型公开输出及用量")
-            return parser(data) if parser is not None else data
-
-    @staticmethod
-    def _parse_json(data):
-        try:
-            choice = data["choices"][0]
-            if choice.get("finish_reason") != "stop":
-                raise ValueError("incomplete model output")
-            result = json.loads(choice["message"]["content"])
-            if not isinstance(result, dict):
-                raise ValueError("expected JSON object")
-            return result
-        except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError):
-            raise MemoryError("model_output_invalid", 502) from None
-
-    @staticmethod
-    def _parse_tool(data):
-        try:
-            choice = data["choices"][0]
-            if choice.get("finish_reason") != "tool_calls":
-                raise ValueError("incomplete tool output")
-            message = choice["message"]
-            calls = message.get("tool_calls") or []
-            if len(calls) != 1:
-                raise ValueError("expected exactly one tool call")
-            function = calls[0]["function"]
-            name = function["name"]
-            def unique_pairs(pairs):
-                value = {}
-                for key, item in pairs:
-                    if key in value:
-                        raise ValueError('duplicate tool key')
-                    value[key] = item
-                return value
-            arguments = json.loads(function['arguments'], object_pairs_hook=unique_pairs)
-            if not isinstance(name, str) or not isinstance(arguments, dict):
-                raise ValueError("invalid tool call")
-            return name, arguments
-        except (KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError):
-            raise MemoryError("model_tool_output_invalid", 502) from None
+            self.observer.output(event, {"format_version": 1, "request_id": response.headers.get("x-request-id"),
+                "response_id": data.get("id"), "max_completion_tokens": body.get("max_completion_tokens"),
+                "schema_fingerprint": digest(body.get("tools", []))}, kind="context", title="模型交互协议")
+            result = parser(data) if parser is not None else data
+            return replace(result, request_id=response.headers.get('x-request-id')) if isinstance(result, ToolResult) else result
 
     def _parse_embedding(self, data, expected):
         try:
@@ -153,28 +129,12 @@ class Providers:
         except (KeyError, TypeError, ValueError):
             raise MemoryError("embedding_output_invalid", 502) from None
 
-    def json(self, purpose, prompt, payload, deadline):
-        return self._post(base=self.config.llm_base_url, path="/chat/completions",
-            key=self.config.llm_api_key, model=self.config.llm_model, embedding=False, deadline=deadline,
-            body={"model": self.config.llm_model, "temperature": 0,
-                  "max_tokens": self.config.model_max_tokens, "response_format": {"type": "json_object"},
-                  "messages": [{"role": "system", "content": prompt},
-                               {"role": "user", "content": dumps({"purpose": purpose, "data": payload})}]},
-            parser=self._parse_json)
-
     def tool(self, purpose, prompt, payload, tools, deadline):
-        """Run one structured tool decision; the caller owns the bounded loop."""
-        allowed = {tool["name"] for tool in tools}
-
-        def parse(data):
-            name, arguments = self._parse_tool(data)
-            if name not in allowed:
-                raise MemoryError("model_unknown_tool", 502)
-            return name, arguments
-
+        """One attempt; validate the actual offered schema before domain interpretation."""
         return self._post(base=self.config.llm_base_url, path="/chat/completions",
             key=self.config.llm_api_key, model=self.config.llm_model, embedding=False, deadline=deadline,
-            body=tool_body(self.config, purpose, prompt, payload, tools), parser=parse)
+            body=tool_body(self.config, purpose, prompt, payload, tools),
+            parser=lambda data: parse_tool(data, tools))
 
     def embed(self, texts, deadline):
         if not texts or len(texts) > self.config.embedding_batch:

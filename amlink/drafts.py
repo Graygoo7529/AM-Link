@@ -1,10 +1,11 @@
 """Local draft edits and a source-to-statement review before atomic writing."""
 from copy import deepcopy
 import re
+from pydantic import ValidationError
 
 from .errors import MemoryError
 from .projection import visible_fragments
-from .schemas import check_source_time
+from .schemas import check_source_time, ItemChange
 from .text import digest
 
 
@@ -64,9 +65,9 @@ def decode_review(payload, output):
     reviews = []
     for unit in payload['units']:
         entry = output[f"u{unit['position']}"]
-        fields = {'detail', 'source_positions'}
+        fields = {'detail', 'evidence_positions'}
         fields |= ({'text', 'time_expression', 'time_start', 'time_end'} if unit['kind'] == 'item'
-                   else {'action', 'revised_endpoints'})
+                   else {'action'})
         replaces = unit['kind'] == 'relation' and unit['proposal'].get('relation') == 'supersedes'
         if replaces:
             fields.add('replacement_quote')
@@ -74,15 +75,16 @@ def decode_review(payload, output):
             raise MemoryError('reflection_review_invalid', 502)
         action = ('drop' if entry['text'] is None else 'accept') if unit['kind'] == 'item' else entry['action']
         allowed = {'accept', 'drop'} if unit['kind'] == 'item' else {'keep', 'drop'}
-        positions = entry['source_positions']
+        positions = entry['evidence_positions']
         if (not isinstance(action, str) or action not in allowed
                 or not isinstance(entry['detail'], str) or not entry['detail'].strip()
                 or not isinstance(positions, list)
                 or any(type(i) is not int or i not in unit['source_positions'] for i in positions)
                 or len(set(positions)) != len(positions)
-                or (action == 'drop') != (not positions)):
+                or (action != 'drop' and not positions)):
             raise MemoryError('reflection_review_invalid', 502)
         normalized = {'position': unit['position'], 'action': action, **entry}
+        normalized['source_positions'] = normalized.pop('evidence_positions')
         if unit['kind'] == 'item':
             times = {k: entry[k] for k in ('time_expression', 'time_start', 'time_end')}
             if action == 'accept':
@@ -94,17 +96,10 @@ def decode_review(payload, output):
                 # about whether its text/time fields should be empty.
                 normalized['action'] = ('revise' if entry['text'] != unit['proposal']['text'] or any(
                     times[k] != unit['proposal'].get(k) for k in times) else 'keep')
-            elif entry['text'] is not None or any(v is not None for v in times.values()):
+            elif entry['text'] is not None or any(v is not None and not isinstance(v, str) for v in times.values()):
                 raise MemoryError('reflection_review_invalid', 502)
             for key in times:
                 normalized.pop(key)
-        else:
-            endpoints = entry['revised_endpoints']
-            offered = {unit['proposal']['from_ref'], unit['proposal']['to_ref']}
-            if (not isinstance(endpoints, list) or any(not isinstance(v, str) or v not in offered for v in endpoints)
-                    or len(set(endpoints)) != len(endpoints) or (action == 'drop' and endpoints)
-                    or (replaces and action == 'drop' and entry['replacement_quote'] is not None)):
-                raise MemoryError('reflection_review_invalid', 502)
         reviews.append(normalized)
     return {'remaining_work': tasks, 'no_change_reason': reason, 'reviews': reviews}
 
@@ -197,7 +192,8 @@ def check_review(payload, output):
         unit = units[position]
         action = review.get('action')
         decision = {'position': position, 'kind': unit['kind'], 'before': unit['proposal'],
-                    'action': action, 'detail': review.get('detail', '')}
+                    'action': action, 'detail': review.get('detail', ''),
+                    'evidence_positions': review.get('source_positions', [])}
         if action == 'drop':
             if not decision['detail']:
                 raise MemoryError('reflection_review_invalid', 502)
@@ -228,6 +224,13 @@ def check_review(payload, output):
                 'content_digest': source['content_digest']})
         corrected['source_refs'] = sorted(supported)
         if unit['kind'] == 'item':
+            try:
+                ItemChange.model_validate(corrected)
+            except ValidationError:
+                raise MemoryError('reflection_review_item_invalid', 409) from None
+            old = next((n for n in payload.get('old_targets', []) if n['ref'] == corrected['ref']), None)
+            if old and old['kind'] in {'episode', 'fact', 'event'} and old['text'] != corrected['text']:
+                raise MemoryError('reflection_review_immutable_target', 409)
             check_source_time(corrected.get('time_expression'), [sources[i]['text'] for i in review['source_positions']],
                               corrected.get('time_start'), corrected.get('time_end'))
         if unit['kind'] == 'relation' and corrected.get('relation') == 'supersedes':
@@ -238,20 +241,6 @@ def check_review(payload, output):
                 raise MemoryError('reflection_replacement_evidence_missing', 409)
             decision['replacement_quote'] = quote
         decisions.append({**decision, 'after': corrected})
-    # A joint review must judge links against its own revised nodes, not stale endpoints.
-    changed = {d['before']['ref'] for d in decisions if d['kind'] == 'item' and d['after']
-               and any(d['before'].get(k) != d['after'].get(k) for k in ('text', 'time_expression', 'time_start', 'time_end'))}
-    removed = {d['before']['ref'] for d in decisions if d['kind'] == 'item' and not d['after']}
-    by_position = {r['position']: r for r in reviews}
-    for decision in decisions:
-        if decision['kind'] != 'relation' or not decision['after']:
-            continue
-        endpoints = {decision['before']['from_ref'], decision['before']['to_ref']}
-        acknowledged = by_position[decision['position']].get('revised_endpoints', [])
-        if not isinstance(acknowledged, list) or any(not isinstance(v, str) for v in acknowledged):
-            raise MemoryError('reflection_review_invalid', 502)
-        if endpoints & removed or not (endpoints & changed).issubset(acknowledged):
-            decision.update(after=None, action='drop', detail='Endpoint removed or revised without explicit relation re-evaluation.')
     accepted = {d['position'] for d in decisions if d['after']}
     return decisions, [r for r in receipts if r['position'] in accepted]
 
@@ -262,9 +251,11 @@ classification. Fix a wrong draft instead of discarding the supported informatio
 If the original says 'I might go back', write 'The speaker might go back', not 'plans to return'.
 If it says 'I have decided; I will definitely return', preserve the commitment.
 If it says '教练建议小林去游泳，小林还没决定', keep the suggestion AND the undecided status.
+Preserve conditions and qualifications such as 'if/unless', who said it, and which event it concerns.
+Do not enlarge a narrow draft into every nearby fact; keep complementary assertions distinct.
 Null text is only for an entirely invented or useless claim with nothing supported to retain.
 Use detail to briefly explain what the cited evidence establishes; put the final memory in text.
-Select source_positions supporting ALL final claims. Do not cite another person's event or an old
+Select evidence_positions supporting ALL final claims; for withdrawal they explain rejection and will NOT become stored support. Do not cite another person's event or an old
 claim merely because it has the same topic. Old write targets are shown separately from new drafts.
 
 Time is part of the claim. Keep the original precision in BOTH text and fields. 'April 20th' without
@@ -272,19 +263,21 @@ a year stays 'April 20th'; dates=null. 'Recently' stays 'recently'; dates=null. 
 stays 'yesterday'; dates=null. An explicit 'April 20, 2023' permits 2023-04-20. Message timestamps are
 not event dates. Normalized years must occur in the selected original text, not timestamp metadata or
 ref names. time_expression must quote the selected original, not an inferred expression.
-Return all final time fields; null for unsupported fields. Null text requires all time fields=null.
+Return all final time fields; null for unsupported fields. For withdrawn nodes, typed time fields are ignored.
 
 For RELATIONS, use their displayed meanings and final node text. Keep a connection only if evidence
 supports the connection itself, not just its endpoints. Supersedes needs an exact replacement_quote
 copied from selected ORIGINAL evidence, not copied from the draft. Different events, complementary
-facts and repeated statements do not replace/conflict. For kept edges list revised_endpoints changed
-by your node edits; otherwise []. Null nodes remove dependent edges. Dropped edges cite [] and use
-replacement_quote=null when offered. Existing episode/fact/event bodies cannot be changed: withdraw
+facts and repeated statements do not replace/conflict. A 1000-to-1200 correction replaces a quota;
+an additional per-minute limit does not. Two purchases are separate events, not price corrections.
+The speaker owns their experience, not the listener. Same names do not establish identity.
+The program rechecks edges incident to edited nodes. Null nodes remove dependent draft edges.
+Dropped edges may cite rejection evidence or []; their replacement_quote is ignored. Existing episode/fact/event bodies cannot be changed: withdraw
 an invalid old-node rewrite and name the needed new assertion in remaining_work.
 
 Return every offered uN at the TOP LEVEL alongside remaining_work and no_change_reason. No reviews
 wrapper, arrays of decisions or nested uN keys. Each entry has a nonempty detail. Nonnull nodes and
-kept edges need supporting source_positions; withdrawn entries cite []. remaining_work lists only
+kept edges need supporting evidence_positions; withdrawn entries may cite rejection evidence or []. remaining_work lists only
 necessary work still unresolved AFTER your edits; otherwise []. no_change_reason is only for an
 entire group needing no semantic change. A greeting does not justify an invented hobby: discard that
 hobby and do not ask for new evidence of it. Budget/dependency failures never justify a no-op."""
@@ -296,8 +289,8 @@ def review_schema(payload):
         node = unit['kind'] == 'item'
         fields = {
             'detail': {'type': 'string', 'minLength': 1, 'description': 'Why this decision; put corrected text in text.'},
-            'source_positions': {'type': 'array', 'items': {'type': 'integer',
-                'enum': unit['source_positions'] or [-1]}, 'description': 'Only actual support for the final claim; exclude old/topic-only citations. [] only for drop.'}}
+            'evidence_positions': {'type': 'array', 'items': {'type': 'integer',
+                'enum': unit['source_positions'] or [-1]}, 'description': 'For keep: actual support of the final claim. For drop: rejection evidence or []; never stored as support.'}}
         if node:
             fields.update({
                 'text': {'type': ['string', 'null'], 'description': 'WRITE the complete faithful memory, correcting wrong claims. Preserve useful uncertain statements. Null ONLY if nothing is supported.'},
@@ -307,9 +300,6 @@ def review_schema(payload):
                    for k in ('time_start', 'time_end')}})
         else:
             fields['action'] = {'type': 'string', 'enum': ['keep', 'drop'], 'description': 'Does the original support this connection?'}
-            fields['revised_endpoints'] = {'type': 'array', 'items': {'type': 'string',
-                'enum': list(dict.fromkeys([unit['proposal']['from_ref'], unit['proposal']['to_ref']]))},
-                'description': 'Endpoints revised in this response and re-evaluated for this kept edge; otherwise [].'}
             if unit['proposal'].get('relation') == 'supersedes':
                 fields['replacement_quote'] = {'type': ['string', 'null'],
                     'description': 'Exact original replacement/correction wording for keep; null for drop.'}
@@ -321,3 +311,30 @@ def review_schema(payload):
         'no_change_reason': {'type': ['string', 'null'], 'minLength': 1,
                              'description': 'Null unless the WHOLE group needs no change. Never an empty string.'}})
     return {'type': 'object', 'properties': properties}
+
+
+def review_units(payload, output):
+    """Wire decoding must already have passed; isolate only repairable domain defects."""
+    decisions, receipts, issues = [], [], []
+    by_position = {u['position']: u for u in payload['units']}
+    for review in output['reviews']:
+        unit = by_position[review['position']]
+        try:
+            edits, evidence = check_review({**payload, 'units': [unit]}, {'reviews': [review]})
+            decisions.extend(edits)
+            receipts.extend(evidence)
+        except MemoryError as error:
+            if error.code not in {'mutation_time_not_quoted', 'mutation_time_precision',
+                                  'reflection_replacement_evidence_missing', 'reflection_review_immutable_target',
+                                  'reflection_review_item_invalid'}:
+                raise
+            guidance = {
+                'reflection_review_item_invalid': 'Correct this item only: nonempty text within 6000 characters, nonempty support, real ordered calendar dates, and an original time expression whenever a normalized date is set. Use null for unsupported dates.',
+                'reflection_review_immutable_target': 'This is an EXISTING episode/fact/event. Do not overwrite its original assertion. Withdraw this rewrite; if new information is useful, describe the separate new assertion in remaining_work.',
+                'mutation_time_not_quoted': 'Quote event time exactly from selected originals, or use null. Preserve the supported statement.',
+                'mutation_time_precision': 'No event year may come from message metadata. Preserve original precision; clear unsupported normalized dates.',
+                'reflection_replacement_evidence_missing': 'Keep only with an exact ORIGINAL correction of the SAME property under the SAME conditions. Otherwise drop this edge; retain useful nodes.'}
+            issues.append({'position': unit['position'], 'review_key': f"u{unit['position']}",
+                'kind': unit['kind'], 'code': error.code, 'proposal': unit['proposal'],
+                'attempted_edit': review, 'next_action': guidance[error.code], 'committed': False})
+    return decisions, receipts, issues

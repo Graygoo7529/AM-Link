@@ -34,6 +34,8 @@ class Observer:
                 yield event
             except MemoryError as error:
                 event["error"] = {"code": error.code, "retryable": error.retryable}
+                if error.detail:
+                    self.output(event, error.detail, kind='context', title='失败层次与具体约束')
                 raise
             finally:
                 self.current.reset(token)

@@ -50,7 +50,7 @@ def test_relation_review_sees_corrected_node_endpoints(make):
         return result
     provider.review = review
     result = engine._review_draft(args, {}, [{'ref':'raw:a','text':'Maya likes tea.'}], time.monotonic()+10)
-    assert phases == ['item']  # One joint review acknowledges its corrected endpoint.
+    assert phases == ['item', 'relation']  # Only the edge sees the final corrected endpoint again.
     assert result['items'][1]['text']=='Maya likes tea.' and result['links']
 
 

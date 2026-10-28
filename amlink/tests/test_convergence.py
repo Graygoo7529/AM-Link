@@ -118,19 +118,18 @@ def test_invalid_relation_cannot_finish_by_noop(make):
     assert engine.store.state('u')['settled_through']==0
 
 
-def test_schema_feedback_repairs_missing_relation_sources(make):
+def test_missing_relation_sources_is_protocol_failure_without_retry(make):
     engine, provider = make(reflection_threshold=1)
     def decide(purpose,payload):
         source=payload['working'][0]['ref']; step=payload['step']
         if step==0: return 'reflection_items', {'items':[dict(ref='new:f',kind='fact',text='A fact',source_refs=[source]),dict(ref='new:e',kind='entity',text='An entity',source_refs=[source])]}
         link=dict(from_ref='new:f',to_ref='new:e',relation='about',support='A fact concerns the entity.')
-        if step==2:
-            assert payload['context']['reflection_control']['last_gate_error']['code']=='mutation_schema_invalid'
-            link['source_refs']=[source]
+        assert step < 2
         return 'reflection_relations', {'links':[link]}
     provider.decide=decide
     engine.add(request('a',['A fact concerns an entity.']))
-    assert any(n['kind']=='fact' for n in engine.store.nodes('u'))
+    assert not any(n['kind']=='fact' for n in engine.store.nodes('u'))
+    assert any(p.get('error') == 'mutation_schema_invalid' for plan in engine.store.reflection_plans('u') for p in plan['progress'].values())
 
 
 def test_rephrasing_unrelated_item_is_not_progress_on_same_invalid_edge(make):

@@ -21,6 +21,15 @@ def test_relation_rejection_and_database_scope_remain_distinct():
     assert evidence_panel(scope)['title']=='旧记忆范围核验'
 
 
+def test_review_rejection_evidence_is_not_shown_as_stored_support():
+    panel = evidence_panel({'format_version': 2, 'committed': False, 'decisions': [
+        {'before': {'ref': 'new:claim', 'text': 'Unsupported.'}, 'after': None,
+         'detail': 'The source contradicts it.', 'evidence_positions': [2]}]})
+    assert panel['rows'][0]['审查依据位置'] == [2]
+    assert panel['rows'][0]['写入支持'] == []
+    assert '尚未提交' in panel['title']
+
+
 def test_successful_api_can_display_unfinished_maintenance_and_partial_search(tmp_path):
     import json
     from visualization.test_imports import fixture

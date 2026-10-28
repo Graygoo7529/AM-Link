@@ -140,7 +140,7 @@ def attach_spans(run: dict, path: Path, request_scope: dict) -> None:
                             'intake', 'reflection', 'maintenance_error', 'progress', 'replay', 'completion', 'stop_reason') if k in detail}
                         preview['evidence_panel'] = {'title': '接口交付与内部完成状态', 'rows': [delivery[event['request_id']]],
                                                      'shown': 1, 'total': 1}
-                    if isinstance(detail, dict) and detail.get("format_version") == 1:
+                    if isinstance(detail, dict) and detail.get("format_version") in (1, 2):
                         panel = evidence_panel(detail)
                         if panel:
                             preview["evidence_panel"] = panel
@@ -165,6 +165,22 @@ def attach_spans(run: dict, path: Path, request_scope: dict) -> None:
 
 def evidence_panel(value):
     """Versioned bounded display, only after artifact path/hash/shape validation."""
+    if value.get('layer') in {'protocol', 'incomplete', 'business', 'integrity', 'dependency'}:
+        labels = {'protocol': '工具协议', 'incomplete': '输出未完成', 'business': '内容待修订',
+                  'integrity': '来源完整性', 'dependency': '外部依赖'}
+        return {'title': '失败层次：' + labels[value['layer']], 'rows': [value], 'shown': 1, 'total': 1}
+    if value.get('format_version') == 2 and 'committed' in value and 'decisions' in value:
+        rows = [{'对象': (d.get('before') or {}).get('ref') or (d.get('before') or {}).get('from_ref'),
+                 '结果': '撤销草案' if d.get('after') is None else '需按最终端点重审' if d.get('recheck_required') else '草案通过',
+                 '原因': d.get('detail'), '审查依据位置': d.get('evidence_positions'),
+                 '写入支持': (d.get('after') or {}).get('source_refs', []),
+                 '修订前': (d.get('before') or {}).get('text'), '修订后': (d.get('after') or {}).get('text')}
+                for d in value['decisions'][:20]]
+        rows.extend({'待办': issue} for issue in value.get('issues', value.get('tasks', []))[:8])
+        return {'title': '本组局部审查（尚未提交）' if not value['committed'] else '本组审查已提交',
+                'rows': rows, 'shown': len(rows), 'total': len(value['decisions']) + len(value.get('issues', value.get('tasks', [])))}
+    if 'schema_fingerprint' in value and 'max_completion_tokens' in value:
+        return {'title': '实际模型调用协议与额度', 'rows': [value], 'shown': 1, 'total': 1}
     if "disclosures" in value:
         return {"title": "模型实际可见范围", "status": value.get("status", "unknown"),
                 "rows": [{"type": "引用清单", "position": row.get("position"), "ref": row.get("ref"),

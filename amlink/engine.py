@@ -16,7 +16,8 @@ from .projection import Choices, visible_fragments, range_receipt, range_is_visi
 from .reflection_policy import plan_prefix
 from .grounding import missing_material
 from .intake import prepare_forgetting
-from .drafts import patch_items, review_payload, check_review, decode_review, review_schema, REVIEW_PROMPT
+from .drafts import patch_items
+from .review_session import review_draft, consume_decision
 from .local_reflection import PLAN_PROMPT, decode_plan, group_rows, completion, passages as source_passages
 from .packing import freeze_pack, pack_frozen
 from .providers import tool_body
@@ -33,7 +34,10 @@ def _tool(name, description, schema):
             return [strict(entry) for entry in value]
         if not isinstance(value, dict):
             return value
-        result = {key: strict(entry) for key, entry in value.items()}
+        # A default is a Python-side convenience, not permission to omit a wire field.
+        result = {key: ({name: strict(schema) for name, schema in entry.items()}
+                       if key in {'properties', '$defs'} else strict(entry))
+                  for key, entry in value.items() if key not in {'default', 'title'}}
         if result.get("type") == "object":
             properties = result.get("properties", {})
             result["required"] = list(properties)
@@ -348,10 +352,10 @@ class Engine:
                 "An existing episode may only be reused with its exact body/time fields.")
         if "time_start" in item_properties:
             item_properties["time_start"]["description"] = (
-                "Optional normalized event date. Never copy the source message timestamp here.")
+                "Always include this key. Use null when no supported normalized event date exists. Never copy the source message timestamp.")
         if "time_end" in item_properties:
             item_properties["time_end"]["description"] = (
-                "Optional normalized event end date. Never copy the source message timestamp here.")
+                "Always include this key. Use null when no supported normalized event end date exists. Never copy the source message timestamp.")
         if "time_expression" in item_properties:
             item_properties["time_expression"]["description"] = (
                 "Exact time phrase in source text; required whenever time_start or time_end is set.")
@@ -491,6 +495,7 @@ class Engine:
         watermark = group['through_ordinal']
         context = self._reflection_context(user, pending, deadline, group=group)
         context['_local_group'] = group
+        context['_decision_count'] = 0
         context["prefix_overview"] = [{'title': g['title'], 'completed': i in {r['index'] for r in self.store.reflection_plan(user, group['plan_id'])['receipts']}}
             for i, g in enumerate(self.store.reflection_plan(user, group['plan_id'])['groups'])]
         context.setdefault("draft_stage", "items")
@@ -601,7 +606,7 @@ class Engine:
                            "next": "Resolve the concrete missing evidence or node defect. The program handles checks and submission; do not copy unchanged nodes."},
                        "working": [self._view(row) for row in pending], "context": {},
                        "watermark": watermark, "step": step,
-                       "remaining_decisions": self.config.reflection_steps - step,
+                       "remaining_decisions": self.config.reflection_steps - context.get('_decision_count', 0),
                        "prefix_overview": context.get("prefix_overview", []),
                        "instruction": "Overview is partial planning context. Future batches are not legal mutation sources."}
             context_limit = self.config.context_chars
@@ -642,6 +647,7 @@ class Engine:
             else:
                 raise MemoryError("reflection_message_budget", 413)
             with self.observer.span("reflection", "reflection tool decision", inputs=payload) as event:
+                consume_decision(context, self.config.reflection_steps)
                 name, arguments = self._call_tool("reflection", prompt(), payload, tools, deadline)
                 self._record_visible(context, payload["context"], "reflection", payload["working"])
                 self.observer.output(event, {"tool": name, "arguments": arguments}, kind="context", title="Reflection 工具调用")
@@ -813,20 +819,8 @@ class Engine:
                     context['draft_stage'] = 'items'
                     self._save_workspace(user, state='maintenance', context=context)
                     return None
-                if error.code == "mutation_schema_invalid":
-                    # A malformed tool payload is a repairable proposal
-                    # error while the current Reflection budget remains.
-                    # Give the model one concrete schema task instead of
-                    # turning a missing relation source list into a
-                    # request failure or reopening source exploration.
-                    self._reflection_feedback(user, context, arguments, [], [{
-                        "reason": "mutation_schema_invalid",
-                        "instruction": ("Correct the affected item with reflection_patch_items (reflection_items for an initial draft). Every item needs ref, kind, text and nonempty source_refs."
-                            if node_submission else "Correct only links with reflection_relations. Endpoints must be offered memory:/new: nodes, NEVER raw: sources. relation must be an offered relation type, not a reference. Include nonempty source_refs. If no legal pair exists, return links=[]; do not rewrite nodes or reread sources.")
-                    }], event, step, error.code)
-                    return None
                 if error.code in {"mutation_fact_overwrite", "minimum_episode_immutable", "mutation_invalid_identity",
-                                  "mutation_episode_overwrite", "mutation_episode_creation", "mutation_time_not_quoted", "mutation_time_precision"}:
+                                  "mutation_episode_overwrite", "mutation_episode_creation", "mutation_time_invalid", "mutation_time_not_quoted", "mutation_time_precision"}:
                     bad_refs = []
                     for item in arguments.get("items", []):
                         ref = item.get("ref") if isinstance(item, dict) else None
@@ -840,11 +834,13 @@ class Engine:
                             "time_expression is not a repair. Do not modify a stored episode/fact/event.")
                     if error.code == 'mutation_time_precision':
                         instruction = "The normalized year is absent from the cited original text. Set time_start/time_end to null; preserve the original time_expression and its precision in text. Message timestamps and ref names do not establish that year. Patch only the affected new draft, not stored episode/fact/event content."
+                    if error.code == 'mutation_time_invalid':
+                        instruction = "Correct the NEW draft's event-time fields: dates must exist in the calendar, start must not follow end, and a normalized date needs its quoted original expression. Unsupported dates must be null. Preserve useful content and all unaffected items."
                     if error.code == "mutation_invalid_identity" and bad_refs:
                         instruction = ("These memory refs are not loaded old nodes: " + ", ".join(bad_refs[:8]) + ". "
                             "Use a new: semantic placeholder for each genuinely new or changed node, or inspect/load the exact existing memory ref before referencing it. Do not invent memory: identifiers.")
                     diagnostic = {"reason": error.code, "instruction": instruction}
-                    if error.code in {'mutation_time_not_quoted', 'mutation_time_precision'}:
+                    if error.code in {'mutation_time_invalid', 'mutation_time_not_quoted', 'mutation_time_precision'}:
                         diagnostic['draft_time_fields'] = [{key: item.get(key) for key in
                             ('ref', 'time_expression', 'time_start', 'time_end', 'source_refs')}
                             for item in arguments.get('items', []) if item.get('time_expression') is not None]
@@ -888,7 +884,10 @@ class Engine:
 
     def _finish_reflection(self, user, group, context, payload, deadline):
         arguments = {**context['pending_mutation'], 'links': context.get('pending_links', [])}
-        arguments = self._review_draft(arguments, payload['context'], payload['working'], deadline, context=context)
+        try:
+            arguments = self._review_draft(arguments, payload['context'], payload['working'], deadline, context=context)
+        finally:
+            self._save_workspace(user, state='maintenance', context=context)
         context['pending_mutation'] = {k: v for k, v in arguments.items() if k != 'links'}
         context['pending_links'] = arguments.get('links', [])
         if context.get('review_remaining'):
@@ -918,118 +917,8 @@ class Engine:
         return True
 
     def _review_draft(self, arguments, projected, working, deadline, *, context=None):
-        identities = []
-        if context:
-            for item in arguments.get('items', []):
-                if item['kind'] == 'person' and item['ref'].startswith('new:'):
-                    matches = context.get('identity_queries', {}).get(item['ref'], {}).get('refs', [])
-                    identities.extend(ref for ref in matches if ref in context.get('inspections', {})
-                        and any(v.get('item_ref') == ref for v in visible_fragments(projected)))
-        full = review_payload(arguments, projected, working, identities)
-        if not full['units']:
-            if not arguments.get('forget'):
-                raise MemoryError('reflection_completion_invalid', 502)
-            return arguments
-        decisions, receipts, shown = [], [], []
-        endpoints = {item['ref']: item for item in full['endpoints']}
-
-        def payload_for(page):
-            refs = {ref for u in page for ref in (u['proposal'].get('from_ref'), u['proposal'].get('to_ref')) if ref}
-            # Include old write targets, even when this group proposes no edge.
-            refs.update(u['proposal']['ref'] for u in page if u['kind'] == 'item' and u['proposal']['ref'].startswith('memory:'))
-            refs.update(full['identity_refs'])
-            positions = {i for u in page for i in u['source_positions']}
-            return {'task': 'Correct this small group as a coherent submission; final relations must match final statements.',
-                'units': [{**u, 'review_key': f"u{u['position']}"} for u in page], 'sources': [v for v in full['sources'] if v['position'] in positions],
-                'old_targets': [v for v in full['old_targets'] if v['ref'] in refs],
-                'identity_targets': [endpoints[ref] for ref in full['identity_refs'] if ref in endpoints],
-                'endpoints': [node for ref, node in endpoints.items() if ref in refs]}
-
-        def size(page):
-            payload = payload_for(page)
-            return self._tool_size('reflection_review', REVIEW_PROMPT, payload,
-                                  [_tool('review', 'Revise statements, evaluate final relations and resolve the group.', review_schema(payload))])
-
-        pages = [full['units']]
-        if size(full['units']) > self.config.model_input_chars:
-            # Oversized groups retain node-before-edge dependencies; no source cropping.
-            pages = []
-            for kind in ('item', 'relation'):
-                remaining = [u for u in full['units'] if u['kind'] == kind]
-                while remaining:
-                    page = remaining[:]
-                    while len(page) > 1 and size(page) > self.config.model_input_chars:
-                        page = page[:-1]
-                    if size(page) > self.config.model_input_chars:
-                        raise MemoryError('reflection_review_budget', 413)
-                    pages.append(page)
-                    remaining = remaining[len(page):]
-        resolutions = []
-        for page in pages:
-            valid = []
-            for unit in page:
-                if unit['kind'] == 'relation' and any(ref not in endpoints for ref in
-                        (unit['proposal']['from_ref'], unit['proposal']['to_ref'])):
-                    decisions.append({'position': unit['position'], 'kind': 'relation', 'before': unit['proposal'],
-                        'after': None, 'action': 'drop', 'detail': 'Endpoint withdrawn by previous review page.'})
-                else:
-                    valid.append(unit)
-            if not valid:
-                continue
-            payload = payload_for(valid)
-            with self.observer.span('reflection', 'statement source review', inputs=payload) as event:
-                _, output = self._call_tool('reflection_review', REVIEW_PROMPT, payload,
-                    [_tool('review', 'Revise statements, evaluate final relations and resolve the group.', review_schema(payload))], deadline)
-                output = decode_review(payload, output)
-                resolutions.append(output)
-                edits, evidence = check_review(payload, output)
-                decisions.extend(edits); receipts.extend(evidence)
-                for edit in edits:
-                    if edit['kind'] == 'item':
-                        endpoints.pop(edit['before']['ref'], None)
-                        if edit['after']:
-                            endpoints[edit['after']['ref']] = {k: edit['after'][k] for k in ('ref', 'kind', 'text')}
-                self.observer.output(event, {'reviews': output, 'decisions': edits, 'source_receipts': evidence,
-                    'semantic_status': 'model_reviewed_not_ground_truth'}, kind='context', title='局部联合审查与来源对应')
-                original = visible_fragments(projected, working)
-                for value in original:
-                    # Sources in the actual payload, or exact old endpoint body shown here.
-                    if any(v['source_ref'] == value['origin_ref'] and v['start'] <= value['start']
-                           and v['end'] >= value['end'] for v in payload['sources']):
-                        shown.append(value)
-                    elif any(n['ref'] == value['origin_ref'] and value['text'] in n['text']
-                             for n in [*payload['endpoints'], *payload['old_targets']]):
-                        shown.append(value)
-                # Source tables split large visible originals into exact smaller ranges.
-                for source in payload['sources']:
-                    source_row = {'ref': source['source_ref'], 'text': source['text'],
-                        'text_fragment': {'origin_ref': source['source_ref'], 'content_digest': source['content_digest'],
-                            'start': source['start'], 'end': source['end'],
-                            'fragment_id': digest([source['source_ref'], source['content_digest'], source['start'], source['end']])}}
-                    shown.extend(visible_fragments({}, [source_row]))
-        items = [d['after'] for d in decisions if d['kind'] == 'item' and d['after']]
-        removed = {d['before']['ref'] for d in decisions if d['kind'] == 'item' and not d['after']}
-        links = [d['after'] for d in decisions if d['kind'] == 'relation' and d['after']
-                 and not removed.intersection((d['after']['from_ref'], d['after']['to_ref']))]
-        empty = not items and not links and not arguments.get('forget')
-        remaining = list(dict.fromkeys(t for r in resolutions for t in r['remaining_work']))
-        if empty and not remaining:
-            reasons = [r['no_change_reason'] for r in resolutions if r.get('no_change_reason')]
-            if len(pages) != 1 or not reasons:
-                raise MemoryError('reflection_review_empty', 409)
-            decision = completion(reasons[0], unresolved=arguments.get('basis') in {'update_existing', 'resolve_conflict'})
-            if context is not None:
-                context['_completion'] = decision
-        if context is not None:
-            context['review_remaining'] = remaining
-        if context is not None:
-            self._record_visible(context, {'disclosures': list({v['fragment_id']: v for v in shown}.values())}, 'reflection_review_pages')
-            context['visible_source_refs'] = sorted({v['origin_ref'] for v in shown if v['origin_ref'].startswith('raw:')})
-        with self.observer.span('reflection', 'reviewed draft', inputs={'proposed': arguments}) as event:
-            self.observer.output(event, {'items': items, 'links': links, 'dropped_endpoint_refs': sorted(removed),
-                'source_receipts': receipts, 'remaining_work': remaining,
-                'outcome': 'unfinished' if remaining else 'episode_only' if empty else 'ready'}, kind='memory')
-        return {**arguments, 'items': items, 'links': links}
+        return review_draft(self, arguments, projected, working, deadline,
+                            context if context is not None else {}, _tool)
 
     @staticmethod
     def _reflection_action(context, action, **details):
@@ -1134,7 +1023,7 @@ class Engine:
             for key in ("disclosures", "last_visible", "read_ranges"):
                 retained[key] = [v for v in retained.get(key, []) if v["origin_ref"] not in blocked_sources | blocked_items and v.get("item_ref") not in blocked_items]
             retained["edges"] = [e for e in retained.get("edges", []) if not blocked_items.intersection((e["from_ref"], e["to_ref"])) and not blocked_sources.intersection(e["source_refs"])]
-            for key in ("prefix_overview", "protected_refs", "protected_sources", "protected_bodies", "last_gate_error", "pending_mutation", "pending_links", "pending_link_support", "draft_stage", "revision_reason", "rejected_proposal", "rejected_problem", "identity_queries", "visible_source_refs", "completed_queries", "action_log", "_page_choices"):
+            for key in ("prefix_overview", "protected_refs", "protected_sources", "protected_bodies", "last_gate_error", "pending_mutation", "pending_links", "pending_link_support", "draft_stage", "review_checkpoint", "review_remaining", "_decision_count", "last_review_unfinished", "revision_reason", "rejected_proposal", "rejected_problem", "identity_queries", "visible_source_refs", "completed_queries", "action_log", "_page_choices"):
                 retained.pop(key, None)
             self._bound_workspace(retained)
             self.store.commit_mutation(user, prepared, watermark=watermark,
@@ -1154,6 +1043,7 @@ class Engine:
                           for ref, version in saved.get('versions', {}).items()):
             context = deepcopy(resume)
             context['_local_group'] = group
+            context['_decision_count'] = 0
             context['local_committed_refs'] = [ref for p in self.store.reflection_plans(user) for r in p['receipts'] for ref in r['refs']]
             context['local_source_refs'] = list(dict.fromkeys(ref for n in context['local_committed_refs']
                 if (node := self.store.get(user, n)) for ref in node['source_refs']))
@@ -1180,7 +1070,7 @@ class Engine:
         context["old_scope"] = {"before": before, "empty": self.store.old_scope_empty(user, before) and not context['local_committed_refs'],
                                 "basis": "database_valid_old_sources", "query_performed": False}
         context.pop("last_gate_error", None)
-        for key in ("protected_refs", "protected_sources", "protected_bodies", "pending_mutation", "pending_links", "pending_link_support", "draft_stage", "revision_reason", "rejected_proposal", "rejected_problem", "completed_queries", "action_log"):
+        for key in ("protected_refs", "protected_sources", "protected_bodies", "pending_mutation", "pending_links", "pending_link_support", "draft_stage", "review_checkpoint", "review_remaining", "_decision_count", "last_review_unfinished", "revision_reason", "rejected_proposal", "rejected_problem", "completed_queries", "action_log"):
             context.pop(key, None)
         context["identity_queries"] = {}
         context["question"] = query
@@ -1405,13 +1295,6 @@ class Engine:
                        if v['ref'] not in context.get('new_refs', [])]}
         self.store.save_workspace(user, state=state, context=context)
 
-    def _model_json(self, purpose, payload, deadline, fallback_prompt):
-        if hasattr(self.providers, "tool"):
-            name, args = self.providers.tool(purpose, fallback_prompt, payload, [
-                _tool(purpose, "Return the structured result.", {"type": "object", "additionalProperties": True})], deadline)
-            return args
-        return self.providers.json(purpose, fallback_prompt, payload, deadline)
-
     def _search_refs(self, user, query, context, deadline, *, mode="search"):
         branches = [query]
         if mode == "search" and self.config.mode == "graph" and self.config.search_model and (COMPLEX.search(query) or len(query) > 100):
@@ -1423,11 +1306,8 @@ class Engine:
                 "Do not invent people, objects, values, events or absolute dates. Keep relative dates such as "
                 "'this year' unresolved unless an explicit reference date is supplied in the input. "
                 "Return fewer expressions when extra branches add no distinct evidence need. Never answer.")
-            if hasattr(self.providers, "tool"):
-                name, data = self._call_tool("query_expansion", prompt_text, payload, [_tool(
+            name, data = self._call_tool("query_expansion", prompt_text, payload, [_tool(
                     "query_expansion", "Produce retrieval expressions.", {"type": "object", "properties": {"queries": {"type": "array", "items": {"type": "string"}, "maxItems": 3}}, "required": ["queries"], "additionalProperties": False})], deadline)
-            else:
-                data = self.providers.json("query_expansion", prompt_text, payload, deadline)
             try:
                 expansion = QueryExpansion.model_validate(data)
             except ValidationError:

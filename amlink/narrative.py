@@ -73,6 +73,15 @@ def context_text(context):
 def render(purpose, payload):
     """One deterministic renderer shared by budget preflight and actual HTTP."""
     out = [f'TASK: {purpose}']
+    if payload.get('repair_tasks'):
+        out.append('LOCAL CORRECTION REQUIRED — previous draft is NOT committed. Do not repeat the rejected fields.')
+        for task in payload['repair_tasks']:
+            out.append(f"Correct u{task['position']}: {task.get('code')}. {task.get('next_action', '')}")
+            attempt = task.get('attempted_edit', {})
+            if attempt.get('time'):
+                out.append('Rejected time fields: ' + dumps(attempt['time']))
+            if task.get('code') == 'reflection_replacement_evidence_missing':
+                out.append('Rejected replacement quote: ' + str(attempt.get('replacement_quote')))
     for key in ('question', 'query', 'task', 'local_group', 'decision', 'instruction'):
         if payload.get(key):
             out.append(f'{key.upper()}: ' + (payload[key] if isinstance(payload[key], str) else dumps(payload[key])))
@@ -112,7 +121,7 @@ def render(purpose, payload):
         meanings = {
             'supersedes': 'The FROM assertion explicitly replaces the TO assertion about the SAME property under the SAME conditions. Both being true or one adding detail is not replacement.',
             'contradicts': 'FROM and TO make incompatible assertions about the SAME property under the SAME conditions.',
-            'about': 'FROM actually concerns the specific person, entity, concept or event described by TO. Shared topic, listener identity or similar activities are insufficient.',
+            'about': 'FROM must concern the identity represented by TO, not a name mentioned inside its description. For a person, identify the actual actor/owner of the FROM experience. A listener, friend or helper is not its owner. Shared topics do not establish this edge.',
             'contains': 'The TO assertion/event is part of the particular episode FROM.',
             'same_event_as': 'FROM and TO describe the SAME event occurrence, not two similar events.'}
         out.append('DRAFT STATEMENTS TO CHECK')
@@ -125,6 +134,8 @@ def render(purpose, payload):
                 out.append('FROM statement:\n' + material(endpoints[proposal['from_ref']]))
                 out.append('TO statement:\n' + material(endpoints[proposal['to_ref']]))
                 out.append('Test the connection itself, not just whether either endpoint is true. Give a brief source-based justification; otherwise drop.')
+                if proposal['relation'] == 'about':
+                    out.append('In detail, name the FROM experience owner and the identity represented by TO. If they differ, drop this about edge even if TO knows that person.')
             else:
                 out.append(material(proposal))
                 out.append('Event time: ' + dumps({k:proposal.get(k) for k in ('time_expression','time_start','time_end')}))
@@ -142,7 +153,7 @@ def render(purpose, payload):
         out.append('ORIGINAL MESSAGES TO READ\n' + '\n\n'.join(
             f"Source position {r.get('position', i)}\n" + material(r) for i, r in enumerate(payload['sources'])))
     handled = {'question','query','task','local_group','decision','instruction','remaining_decisions','prefix_overview',
-               'working','messages','context','candidates','result_limit','units','sources','endpoints','old_targets','identity_targets','step','watermark'}
+               'working','messages','context','candidates','result_limit','units','sources','endpoints','old_targets','identity_targets','step','watermark','repair_tasks'}
     for key, value in payload.items():
         if key not in handled:
             out.append(key + ': ' + dumps(value))

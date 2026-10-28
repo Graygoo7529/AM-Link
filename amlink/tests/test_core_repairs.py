@@ -256,18 +256,17 @@ def test_self_and_unknown_links_are_filtered_without_dropping_items(make):
     assert [link["reason"] for link in mutation["filtered_links"]] == ["self_link", "unknown_memory"]
 
 
-def test_misplaced_root_time_fields_are_observable_and_discarded(make):
+def test_misplaced_root_time_fields_are_rejected(make):
     engine, _ = make(mode="raw")
     engine.add(request("source", ["Maya discussed a design meeting."]))
     source = engine.store.raw("u")[0]["ref"]
     context = {"sources": engine.store.raw("u"), "items": {}, "memories": [], "new_refs": [source]}
-    mutation = prepare_mutation({
-        "items": [{"ref": "new:meeting", "kind": "event",
-                   "text": "Maya discussed a design meeting.", "source_refs": [source]}],
-        "links": [], "forget": [], "time_start": "2026-01-01",
-    }, user="u", request_id="followup", number=1, context=context, store=engine.store)
-    assert len(mutation["items"]) == 1
-    assert mutation["filtered_fields"] == [{"field": "time_start", "reason": "mutation_field_without_item"}]
+    with pytest.raises(MemoryError, match="mutation_schema_invalid"):
+        mutation = prepare_mutation({
+            "items": [{"ref": "new:meeting", "kind": "event",
+                       "text": "Maya discussed a design meeting.", "source_refs": [source]}],
+            "links": [], "forget": [], "time_start": "2026-01-01",
+        }, user="u", request_id="followup", number=1, context=context, store=engine.store)
 
 
 def test_select_merge_refuses_to_crop_surviving_originals_silently(make):
