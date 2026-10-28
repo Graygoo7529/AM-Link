@@ -1,5 +1,9 @@
 # AM-Link Add/Search 当前设计
 
+下一轮[工具协议、局部整理修订与有界对话执行计划](docs/phase-2/2026-10-28-tool-contract-and-reflection-repair-plan.md)已完成设计核对，**尚未实施**。拟统一当次工具 schema 校验，明确审查依据与持久支持，让局部语义问题能够在保留合法草案的基础上修订；工具往返需先解决编号、预算和可见证据一致性再做实测取舍。下文仍描述 `b000d96` 当前实现，不能把计划流程当作已运行事实。
+
+2026-10-28 补充审计：[整理与模型接口核查](docs/doing/2026-10-28-reflection-api-audit.md)。当前方法已提交为 `b000d96`。`strict=true` 已发送，但实际代理输出仍有 schema 违规；当前各轮重新渲染 context，没有原生工具往返续接。审查合法结果的 `remaining_work` 能续做，解码/来源校验异常尚可能直接结束该组。文中的协议统一、局部修订与有界工具回放是建议，未改变下述实现。
+
 更新：2026-10-28。当前默认实现已接入[节点保真与简明来源审查计划](docs/phase-2/2026-10-28-memory-integrity-review-plan.md)：全部旧 episode 正文/时间不可覆盖，可变导航节点只使用当前支持来源，节点审查直接交付最终正文，检查语气、原句时间及年份依据。[实施核对](docs/doing/2026-10-28-memory-integrity-implementation.md)区分工程与真实语义结果。此前 [Add/Search 对外契约](docs/phase-2/2026-10-27-add-search-contract-and-convergence-plan.md)不变；未部署，完整历史整理、图语义和多跳质量尚未验收。
 
 ## 边界和对象
