@@ -2,6 +2,8 @@
 
 统一展示入口：[独立网页](./index.html)。`view.html` 是同源会话片段；原始样本与轨迹的本地扩展版在被忽略的 `data/local/`。原案例文档仍保留在 [`casestudies/`](../casestudies/README.md)。
 
+2026-10-28：[v4 迁移](../docs/doing/2026-10-28-embedding-v4-migration.md)已清理旧库及活动登记，历史轨迹/报告保留供离线研究。当前活动运行仅 `v4-1024-20261028-lm4`、`v4-1024-20261028-p2`，均使用新库、text-embedding-v4 / 1024 维；页面仍为 11 数据集、26 案例。下方 contract27 记录是清理前历史状态。
+
 2026-10-27 当前已增加 `contract27-*` 新库真实实验及评注；历史清理记录见[10月26日备份清理](../docs/doing/2026-10-26-convergence-audit-and-reset.md)，未恢复旧库。最新[实施报告](../docs/doing/2026-10-27-delivery-contract-implementation.md)分别核对接收、整理及检索质量。Add 摘要现在显示接收结果、缓冲/未完成、组进度与内部错误；Search 显示局部停止及原因。HTTP 成功不代表内部无错误；旧轨迹未采集字段显示未知。公共版仍无原文运行，本地版选择档案加载。
 
 ## 四个连通视角

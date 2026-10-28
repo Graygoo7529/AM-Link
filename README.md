@@ -6,6 +6,8 @@
 
 AM-Link 和设计灵感来源 **TinySoul-Agent** 都是 Graygoo7529 的个人原创项目。一期借鉴自己的记忆设计思想，独立实现比赛接口，未直接移植 TinySoul-Agent 代码。
 
+2026-10-28：[v4 / 1024 迁移实施](./docs/doing/2026-10-28-embedding-v4-migration.md)。默认已使用智增增 `text-embedding-v4`、1024 维、批量 10，符合新的模型要求；旧向量库与缓存已备份清理，231 项回归＋3 子测试、两个新库切片 6/6 Add 和 2/2 Search。迁移接通不代表 Reflection 和图质量已通过；长文本分段索引仍为设计，无部署。
+
 2026-10-27最新：[方法收敛实施与核对](./docs/doing/2026-10-27-convergence-implementation.md)、[执行计划](./docs/phase-2/2026-10-27-convergence-execution.md)。已实施原文范围分组、程序推进、联合审查和检索说明传播；198项回归通过，真实六切片Add11/14、Search6/6，最终完整讨论Add1/4。工程清理已交付，长历史与图语义尚未验收，无部署。
 
 | 入口 | 内容 |

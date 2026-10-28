@@ -1,6 +1,6 @@
 # 二期接入调研
 
-核验日期：**2026-09-23**，本轮重新读取官网文档、API Guide 和官方公开评测仓库。以下是二期调研输入，不代表已经完成二期接入；正式绑定前仍以主办方冻结的 contract 和申请页为准。
+初次核验日期：**2026-09-23**。**2026-10-28 已重新核验并修正下文模型约束**，见[最新规则与智增增实测](../doing/2026-10-28-embedding-v4-verification.md)。其余章节保留 9 月的规则/计划快照，不表示已在 10 月重新核验；当前实施以根 DESIGN 和最新实施报告为准。正式绑定前仍以主办方冻结的 contract 和申请页为准。
 
 ## 已确认的变化
 
@@ -15,17 +15,18 @@
 
 ## 二期模型约束
 
-当前官方公开信息应分成平台侧和参赛方侧：
+2026-10-28 官网用户文档与赛事问答已明确统一约束，取代此前“embedding 不限、Search 模型待确认”的判断：
 
 | 范围 | 当前规则 | 对我们的结论 |
 | --- | --- | --- |
 | Answer / Eval | 平台锁定 Answer 模型、提示词、评测器和聚合流程；参赛方不能选择 | Add/Search 只需返回证据，不实现回答或评分 |
-| 开源方法榜 Add | Full 检查项明确写明应使用 `gpt-4o-mini` | 二期 Add 中所有生成式 LLM 调用暂固定为 `gpt-4o-mini`，兼容代理可以更换，但模型标识不能改成其他模型 |
-| 开源方法榜 Search | 当前公开页面没有单独列出 Search 的模型白名单；旧申请页曾显示 Add/Search 均为 `gpt-4o-mini` | 为避免边界争议，Search 也暂固定 `gpt-4o-mini`；正式提交前向主办方确认是否允许其他 Search 模型或无 LLM Search |
-| Embedding / 索引 | 官方文档明确不规定数据库、索引或 embedding 模型 | 可以使用本地或任意合规 embedding，也可以走词法/规则检索；需披露模型、版本、维度和费用 |
-| 商业产品榜 | 当前 Full 检查项写明 Add/Search 没有模型限制 | 不适用于我们的开源方法榜 |
+| 开源方法榜 LLM 相关组件 | 须使用 `gpt-4o-mini` | Add/Reflection、Query 扩展、Select、Search 多跳决策均继续使用现有模型 |
+| 开源方法榜 Embedding | 须使用 `text-embedding-v4` | 10月28日已迁移为 v4 / 1024 维；旧 embedding-3 研究结果不作为新组合验证 |
+| Reranker | 不限制 | 当前 Select 仍使用 gpt-4o-mini，无需为此新增独立 reranker |
+| 数据库、索引和内部架构 | 不限制 | 保留 BM25、向量与引用图设计；更换向量模型须使用新向量库 |
+| 商业产品榜 | 不受上述模型限制 | 不适用于我们的开源方法榜 |
 
-因此当前最稳妥的开源配置是：Add `gpt-4o-mini`，Search `gpt-4o-mini`（或确定性检索但先取得主办方确认），embedding 采用可替换的本地/外部模型。官方只比较我们提供的 Add/Search 证据，统一 Answer/Eval 不应被我们的实现替代。来源：[官方 Full 检查项](https://agentmemories.ai/zh-cn/docs)、[公开评测仓库说明](https://github.com/AML-memory/agent-memory-leaderboard)。
+当前默认组合已是 `gpt-4o-mini` + 智增增 `text-embedding-v4` / 1024 维，批量最多 10 条；新库切片已验证接入，见[迁移核对](../doing/2026-10-28-embedding-v4-migration.md)。单条 8192 tokens 的分段索引仍需后续实施。官方统一执行 Answer/Eval，我们仍只提供 Add/Search 证据。来源：[官方用户文档](https://agentmemoryleaderboard.ai/zh-cn/docs#doc-modes)、[官方赛事问答第 5 项](https://agentmemoryleaderboard.ai/competition/)。
 
 ## Add/Search 边界
 
@@ -97,11 +98,11 @@ API 文档提到 Streaming，但此公开数据项列表没有单独名为 Strea
 
 ## 仍待正式绑定前核验
 
-官网当前 Full 检查项对开源方法榜明确写的是 Add 使用 `gpt-4o-mini`；Search 是否必须同一模型、无 LLM Search 是否允许、embedding 是否需要在申请表单声明，公开文档没有完全展开。暂按 Add/Search 均固定 `gpt-4o-mini` 设计，正式绑定前再次查看申请页冻结版本并向主办方确认。商业榜的宽松约定不能套用到开源榜。
+2026-10-28 已明确模型组合，无需继续把 Search 的 LLM 白名单列为未知。页面仍有只提 Add 的旧 Full 检查项，不应据此忽略概览和赛事问答中的统一要求。正式绑定前仍需核对申请字段、版本与实际运行配置；商业榜的宽松约定不能套用到开源榜。
 
 当前配额、数据包和模型文案可能继续更新。实施前再次核验官网与选中版本；一期保存的旧运行说明仅作为经验。官方评测内容及派生副本仅用于对应任务，并在完成后 30 天内删除。来源：[用户文档数据条款](https://agentmemories.ai/zh-cn/docs)。
 
-## 下一步执行顺序
+## 2026-09-23 执行顺序快照
 
 | 状态 | 事项 | 验收依据 |
 | --- | --- | --- |
@@ -113,4 +114,4 @@ API 文档提到 Streaming，但此公开数据项列表没有单独名为 Strea
 | todo | 扩大真实 provider 的质量与故障实验 | 新库与缓存分开报告；同切片对照；有明确调用预算 |
 | todo | 部署独立二期版本，绑定 Key，Smoke 后 Full | 本地协议/容量/停流检查通过，固定 commit 和模型配置 |
 
-本轮不启动新模型实验，也不重新上线归档服务。先完成规则与最小失败语义，再根据可重复的收益增加记忆机制。
+以上为当时的执行安排，不是最新实施状态。2026-10-28 已完成 v4 默认迁移及有限新库验证，尚未重新上线服务。

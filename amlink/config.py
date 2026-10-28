@@ -39,11 +39,11 @@ class Config:
     llm_api_key: str = ""
     llm_model: str = "gpt-4o-mini"
     embedding_enabled: bool = True
-    embedding_base_url: str = "https://open.bigmodel.cn/api/paas/v4"
+    embedding_base_url: str = "https://api.zhizengzeng.com/v1"
     embedding_api_key: str = ""
-    embedding_model: str = "embedding-3"
-    embedding_dimensions: int = 512
-    embedding_batch: int = 32
+    embedding_model: str = "text-embedding-v4"
+    embedding_dimensions: int = 1024
+    embedding_batch: int = 10
     auth_scheme: str = "none"
     api_key: str = ""
     max_provider_calls: int = 10000
@@ -52,6 +52,8 @@ class Config:
     def __post_init__(self):
         if self.mode not in {"raw", "graph"} or self.llm_model != "gpt-4o-mini":
             raise ValueError("mode must be raw/graph; generative model must be gpt-4o-mini")
+        if self.embedding_model != "text-embedding-v4":
+            raise ValueError("embedding model must be text-embedding-v4 for the academic track")
         if self.auth_scheme not in {"none", "bearer", "token", "x-api-key"}:
             raise ValueError("unsupported authentication scheme")
         for address in (self.llm_base_url, self.embedding_base_url):
@@ -64,8 +66,10 @@ class Config:
                 raise ValueError(f"{field.name} must be finite")
             if type(value) in (int, float) and value <= 0 and field.name != "max_hops":
                 raise ValueError(f"{field.name} must be positive")
-        if not 0 <= self.max_hops <= 8 or self.embedding_batch > 64:
-            raise ValueError("invalid graph depth or embedding batch")
+        if not 0 <= self.max_hops <= 8:
+            raise ValueError("invalid graph depth")
+        if self.embedding_batch > 10:
+            raise ValueError("text-embedding-v4 accepts at most 10 texts per batch")
         if self.reflection_steps < 1 or self.search_steps < 1:
             raise ValueError("tool loops must have a positive step budget")
         if self.model_timeout > self.request_seconds:

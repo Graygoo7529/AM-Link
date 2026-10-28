@@ -4,6 +4,8 @@
 
 ## 边界和对象
 
+2026-10-28 已按开源榜要求迁移：默认智增增 `text-embedding-v4` / 1024 维、每批最多 10 条，LLM 相关组件继续 `gpt-4o-mini`。旧模型配置明确拒绝，旧向量库/缓存已备份清理。231 项回归和两个新库切片通过接入验证，但 Reflection 审查及图质量仍未验收。见[迁移报告](docs/doing/2026-10-28-embedding-v4-migration.md)。长文本仍是完整 Item 一次嵌入，8192 tokens 边界与多片段索引的[后续设计](docs/phase-2/2026-10-28-embedding-v4-migration-plan.md)尚未实施，不通过截断原文绕过限制。
+
 只提供Add/Search，主办方负责Answer/Eval。公开接口不变；同用户锁内同步执行，没有内部模型重试、后台补偿、自动重建或静默降级。默认开启embedding及模型Select。
 
 MemoryItem包含episode/person/entity/concept/event/fact，MemoryRelation保留about/contains/supersedes/contradicts/same_event_as。最低episode是不可变原文投影，RawEvent保存原始角色、会话、顺序及来源时间。user_id是隔离空间，不等于真实speaker；角色也不能代替人物姓名。

@@ -4,6 +4,8 @@
 `archive/phase-1/`；重构前的二期实现保存在 `archive/phase-2/amlink-0.1.0/`。
 AM-Link 只提供官方要求的 Add/Search，Search 返回证据，不生成最终答案。
 
+2026-10-28：默认 embedding 已迁移到智增增 `text-embedding-v4` / **1024 维**、批量最多 **10**；LLM 继续 `gpt-4o-mini`。旧模型环境变量会被拒绝，旧库向量指纹不兼容。已备份清理旧库，两个新库切片 6/6 Add、2/2 Search，回归 231 项＋3 子测试；长文本分段索引尚未实施，详见[迁移核对](../docs/doing/2026-10-28-embedding-v4-migration.md)。
+
 **核心工程修复已实施，方法质量继续验证。** [核心审计](../docs/doing/2026-10-11-amlink-core-audit.md)保存0.2.0失败基线；[0.2.1修复报告](../docs/doing/2026-10-11-amlink-core-repairs.md)区分工程回归、真实小样本和待讨论的方法改进。尚未部署或参加官方 Smoke。
 
 2026-10-27最新：[交付边界实施核对](../docs/doing/2026-10-27-delivery-contract-implementation.md)、[执行计划](../docs/phase-2/2026-10-27-add-search-contract-and-convergence-plan.md)。Add 可靠接收与 Reflection 进度独立；Search 可交付最后完成步骤的合法证据。当前数据库版本3，旧库显式拒绝，新实验必须新库。历史实现报告保留原始结论，当前流程以根 DESIGN 为准。
@@ -42,5 +44,6 @@ AM-Link 只提供官方要求的 Add/Search，Search 返回证据，不生成最
 
 需要真实模型时，使用被忽略的 `AML2_*` 环境变量，并通过靶场的
 `--factory amlink.native:factory` 运行；不要把密钥写入代码、观测或报告。
+本机二期配置已保存在忽略的 `docs/private/amlink.env`；HTTP 启动显式使用 `python -m amlink --env-file docs/private/amlink.env`。靶场嵌入调用前用 `amlink.config.load_env_file` 加载同一文件，两个组件均显式提供智增增 Key；不要复用历史脚本绑定的 `ZHIPU_API_KEY`。仓库示例不含 Key，默认库是新建空库；测试与研究库各自独立。
 接口字段和错误边界见 [PROTOCOL.md](PROTOCOL.md)，整体设计见根目录
 [DESIGN.md](../DESIGN.md)。

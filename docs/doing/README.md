@@ -1,9 +1,13 @@
 # 进行中的工作
 
+2026-10-28 最新：[v4 / 1024 迁移实施](./2026-10-28-embedding-v4-migration.md)。默认切换与清理 done；231 项回归＋3 子测试、两个新库切片和 4 次长度探测。长文本多片段索引仍为设计，图质量未验收。Add/Search 交付边界见[前轮核对](./2026-10-27-delivery-contract-implementation.md)，下方为历史索引。
+
 最新：[方法收敛实施核对](./2026-10-27-convergence-implementation.md)及[执行清单](../phase-2/2026-10-27-convergence-execution.md)。工程清理done，198项回归通过；真实长历史、图语义及成本质量联合验收未通过。
 
 | 日期 | 计划 | 当前状态 |
 | --- | --- | --- |
+| 2026-10-28 | [v4 / 1024 迁移](./2026-10-28-embedding-v4-migration.md) | done：新库6/6 Add、2/2 Search；39次真实调用；1651旧数据/缓存文件备份清理；长文本分段索引待实施 |
+| 2026-10-28 | [最新模型规则与 v4 接入](./2026-10-28-embedding-v4-verification.md) | 迁移前核验 done；智增增两次调用成功，130 输入 tokens；后续实施见上一行 |
 | 2026-10-27 | [方法收敛实施](./2026-10-27-convergence-implementation.md) | 工程清理与有限验证done；198回归、578模型尝试；完整历史和图质量未验收 |
 | 2026-10-26 | [运行清理、成本归因与整体收敛](./2026-10-26-convergence-audit-and-reset.md) | done：43个数据库/关联文件备份校验删除，12条登记清零；只做离线分析；[方法收敛计划](../phase-2/2026-10-26-method-convergence-plan.md)待确认/实施 |
 | 2026-10-26 | [自然叙事与局部整理](./2026-10-26-local-narrative-implementation.md) | 已提交65bc34a；185项回归，2189次模型尝试；整体质量及36题扩展未验收 |
