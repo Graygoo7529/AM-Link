@@ -17,14 +17,16 @@ def relations(payload):
         source_refs=[payload['working'][0]['ref']], support='Maya says she likes tea in this message.')]}
 
 
-def test_draft_and_links_are_invisible_until_atomic_commit(make):
+def test_reviewed_new_nodes_precede_links_but_group_waits_for_link_commit(make):
     engine, provider = make(reflection_threshold=1)
     stages = []
     def decide(purpose, payload):
         assert engine.store.state('u')['settled_through'] == 0
-        assert all(n['kind'] == 'episode' for n in engine.store.nodes('u'))
         control = payload['context']['reflection_control']
         stage = control.get('pending_mutation', {}).get('stage', 'initial')
+        assert (all(n['kind']=='episode' for n in engine.store.nodes('u')) if stage == 'initial' else
+                len(engine.store.nodes('u')) == 3)
+        assert not engine.store.rows('SELECT * FROM edges')
         stages.append(stage)
         if stage == 'initial': return 'reflection_items', proposal(payload)
         if stage == 'relations': return 'reflection_relations', relations(payload)
@@ -43,7 +45,7 @@ def test_draft_and_links_are_invisible_until_atomic_commit(make):
     assert len(provider.calls) == before
 
 
-def test_failed_draft_replay_never_partially_writes_or_duplicates_nodes(make):
+def test_link_failure_keeps_reviewed_nodes_and_replay_does_not_duplicate_them(make):
     engine, provider = make(reflection_threshold=1)
     failed = False
     def decide(purpose, payload):
@@ -61,14 +63,15 @@ def test_failed_draft_replay_never_partially_writes_or_duplicates_nodes(make):
     assert engine.add(req)['success']
     assert any(p.get('error') == 'provider_timeout' for plan in engine.store.reflection_plans('u') for p in plan['progress'].values())
     assert engine.store.state('u')['settled_through'] == 0
-    assert all(n['kind'] == 'episode' for n in engine.store.nodes('u'))
+    assert len(engine.store.nodes('u')) == 3
     calls = len(provider.calls)
     engine.add(req)
     assert len(provider.calls) == calls
     assert len(engine.store.raw('u')) == 1
-    assert not [n for n in engine.store.nodes('u') if n['kind'] == 'fact']
+    assert len([n for n in engine.store.nodes('u') if n['kind'] == 'fact']) == 1
     progress = engine.store.reflection_plan('u')['progress']['0']
-    assert progress['context']['pending_mutation']['items']
+    assert progress['context']['committed_node_refs']
+    assert not progress['context']['pending_mutation']['items']
     assert progress['context']['draft_stage'] == 'relations'
 
 
@@ -105,16 +108,12 @@ def test_uncommitted_draft_cannot_finish_via_stop(make):
     assert engine.store.state('u')['settled_through'] == 0
 
 
-def test_staged_invalid_relation_can_be_removed_but_not_committed(make):
+def test_relation_withdrawal_keeps_independent_valid_nodes(make):
     engine, provider = make(reflection_threshold=1)
     def decide(purpose, payload):
         if payload['step'] == 0: return 'reflection_items', proposal(payload)
         if payload['step'] == 1:
-            invalid = relations(payload)
-            invalid['links'][0].update(from_ref='new:maya', to_ref='new:tea')
-            return 'reflection_relations', invalid
-        if payload['step'] == 2:
-            assert payload['context']['reflection_control']['last_gate_error']['invalid_links']
+            assert not any(m['from_ref']=='new:maya' for m in payload['connection_menu'])
             return 'reflection_relations', {'links': []}
         raise AssertionError('Unexpected extra model control turn')
     provider.decide = decide
@@ -138,7 +137,7 @@ def test_revision_must_change_the_node_draft(make):
         patch_items(draft, {'reason': 'Correct Maya.', 'upsert': draft['items'], 'remove_refs': []})
 
 
-def test_relation_tool_limits_endpoint_kinds_before_model_generation(make):
+def test_relation_tool_uses_compact_positions_with_semantic_menu(make):
     engine, provider = make(reflection_threshold=1)
     original = provider.tool
     seen = []
@@ -147,18 +146,19 @@ def test_relation_tool_limits_endpoint_kinds_before_model_generation(make):
             if t['name'] == 'reflection_relations':
                 props = t['parameters']['properties']
                 assert 'drop_invalid' not in props
-                for alternative in props['links']['items']['anyOf']:
-                    p = alternative['properties']
-                    if p['relation']['enum'] == ['about']:
-                        seen.append(p)
-                        assert p['from_ref']['enum'] == ['new:tea']
-                        assert p['to_ref']['enum'] == ['new:maya']
+                assert 'anyOf' not in props['links']['items']
+                p = props['links']['items']['properties']
+                seen.append(p)
+                assert set(p) == {'connection_position', 'source_refs', 'support'}
+                assert p['connection_position']['enum'] == [m['position'] for m in payload['connection_menu']]
+                assert any('fact-tea-' in m['from_ref'] and 'person-maya-' in m['to_ref'] and m['relation']=='about'
+                           for m in payload['connection_menu'])
         return original(purpose, prompt, payload, tools, deadline)
     provider.tool = tool
     provider.decide = lambda purpose, payload: [
         ('reflection_items', proposal(payload)), ('reflection_relations', relations(payload))][payload['step']]
     engine.add(request('a', ['Speaker: Maya\nI like tea.']))
-    assert seen
+    assert seen and len(engine.store.nodes('u')) == 3
 
 
 def test_short_chinese_support_is_not_rejected_by_english_length_threshold(make):

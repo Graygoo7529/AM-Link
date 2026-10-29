@@ -50,6 +50,22 @@ class Scripted:
             positions = [row["position"] for row in payload["candidates"]]
             assert tools[0]["parameters"]["properties"]["positions"]["items"]["enum"] == positions
         name, args = self.decide(purpose, payload)
+        # Fixtures describe their intended semantic edges; encode the actual
+        # offered wire protocol. Deliberately invalid triples become a bad
+        # position, rather than gaining a production compatibility path.
+        if name == 'reflection_relations' and isinstance(args.get('links'), list):
+            def canonical(ref):
+                if not ref.startswith('new:'):
+                    return ref
+                label = ref[4:]
+                return next((n['ref'] for n in payload.get('context', {}).get('items', {}).values()
+                             if n['ref'].startswith('memory:' + n['kind'] + '-' + label + '-')), ref)
+            args = {**args, 'links': [
+                ({'connection_position': next((m['position'] for m in payload.get('connection_menu', [])
+                    if all(m.get(k) == (canonical(link[k]) if k != 'relation' else link[k])
+                           for k in ('from_ref', 'to_ref', 'relation'))), -1),
+                  **{k: link[k] for k in ('source_refs', 'support') if k in link}}
+                 if 'from_ref' in link else link) for link in args['links']]}
         if purpose == "bfs" and name == "bfs_action":
             name = "bfs_" + args["action"]
         if name in {"bfs_inspect", "reflection_inspect"} and "target" not in args:

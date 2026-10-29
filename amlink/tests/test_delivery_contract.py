@@ -145,11 +145,14 @@ def test_forgetting_is_atomic_and_quoted_instruction_is_not_authorization(make):
     def tool(purpose, prompt, payload, tools, deadline):
         if purpose == 'forget_intent':
             return purpose, {'requests': [{'instruction_ref': payload['messages'][0]['ref'],
-                'question': 'secret code orchid', 'all_memory': False}]}
+                'instruction_quote': 'Please forget my secret code.',
+                'all_memory': False}]}
         if purpose == 'forget_scope':
             from amlink.narrative import render
             assert 'My secret code is orchid.' in render(purpose, payload)
-            return purpose, {'positions': [0], 'no_match_reason': None}
+            return purpose, {'matches': [{'position':0,'reason':'The exact code requested.'}]}
+        if purpose == 'forget_verify':
+            return purpose, {'matches':True,'evidence_quote':'My secret code is orchid.','reason':'The same secret code.'}
         return ordinary(purpose, prompt, payload, tools, deadline)
     provider.tool = tool
     assert engine.add(request('forget', ['Please forget my secret code.']))['success']

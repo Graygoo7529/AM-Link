@@ -6,6 +6,7 @@ from amlink.config import Config
 from amlink.providers import tool_body
 from amlink.packing import freeze_pack, pack_frozen
 from amlink.evidence import fragment
+from amlink.selection import contribution_groups
 
 
 def test_model_serialization_preserves_task_before_material_without_changing_hash_format():
@@ -59,3 +60,34 @@ def test_selected_passage_is_not_recropped_in_next_model_context(make):
     visible = projected['references'][node['ref']]['evidence_fragments'][0]
     assert visible['text'] == selected['text'] and '$120' in visible['text']
     assert visible['shown_range'] == selected['shown_range']
+
+
+def test_many_page_winners_merge_without_losing_bound_original_ranges(make):
+    engine, provider = make(mode='raw', model_input_chars=8000)
+    cards, rows = [], []
+    for i in range(9):
+        row = {'ref': f'memory:fact-{i}', 'kind':'fact', 'text':f'Purchase {i}.'}
+        text = (f'Purchase {i} has separate supporting details. ' * 35) + f' Its exact cost is {120+i} dollars.'
+        value = fragment({'ref':f'raw:{i}', 'text':text}, 0, len(text))
+        rows.append(row); cards.append({'row':row, 'fragment':value})
+    phases = []
+    def decide(purpose, payload):
+        merged = payload['candidates'][0]['view'] == 'contribution summary'
+        phases.append('merge' if merged else 'page')
+        if merged:
+            assert all(not c['complete_source'] for c in payload['candidates'])
+        positions = list(range(len(payload['candidates'])))
+        return 'select', {'positions':positions,'coverage':[
+            {'evidence':f'Separate purchase {i}', 'positions':[i]} for i in positions]}
+    provider.decide = decide
+    selected = engine._select_cards('List all purchases and costs', rows, cards, {}, time.monotonic()+20, reason='query')
+    assert phases.count('page') > 1 and phases[-1] == 'merge'
+    actual = {f['fragment_id']:f for row in selected for f in row['selected_fragments']}
+    assert actual == {c['fragment']['fragment_id']:c['fragment'] for c in cards}
+
+
+def test_contribution_groups_preserve_uncovered_passages_and_overlap():
+    cards = [{'row':{'ref':f'memory:{i}'}, 'fragment':{'fragment_id':f'f{i}'}} for i in range(3)]
+    groups = contribution_groups(cards, [{'evidence':'connection', 'cards':cards[:2]}])
+    assert groups[0]['members'] == cards[:2]
+    assert groups[1]['members'] == cards[2:]

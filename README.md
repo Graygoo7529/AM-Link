@@ -1,12 +1,14 @@
 # AM-Link
 
+2026-10-29当前：[100题准备实施](./docs/doing/2026-10-29-hundred-question-readiness-implementation.md)、[执行计划](./docs/phase-2/2026-10-29-hundred-question-readiness-plan.md)、[真实台账](./docs/doing/2026-10-29-hundred-question-readiness-run-ledger.md)。默认多片段索引、独立节点检查点、贡献合并Select与逐条遗忘核对；356回归＋3子测试。六类分版本完整预检已完成；最终r11 PersonaMem13/13 Add、6/6 Search。已可启动100题本地诊断，剩94题未运行；图语义/同义遗忘仍有缺口，未部署。下方为历史阶段。
+
 面向 Agent Memory Leaderboard 的智能体记忆研究项目：实现 Add 写入和 Search 证据检索，由主办方统一回答与评分。
 
 **当前阶段：一期归档，二期本地实现与小样本验证。** 一期 `0.3.0` 已通过官方 Smoke 并完成 Full，在 [AM-Link 排行榜开源榜文本赛道](https://agentmemories.ai/leaderboard/academic/textual)排名第 21 名。2026-09-23 已关闭一期公网 API，并删除服务器上的一期程序、数据库数据和专用证书。
 
 AM-Link 和设计灵感来源 **TinySoul-Agent** 都是 Graygoo7529 的个人原创项目。一期借鉴自己的记忆设计思想，独立实现比赛接口，未直接移植 TinySoul-Agent 代码。
 
-2026-10-28最新：[工具协议、局部整理修订与验证](./docs/doing/2026-10-28-tool-repair-implementation.md)。统一工具校验、逐项保留合法草案和原子提交已实施；286项回归＋3子测试。真实语义与完整历史验收独立记录，未部署。
+2026-10-29最新：[可见增量与检索实施](./docs/doing/2026-10-29-visible-increment-implementation.md)、[真实台账](./docs/doing/2026-10-29-visible-increment-run-ledger.md)、[执行计划](./docs/phase-2/2026-10-29-visible-increment-execution-plan.md)。旧字段实际披露、新增支持审查、短身份叙事及已见图证据装箱进入默认方法；310项回归＋3子测试。最后新库8/8 Add、4/4 Search、4/6整理组，整体图质量未验收，未部署。
 
 2026-10-28：[v4 / 1024 迁移实施](./docs/doing/2026-10-28-embedding-v4-migration.md)。默认已使用智增增 `text-embedding-v4`、1024 维、批量 10，符合新的模型要求；旧向量库与缓存已备份清理，231 项回归＋3 子测试、两个新库切片 6/6 Add 和 2/2 Search。迁移接通不代表 Reflection 和图质量已通过；长文本分段索引仍为设计，无部署。
 

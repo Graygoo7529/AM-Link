@@ -232,7 +232,9 @@ def test_changed_old_target_invalidates_saved_review(make):
     engine, provider = make(mode='raw')
     item = dict(ref='memory:alex', kind='person', text='Alex enjoys cycling.', source_refs=['raw:a'])
     projected = {'items': {'memory:alex': dict(item)}}
-    working = [dict(ref='raw:a', text='Alex enjoys cycling.')]
+    # A real increment has a new source; old support alone is not an addition.
+    item = {**item, 'source_refs': ['raw:b']}
+    working = [dict(ref='raw:b', text='Alex confirms enjoying cycling.')]
     context = {}
     result = engine._review_draft({'items': [item]}, projected, working, time.monotonic()+10, context=context)
     calls = len(provider.calls)
@@ -241,13 +243,14 @@ def test_changed_old_target_invalidates_saved_review(make):
     assert len(provider.calls) == calls + 1
 
 
-def test_real_group_commits_valid_nodes_only_after_edge_repair(make):
+def test_independent_nodes_survive_explicit_edge_withdrawal(make):
     engine, provider = make(reflection_threshold=1)
     ordinary = provider.review
     reviews = []
     def review(payload):
         reviews.append([u['kind'] for u in payload['units']])
-        assert all(n['kind'] == 'episode' for n in engine.store.nodes('u'))
+        assert (all(n['kind']=='episode' for n in engine.store.nodes('u')) if len(reviews)==1 else
+                len([n for n in engine.store.nodes('u') if n['kind']=='fact'])==2)
         out = ordinary(payload)
         if len(reviews) == 2:
             assert reviews[-1] == ['relation']

@@ -164,9 +164,12 @@ def build_bundle(local: bool = False, run_specs: list[tuple[Path, str]] | None =
     bundle["case_observations"] = case_observation_index(all_registrations, catalog=catalog,
         profiles=profiles, runs=bundle["runs"], repo_root=ROOT.parent)
     from benchmark.workspace import read_notes
+    validation_runs = {}
     for run, (path, _) in zip(bundle["runs"], specs):
-        # Validate every note even when the view limits the query projection.
-        note_run = read_run(path, run["kind"], max_queries=100000) if (path / "notes.jsonl").exists() and run["total_queries"] > run["shown_queries"] else run
+        # Validate every note/Answer before projecting a subset of questions.
+        has_observations = observations or any(r['run_id'] == run['run_id'] and r.get('observations') for r in registrations)
+        note_run = read_run(path, run["kind"], max_queries=100000) if ((path / "notes.jsonl").exists() or has_observations) and run["total_queries"] > run["shown_queries"] else run
+        validation_runs[run['run_id']] = note_run
         notes = read_notes(path, note_run)
         for query in run["queries"]:
             query["notes"] = [n for n in notes if n["search_id"] == query["search_id"]]
@@ -175,14 +178,23 @@ def build_bundle(local: bool = False, run_specs: list[tuple[Path, str]] | None =
         if run["dataset_pack_sha256"] != row["dataset_pack_sha256"]:
             raise ValueError("registered pack identity changed")
         if row.get("observations"):
-            attach_observations([run], ROOT.parent / row["observations"])
+            attach_observations([validation_runs[run['run_id']]], ROOT.parent / row["observations"])
     bundle["research"] = json.loads((ROOT / "research.json").read_text(encoding="utf-8"))
     bundle["workspace"] = {"runs": [{"run_id": r["run_id"], "directory": r["directory"]} for r in all_registrations],
         "shown": [r["run_id"] for r in registrations]}
     if len({r["run_id"] for r in bundle["runs"]}) != len(bundle["runs"]):
         raise ValueError("duplicate run ID")
     if observations:
-        attach_observations(bundle["runs"], observations)
+        attach_observations(list(validation_runs.values()), observations)
+    for run in bundle['runs']:
+        validated = validation_runs[run['run_id']]
+        if validated is run:
+            continue
+        by_id = {q['search_id']: q for q in validated['queries']}
+        for query in run['queries']:
+            for key in ('answer', 'evaluation', 'steps', 'observations_sha256'):
+                if key in by_id[query['search_id']]:
+                    query[key] = by_id[query['search_id']][key]
     return bundle
 
 

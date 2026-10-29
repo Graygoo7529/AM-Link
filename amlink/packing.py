@@ -16,6 +16,12 @@ def freeze_pack(store, user, query, rows, context, config):
     branch_terms = [set(terms(entry["branch"])) for row in rows for entry in row.get("lineage", []) if entry.get("branch")]
     paths = context.get("paths", [])
     inspected = set(context.get("inspections", {}))
+    # A graph neighbor can supply the missing fact in its Reference fragment.
+    # Requiring another Inspect here discarded evidence already seen by BFS.
+    # Labels/links alone do not qualify; use the receipt of the actual last call.
+    visible_bodies = {v["origin_ref"] for v in context.get("last_visible", [])
+                      if v.get("origin_ref") in nodes and v.get("end", 0) > v.get("start", 0)
+                      and v.get("content_digest") == digest(nodes[v["origin_ref"]]["text"])}
     groups, assigned = [], set()
     for root in roots:
         if root not in nodes or root in assigned:
@@ -29,7 +35,7 @@ def freeze_pack(store, user, query, rows, context, config):
         root_words = set(terms(nodes[root]["text"]))
         gain = {ref: sum(bool(words.intersection(terms(nodes[ref]["text"]))) and not bool(words.intersection(root_words))
                          for words in branch_terms) for ref in routes}
-        useful = [ref for ref, route in routes.items() if ref == root or ref in inspected or gain[ref] or any(
+        useful = [ref for ref, route in routes.items() if ref == root or ref in inspected or ref in visible_bodies or gain[ref] or any(
             p.get("selected") or any(e["relation"] in {"contradicts", "supersedes"} for e in p["edges"])
             for p in route)]
         useful.sort(key=lambda ref: (ref != root,
@@ -76,6 +82,9 @@ def freeze_pack(store, user, query, rows, context, config):
         bodies = [value for value in preferred if not value["origin_ref"].startswith("raw:")]
         for node in group_nodes:
             if not store.is_minimum_episode(user, node["ref"]):
+                bodies.extend(fragment(node, v['start'], v['end']) for v in context.get('last_visible', [])
+                    if v.get('origin_ref') == node['ref'] and v.get('content_digest') == digest(node['text'])
+                    and 0 <= v['start'] < v['end'] <= len(node['text']))
                 values, _ = complementary_passages([node], queries, min(2000, config.result_chars // 3), max(1, len(queries)))
                 bodies.extend(values)
         for value in bodies + units:
@@ -86,7 +95,8 @@ def freeze_pack(store, user, query, rows, context, config):
                 raise MemoryError('search_evidence_integrity', 503)
         groups.append({"ref": root, "members": members, "nodes": group_nodes,
                        "edges": edges, "source_refs": source_refs,
-                       "fragments": bodies + units, "paths": [p for ref in useful for p in routes[ref]]})
+                       "fragments": bodies + units, "visible_graph_refs": [ref for ref in members if ref in visible_bodies and ref != root],
+                       "paths": [p for ref in useful for p in routes[ref]]})
     return {"format_version": 1, "packing_unit": "evidence_group", "question": query,
             "groups": groups, "result_chars": config.result_chars, "context_chars": config.context_chars}
 
@@ -108,7 +118,7 @@ def pack_frozen(frozen, top_k):
     # Pass 1: reserve one complete (when short) support window per origin.
     for group in groups:
         decision = {"ref": group["ref"], "members": group["members"], "included": False,
-                    "reason": "top_k", "evidence_units": []}
+                    "reason": "top_k", "evidence_units": [], "visible_graph_refs": group.get("visible_graph_refs", [])}
         decisions.append(decision)
         prior_units = [v for _, admitted, _ in chosen for v in admitted]
         if (not group['edges'] and group['fragments']

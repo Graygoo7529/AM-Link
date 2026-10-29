@@ -81,7 +81,7 @@ def test_empty_scope_is_database_fact_and_new_person_needs_no_empty_query(make):
     assert engine.store.old_scope_empty('another_user', 2)
 
 
-def test_invalid_relation_feedback_then_correct_direction_commits_atomically(make):
+def test_only_correct_relation_direction_is_offered_and_commits_atomically(make):
     engine, provider = make(reflection_threshold=1)
     names = []
     original = provider.tool
@@ -92,16 +92,17 @@ def test_invalid_relation_feedback_then_correct_direction_commits_atomically(mak
     def decide(purpose, payload):
         source = payload['working'][0]['ref']; step = payload['step']
         assert engine.store.state('u')['settled_through'] == 0
-        assert all(n['kind']=='episode' for n in engine.store.nodes('u'))
+        assert (all(n['kind']=='episode' for n in engine.store.nodes('u')) if step == 0 else
+                len(engine.store.nodes('u')) == 3)
         if step == 0: return 'reflection_items', {'items': [dict(ref='new:maya',kind='person',text='Maya',source_refs=[source]),dict(ref='new:tea',kind='fact',text='Maya likes tea.',source_refs=[source])]}
-        if step == 2: assert payload['context']['reflection_control']['last_gate_error']['invalid_links']
-        a,b = ('new:maya','new:tea') if step==1 else ('new:tea','new:maya')
+        assert not any(m['from_ref']=='new:maya' and m['to_ref']=='new:tea' for m in payload['connection_menu'])
+        a,b = 'new:tea','new:maya'
         return 'reflection_relations', {'links':[dict(from_ref=a,to_ref=b,relation='about',source_refs=[source],support='Maya says she likes tea.')]}
     provider.decide = decide
     engine.add(request('a',['Speaker: Maya\nI like tea.']))
     fact = next(n for n in engine.store.nodes('u') if n['kind']=='fact')
     assert len(engine.store.edges('u',fact['ref'])) == 1
-    assert 'reflection_inspect' not in names[2] and 'reflection_backlinks' not in names[2]
+    assert len(names) == 2
 
 
 def test_invalid_relation_cannot_finish_by_noop(make):
@@ -114,7 +115,7 @@ def test_invalid_relation_cannot_finish_by_noop(make):
         return 'reflection_stop', {'reason': 'No additional semantic change is needed in this fixture.'}
     provider.decide=decide
     assert engine.add(request('a',['A meeting.']))['success']
-    assert any(p.get('error') == 'model_unknown_tool' for plan in engine.store.reflection_plans('u') for p in plan['progress'].values())
+    assert any(p.get('error') == 'reflection_relation_position_invalid' for plan in engine.store.reflection_plans('u') for p in plan['progress'].values())
     assert engine.store.state('u')['settled_through']==0
 
 
@@ -128,11 +129,11 @@ def test_missing_relation_sources_is_protocol_failure_without_retry(make):
         return 'reflection_relations', {'links':[link]}
     provider.decide=decide
     engine.add(request('a',['A fact concerns an entity.']))
-    assert not any(n['kind']=='fact' for n in engine.store.nodes('u'))
-    assert any(p.get('error') == 'mutation_schema_invalid' for plan in engine.store.reflection_plans('u') for p in plan['progress'].values())
+    assert any(n['kind']=='fact' for n in engine.store.nodes('u'))
+    assert any(p.get('error') == 'reflection_relation_output_invalid' for plan in engine.store.reflection_plans('u') for p in plan['progress'].values())
 
 
-def test_rephrasing_unrelated_item_is_not_progress_on_same_invalid_edge(make):
+def test_invalid_connection_position_is_rejected_without_rephrasing_retry(make):
     engine, provider = make(reflection_threshold=1)
     def decide(purpose,payload):
         source=payload['working'][0]['ref']
@@ -140,7 +141,7 @@ def test_rephrasing_unrelated_item_is_not_progress_on_same_invalid_edge(make):
         return 'reflection_relations', {'links':[dict(from_ref='new:p',to_ref='new:f',relation='about',source_refs=[source],support='Maya likes tea.')]}
     provider.decide=decide
     assert engine.add(request('a',['Speaker: Maya\nI like tea.']))['success']
-    assert any(p.get('error') == 'reflection_no_evidence_progress' for plan in engine.store.reflection_plans('u') for p in plan['progress'].values())
+    assert any(p.get('error') == 'reflection_relation_position_invalid' for plan in engine.store.reflection_plans('u') for p in plan['progress'].values())
     assert len(provider.calls)==3 and engine.store.state('u')['settled_through']==0
 
 
@@ -241,7 +242,8 @@ def test_impossible_old_episode_write_is_repaired_before_reading(make, invalid_k
             assert payload['context']['reflection_control']['last_gate_error']['missing']==[]
             return 'reflection_items', {'items':[node]}
         if invalid_kind=='about_episode' and step==1:
-            return 'reflection_relations', {'links':[dict(from_ref=node['ref'],to_ref=old['ref'],relation='about',source_refs=[source],support='The configuration changed.')]}
+            assert not any(m['relation']=='about' and m['to_ref']==old['ref'] for m in payload['connection_menu'])
+            return 'reflection_relations', {'links': []}
         return 'reflection_relations', {'links':[]}
     provider.decide=decide
     engine.add(request('new',['The project now uses a different configuration.']))

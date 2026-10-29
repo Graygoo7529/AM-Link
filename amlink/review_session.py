@@ -30,6 +30,9 @@ def review_draft(engine, arguments, projected, working, deadline, context, tool)
         for ref in context.get('identity_queries', {}).get(item['ref'], {}).get('refs', [])
         if ref in context.get('inspections', {}) and any(v.get('item_ref') == ref for v in visible_fragments(projected))]
     all_decisions, shown, tasks = [], [], state.get('tasks', [])
+    initial = review_payload(arguments, projected, working, identities)
+    support_only = bool(initial['units']) and not arguments.get('forget') and all(
+        u.get('review_task') == 'support_addition' for u in initial['units'])
 
     def save_draft():
         context['pending_mutation'] = {k: v for k, v in current.items() if k != 'links'}
@@ -55,7 +58,7 @@ def review_draft(engine, arguments, projected, working, deadline, context, tool)
 
     def fingerprint(unit, full):
         refs = {unit['proposal'].get('from_ref'), unit['proposal'].get('to_ref')}
-        return digest([unit['proposal'],
+        return digest([unit['proposal'], unit.get('review_task'), unit.get('added_source_refs'),
             [s for s in full['sources'] if s['position'] in unit['source_positions']],
             [e for e in full['endpoints'] if e['ref'] in refs or e['ref'] in identities],
             [e for e in full['old_targets'] if e['ref'] == unit['proposal'].get('ref')]])
@@ -66,7 +69,8 @@ def review_draft(engine, arguments, projected, working, deadline, context, tool)
         refs.update(identities)
         positions = {i for u in page for i in u['source_positions']}
         keys = {u['position'] for u in page}
-        return {'task': 'Edit only these unresolved draft units. Other approved units persist; NOTHING has been committed.',
+        return {'task': ('Edit only these unresolved draft units. These changes are uncommitted; other approved draft units persist. '
+                        'Previously saved independent nodes remain stored: ' + ', '.join(context.get('committed_node_refs', []))),
             'repair_tasks': [t for t in tasks if t['position'] in keys],
             'units': [{**u, 'review_key': f"u{u['position']}"} for u in page],
             'sources': [s for s in full['sources'] if s['position'] in positions],
@@ -196,17 +200,18 @@ def review_draft(engine, arguments, projected, working, deadline, context, tool)
             state['tasks'] = tasks
             context['review_remaining'] = list(dict.fromkeys(t for r in resolutions for t in r['remaining_work']))
             empty = not current.get('items') and not current.get('links') and not current.get('forget')
-            if empty and not tasks and not context['review_remaining']:
+            if empty and not tasks and not context['review_remaining'] and not context.get('committed_node_refs'):
                 reasons = [r['no_change_reason'] for r in resolutions if r.get('no_change_reason')]
                 if not reasons:
                     raise MemoryError('reflection_review_empty', 409)
-                context['_completion'] = completion(reasons[0], unresolved=arguments.get('basis') in {'update_existing', 'resolve_conflict'})
+                context['_completion'] = completion(reasons[0], unresolved=(arguments.get('basis') == 'resolve_conflict' or
+                    (arguments.get('basis') == 'update_existing' and not support_only)))
             # Already successful decisions are now checkpoints, not repeated model assignments.
             repair_signature = digest([current, tasks, [fingerprint(u, full) for u in full['units']]])
             if tasks and repair_signature == state.get('last_repair'):
                 raise MemoryError('reflection_no_evidence_progress', 409)
             state['last_repair'] = repair_signature
-        if not full['units'] and not current.get('forget') and not context.get('_completion') and not context.get('review_remaining'):
+        if not full['units'] and not current.get('forget') and not context.get('_completion') and not context.get('review_remaining') and not context.get('committed_node_refs'):
             raise MemoryError('reflection_completion_invalid', 502)
         return current
     finally:

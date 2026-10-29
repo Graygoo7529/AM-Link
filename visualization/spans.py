@@ -140,7 +140,8 @@ def attach_spans(run: dict, path: Path, request_scope: dict) -> None:
                             'intake', 'reflection', 'maintenance_error', 'progress', 'replay', 'completion', 'stop_reason') if k in detail}
                         preview['evidence_panel'] = {'title': '接口交付与内部完成状态', 'rows': [delivery[event['request_id']]],
                                                      'shown': 1, 'total': 1}
-                    if isinstance(detail, dict) and detail.get("format_version") in (1, 2):
+                    if isinstance(detail, dict) and (detail.get("format_version") in (1, 2) or
+                            event['name'] == 'reviewed independent node checkpoint'):
                         panel = evidence_panel(detail)
                         if panel:
                             preview["evidence_panel"] = panel
@@ -149,7 +150,8 @@ def attach_spans(run: dict, path: Path, request_scope: dict) -> None:
     for query in run["queries"]:
         requests = {query["search_id"]} | {a["id"] for a in query["adds"]}
         query["spans"] = [e for e in ordered if e["request_id"] in requests]
-        query["span_previews"] = {key: value for key, value in previews.items() if key in {s["span_id"] for s in query["spans"]}}
+        visible_span_ids = {s["span_id"] for s in query["spans"]}
+        query["span_previews"] = {key: value for key, value in previews.items() if key in visible_span_ids}
         query['delivery'] = delivery.get(query['search_id'])
         query['internal_errors'] = sum(e['status'] == 'error' for e in query['spans'])
         for add in query['adds']:
@@ -165,12 +167,33 @@ def attach_spans(run: dict, path: Path, request_scope: dict) -> None:
 
 def evidence_panel(value):
     """Versioned bounded display, only after artifact path/hash/shape validation."""
+    if value.get('view') == 'contribution_summary' and 'member_fragment_map' in value:
+        candidates = value.get('model_input', {}).get('candidates', [])
+        rows = [{'位置': c['position'], '模型实际看到的贡献摘要': excerpt(c['narrative'], 500)['text'],
+                 '绑定的完整原文卡数': len(value['member_fragment_map'].get(str(c['position']), [])),
+                 '说明': '摘要用于比较，不是新证据；选中后携带绑定原文范围。'} for c in candidates[:16]]
+        return {'title': 'Select 全局比较：摘要与完整原文的对应', 'rows': rows,
+                'shown': len(rows), 'total': len(candidates)}
+    if value.get('group_complete') is False and 'committed_node_refs' in value and 'mutation' in value:
+        rows = [{'引用': n['ref'], '类型': n['kind'], '已保存正文': excerpt(n['text'],350)['text'],
+                 '支持来源': n.get('source_refs', [])} for n in value['mutation'].get('items', [])[:12]]
+        return {'title': '独立节点已保存；关系与整组整理尚未完成', 'rows': rows,
+                'shown': len(rows), 'total': len(value['mutation'].get('items', []))}
+    if value.get('committed') is True and 'increment' in value:
+        names = {'created': '新增节点', 'support_added': '旧陈述补充来源', 'navigation_updated': '导航正文更新'}
+        rows = [{'变化': label, '数量': len(value['increment'].get(key, [])),
+                 '节点与新增来源': value['increment'].get(key, [])[:12]}
+                for key, label in names.items()]
+        rows.append({'无节点变化': value.get('no_item_change'), '本组': value.get('completed_group')})
+        return {'title': '已提交的实际记忆增量（非草案）', 'rows': rows, 'shown': len(rows), 'total': len(rows)}
     if value.get('layer') in {'protocol', 'incomplete', 'business', 'integrity', 'dependency'}:
         labels = {'protocol': '工具协议', 'incomplete': '输出未完成', 'business': '内容待修订',
                   'integrity': '来源完整性', 'dependency': '外部依赖'}
         return {'title': '失败层次：' + labels[value['layer']], 'rows': [value], 'shown': 1, 'total': 1}
     if value.get('format_version') == 2 and 'committed' in value and 'decisions' in value:
         rows = [{'对象': (d.get('before') or {}).get('ref') or (d.get('before') or {}).get('from_ref'),
+                 '审查任务': {'support_addition': '新增原文是否支持同一旧陈述', 'navigation_create': '新建主体路标',
+                            'navigation_update': '更新同一主体路标', 'new_assertion': '新陈述与原文对应'}.get(d.get('review_task'), d.get('review_task')),
                  '结果': '撤销草案' if d.get('after') is None else '需按最终端点重审' if d.get('recheck_required') else '草案通过',
                  '原因': d.get('detail'), '审查依据位置': d.get('evidence_positions'),
                  '写入支持': (d.get('after') or {}).get('source_refs', []),

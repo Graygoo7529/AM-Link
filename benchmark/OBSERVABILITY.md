@@ -1,5 +1,11 @@
 # AM-Link 可观测性标准接口 v1
 
+2026-10-29新增：`reviewed independent node checkpoint`为真实store提交事件，记录committed_node_refs、group_complete=false和未推进的水位。不要把它算成整组完成；最终`reflection mutation commit`才包含完成组凭据。Add的maintenance另报groups_with_committed_nodes。向量index事件记录正文版本和片段范围；query.embedding/merge的lineage记录实际命中范围，模型可见范围仍以context实际输入凭据为准。合法关系菜单位置与支持说明在reflection输入/输出成对保留，不把位置数当图边数。
+
+全局Select的投影带`view=contribution_summary`及`member_fragment_map`，网页显示“实际输入为贡献摘要”与绑定原文数量。贡献摘要不是新证据、不是全文阅读凭据；全局选中后仍携带局部已选原文范围。原文页、贡献摘要、最终展开分别记录，不能因为摘要没展示一句话就断言原句未在局部Select被读取。真实Answer诊断另记model/answer事件，计费统计须包含它们但不重复计数；它不属于AM-Link标准Search。
+
+遗忘范围：`forget source scope`保存候选来源位置、选择说明及实际原文；`forget source correspondence`每条来源单独记录指令、原文和布尔判定/quote/理由，模型输入不包含选择器解释。阳性quote须是该来源的真实子串。来源选择不是已删除，拒绝项不进入屏蔽；协议错误仍使必要接收失败。`add atomic intake`的`retained_episode_refs`记录同事务内真正提交的未遗忘原文投影；旧episode只隐藏、不改写。需分别核对目标范围、无关原文是否仍有活动episode、以及最终Search是否泄露被删除信息。
+
 状态：接口约定、Python recorder、校验器与研究视图接入已实现；Mem0 研究实验和 AM-Link 二期 0.2.0 均已接入 native 内部步骤观测，并保留真实模型切片档案。AM-Link 尚未部署或参加官方 Smoke。此接口是诊断侧接口，不改变比赛 Add/Search API。
 
 靶场的 `ObservedTarget` 自动提供 API 根 span；native 工厂可通过 `set_observation_parent` 连接内部步骤。`Artifacts.text` 提供 `amlink.artifact.v1` 可显示正文，`amlink.note.v1` 将研究评注绑定到真实查询/步骤/哈希，详见 [接入与评注指南](./STUDIES.md)。两者是独立附属格式，不修改 observation v1 事件字段。
@@ -115,3 +121,16 @@ links 的方向固定为 `from_id` 指向 `to_id`：memory derived_from source�
 - 完成仍以reflection mutation commit和group receipt为准；Add 200只说明必要接收已提交。网页展示“本组局部审查（尚未提交）”，将撤销依据与写入支持分列；旧事件缺失的新字段不能推断为成功。
 
 工具往返仅本轮离线对照，未进入生产，不生成虚构的跨请求对话/缓存成功事件。实际对照与完整历史质量门槛见本轮实施报告。
+
+## 2026-10-28 来源约束与实际增量
+
+`reflection mutation commit` 的可显示产物增加 `format_version=1 / committed=true / increment / no_item_change`。`increment.created` 是本次新 ref，`support_added` 是正文和时间均未变化的旧 ref，`navigation_updated` 是可变导航正文变化；每项记录 kind 和 added_source_refs。事务成功后才输出，不把临时提案或审查解释计入已写入记忆。空列表表示该类实际变化为零，旧产物缺字段则未知。网页在完整产物范围内显示“已提交的实际记忆增量（非草案）”。
+
+contains 的 `contains_source_mismatch` / `reflection_contains_source_mismatch` 记录来源范围不合，不等于模型已做语义证明。节点模型输入的 `reuse_options` 只是当次实际读完且仍可见的旧对象提示；输出仍是完整统一节点条目，不生成额外模型调用或虚构阅读凭据。独立复用数组/简写是已撤回实验，仅存在历史源码快照和轨迹中。
+
+## 2026-10-29 可见字段与增量审查
+
+- `statement source review` 的units/decisions带 `review_task`；support_addition 的 `added_source_refs` 与 `source_positions`仅指新增支持候选。网页显示任务含义；审查撤销不是删除已有节点。
+- 原有 `evidence disclosure receipt` 的披露片段保留kind和完整事件时间，叙事区别消息日期；字段反馈有item_changes和是否实际已读，未读时不暗取正文。
+- `evidence packing decisions` 的 `visible_graph_refs` 是基于最后一次实际模型输入范围纳入的邻居正文；没有另一次Inspect不代表模型未见，标签或旧版本凭据不能合格。最终路径仍需来源闭合。
+- 真实组件中的冻结Query/人工图必须标注，不把人工图算作Reflection成果；已选择反证、错误前提说明与正面事实分别人工核对，不以返回数量替代质量。

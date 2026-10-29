@@ -6,6 +6,7 @@ import re
 from pydantic import ValidationError
 
 from .errors import MemoryError
+from .evidence import ranges_complete
 from .schemas import Mutation, check_source_time
 from .text import FORGET, digest, dumps
 
@@ -18,13 +19,28 @@ Compare relevant old memory before creating another node. Query finds candidates
 numbered location/page; Backlinks finds related events or assertions. Read what is missing, not every
 available page. A person's node is a signpost, not proof that every linked action was performed by them.
 Use Speaker/name clues, not role=user as an identity. An assistant suggestion is not a user's decision.
+Distinguish a speaker's own assertion from text submitted for editing, quoted dialogue or fiction.
+'Polish this story: I climbed Everest' establishes an editing request, not the user's Everest climb.
+An assistant rewrite repeats the submitted material; it is not independent confirmation. Any stored
+claim about it MUST retain the frame ('in the fictional story submitted for editing, ...'), with the
+request establishing that frame among its sources. 'The narrator did X' alone loses the fiction boundary.
+Routine editing can stay in the episode instead of creating another narrative summary.
+Conversely, 'I climbed Everest; help me describe my experience' explicitly claims a personal experience.
+Advice is advice until the user explicitly adopts it. Suggested research, consideration or risk evaluation
+is not an activity the user has performed. Read the preceding request before interpreting a reply.
 
 Choose the smallest faithful action:
+State the subject and conditions in each final assertion itself. A real user's name is NOT the
+name of an unnamed fictional narrator. Keep fiction unnamed unless the original names that character.
+For a changed value (e.g. retention changes from 14 to 21 days), write a NEW fact for the new value;
+never submit the old fact ref with revised text. The old 14-day statement remains historical evidence.
 Only propose a change supported by this group's NEW messages. Old memory is comparison material,
 not a checklist to copy into the draft. Do not re-emit unchanged unrelated facts. If the new message
 adds no supported semantic information or support, stop instead of rebuilding the existing profile.
-- A repeated assertion about the SAME event/subject/conditions reuses the old ref; keep old fact/event
-  text and time fields exactly, adding only directly supporting new sources. Similar purchases on
+- A repeated assertion about the SAME event/subject/conditions uses a complete items entry with the
+  EXACT old ref, kind, text and time fields, plus newly supporting source_refs. Inspect the old match
+  first; the ready-for-reuse list identifies full bodies actually read and visible now. The program
+  preserves old support: do not re-list old citations as if they were new. Similar purchases on
   different dates may be different events. Do not merge by wording alone.
 - A complementary detail adds that detail, not another biography. Keep roles and event connections.
 - An explicit replacement of the SAME property under the SAME conditions creates a new assertion
@@ -34,8 +50,11 @@ adds no supported semantic information or support, stop instead of rebuilding th
 Person/entity nodes should identify the named subject with only necessary disambiguation. Put hobbies,
 purchases and activities in separate assertions/events. Do not attach an activity to the listener when
 the actual actor's node is absent; omit the edge or create a properly supported actor node.
+An existing person/entity ref must continue to identify the SAME subject. Keep its identity short;
+do not rewrite a profile for each new event. A separate event can refer to the unchanged person without
+re-emitting that person. The user's own name and a fictional narrator are separate identities.
 
-Use reflection_items for nodes and authorized forgetting; reflection_relations then adds directly
+Use reflection_items for nodes; authorized deletion is handled only by Add intake, never by Reflection. reflection_relations then adds directly
 supported links, or links=[] if none. Drafts are not stored yet. If a draft has a specific defect,
 reflection_patch_items edits/removes ONLY affected entries; untouched entries remain. After reading
 required material, the program rechecks availability and schedules the next content step. Joint source
@@ -66,10 +85,14 @@ raw: references identify original quotations for source_refs, never graph endpoi
 has no relation to itself or its raw citations: return links=[] if there is no useful legal pair.
 A relationship between people can be a fact with about links to both. Explain each link with direct
 sources; sharing a topic does not establish a relation. Updates/conflicts require both source sides.
+For contains, every edge source must belong to BOTH the episode and the target assertion. A different
+episode mentioning the same subject is not its container. Shared sources alone still do not prove meaning.
 When required_actions says material_ready, proceed with the offered content step instead of rereading; when only invalid fields
 remain, patch them instead of searching. Respect the available tool and page positions.
 
 Time fields need an exact source time_expression, never an inferred year added to a quotation.
+Keep that quotation in its ORIGINAL language: a translation of a Chinese time phrase is not the quoted
+source phrase. Reusing an old statement requires its displayed stored time values, including nulls.
 Normalized date years must occur in the cited original text, not only in timestamp metadata or ref names.
 Message date is not automatically event date. Do not fill missing year/month/day or turn 'recently'
 into an exact date; keep unknown date fields null and preserve the original temporal wording.
@@ -99,6 +122,25 @@ def parse_mutation(value):
     return mutation, []
 
 
+def immutable_change_details(value, context):
+    """Specific repair feedback from already visible/read old bodies, never hidden DB text."""
+    result = []
+    for item in value.get('items', []):
+        old = context.get('items', {}).get(item.get('ref'))
+        if not old or old.get('kind') not in {'episode', 'fact', 'event'}:
+            continue
+        version = old.get('content_digest') or digest(old['text'])
+        visible = [v for v in context.get('last_visible', []) if v['origin_ref'] == old['ref'] and v['content_digest'] == version]
+        read = [v for v in context.get('read_ranges', []) if v['origin_ref'] == old['ref'] and v['content_digest'] == version]
+        complete = ranges_complete(visible, len(old['text'])) and ranges_complete(read, len(old['text']))
+        fields = {k: {'submitted': item.get(k), **({'stored': old.get(k)} if complete else {'stored': 'Inspect this old body first'})}
+                  for k in ('text', 'time_expression', 'time_start', 'time_end') if item.get(k) != old.get(k)}
+        if fields:
+            result.append({'ref': old['ref'], 'kind': old['kind'], 'changed_fields': fields,
+                'old_body_read_and_visible': complete})
+    return result
+
+
 def preflight_mutation(value, *, user, store):
     """Reject impossible writes before asking the model to read their targets.
 
@@ -106,7 +148,7 @@ def preflight_mutation(value, *, user, store):
     authorize writes or count database content as model-visible evidence.
     """
     mutation, _ = parse_mutation(value)
-    kinds = {item.ref: item.kind for item in mutation.items}
+    proposed = {item.ref: item.model_dump() for item in mutation.items}
     for item in mutation.items:
         old = store.get(user, item.ref) if item.ref.startswith('memory:') else None
         if item.ref.startswith('memory:') and (not old or old['kind'] != item.kind):
@@ -126,14 +168,36 @@ def preflight_mutation(value, *, user, store):
             raise MemoryError('mutation_episode_overwrite', 502)
     invalid = []
     for link in mutation.links:
-        endpoints = []
+        nodes = []
         for ref in (link.from_ref, link.to_ref):
             node = store.get(user, ref) if ref.startswith('memory:') else None
-            endpoints.append(kinds.get(ref) or (node['kind'] if node else None))
+            replacement = proposed.get(ref)
+            if replacement and node and all(replacement.get(k) == node.get(k) for k in
+                    ('kind', 'text', 'time_expression', 'time_start', 'time_end')):
+                replacement = {**replacement, 'source_refs': list(set(replacement['source_refs']) | set(node['source_refs']))}
+            nodes.append(replacement or node)
+        endpoints = [n['kind'] if n else None for n in nodes]
         if all(endpoints) and not _relation_kinds_valid(*endpoints, link.relation):
+            allowed = [r for r in ('about', 'contains', 'supersedes', 'contradicts', 'same_event_as')
+                       if _relation_kinds_valid(*endpoints, r)]
             invalid.append({**link.model_dump(), 'reason': 'relation_type_mismatch',
-                            'from_kind': endpoints[0], 'to_kind': endpoints[1]})
+                'from_kind': endpoints[0], 'to_kind': endpoints[1],
+                'allowed_relations_for_these_endpoints': allowed,
+                'instruction': ('For this endpoint direction the only type-compatible relations are '
+                    + ', '.join(allowed) + '. Choose one ONLY if the originals establish that meaning; '
+                    'otherwise remove this edge. A repeated statement is not replacement or a different event.') if allowed
+                    else 'No supported relation has this endpoint direction. Withdraw this edge; keep the useful nodes.'})
+        elif all(nodes) and link.relation == 'contains' and not contains_sources_valid(
+                nodes[0], nodes[1], link.source_refs):
+            invalid.append({**link.model_dump(), 'reason': 'contains_source_mismatch',
+                'instruction': 'Every contains source must support the target AND occur in this episode. Choose their actual shared original or withdraw this edge; keep useful nodes.'})
     return invalid
+
+
+def contains_sources_valid(episode, target, sources):
+    """Necessary provenance condition, not a semantic entailment test."""
+    return bool(sources) and set(sources).issubset(
+        set(episode.get('source_refs', [])) & set(target.get('source_refs', [])))
 
 
 def _relation_kinds_valid(left, right, relation):
@@ -203,6 +267,12 @@ def prepare_mutation(value, *, user, request_id, number, context, store):
             ref = item.ref
         else:
             raise MemoryError("mutation_invalid_identity", 502)
+        persisted = store.get(user, ref)
+        if persisted and persisted['kind'] in {'episode', 'fact', 'event'} and any(
+                getattr(item, key) != persisted.get(key) for key in ('kind', 'text', 'time_expression', 'time_start', 'time_end')):
+            # A replayed/new: label can resolve to an already checkpointed ID.
+            # The generated identity must not bypass the ordinary old-body gate.
+            raise MemoryError('mutation_fact_overwrite', 502)
         check_source_time(item.time_expression, [
             (sources.get(source_ref) or store.get(user, source_ref, include_blocked=True))['text']
             for source_ref in refs], item.time_start, item.time_end)
@@ -282,6 +352,10 @@ def prepare_mutation(value, *, user, request_id, number, context, store):
                                    }[link.relation]})
             continue
         refs = checked(link.source_refs)
+        if link.relation == 'contains' and not contains_sources_valid(a, b, refs):
+            filtered_links.append({**link.model_dump(), 'reason': 'contains_source_mismatch',
+                'instruction': 'Use only originals shared by this episode and target, or withdraw this edge.'})
+            continue
         if link.relation in {"contradicts", "same_event_as"}:
             left, right = sorted((left, right))
         key = (left, right, link.relation)
@@ -289,19 +363,7 @@ def prepare_mutation(value, *, user, request_id, number, context, store):
             seen.add(key)
             links.append({"from_ref": left, "to_ref": right, "relation": link.relation, "source_refs": refs})
 
-    forget = []
-    for change in mutation.forget:
-        instructions = checked(change.instruction_refs)
-        if any(ref not in context["new_refs"] or sources[ref].get("role") != "user" or not FORGET.search(sources[ref]["text"])
-               for ref in instructions):
-            raise MemoryError("forget_requires_explicit_new_user_instruction", 502)
-        memory_refs = [resolve(ref) for ref in change.memory_refs]
-        raw_refs = set(change.source_refs)
-        for ref in memory_refs:
-            raw_refs.update(nodes[ref]["source_refs"])
-        if not raw_refs and not memory_refs:
-            raise MemoryError("forget_requires_known_scope", 502)
-        raw_refs = checked(list(raw_refs))
-        forget.append({"source_refs": raw_refs, "memory_refs": memory_refs, "instruction_refs": instructions})
-    return {"items": items, "links": links, "forget": forget,
+    if mutation.forget:
+        raise MemoryError('forget_intake_only', 502)
+    return {"items": items, "links": links, "forget": [],
             "filtered_links": filtered_links, "filtered_fields": filtered_fields, "deduplicated_links": deduplicated_links}

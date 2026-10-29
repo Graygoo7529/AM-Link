@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS reflection_plans(
  groups_json TEXT NOT NULL,receipts TEXT NOT NULL DEFAULT '[]',progress TEXT NOT NULL DEFAULT '{}',
  PRIMARY KEY(user_id,plan_id));
 CREATE TABLE IF NOT EXISTS vectors(user_id TEXT,ref TEXT,fingerprint TEXT,vector TEXT,
- PRIMARY KEY(user_id,ref));
+ start INTEGER,end INTEGER,content_digest TEXT,PRIMARY KEY(user_id,ref,start));
 CREATE TABLE IF NOT EXISTS blocks(user_id TEXT,ref TEXT,instructions TEXT,
  PRIMARY KEY(user_id,ref));
 CREATE VIRTUAL TABLE IF NOT EXISTS lexical USING fts5(user_id UNINDEXED,ref UNINDEXED,body);
@@ -82,10 +82,10 @@ class Store:
             self.db.execute("PRAGMA foreign_keys=ON")
             version = self.db.execute("PRAGMA user_version").fetchone()[0]
             tables = self.db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-            if version not in (0, 3) or (version == 0 and tables):
+            if version not in (0, 4) or (version == 0 and tables):
                 raise MemoryError("incompatible_database", 503)
             self.db.executescript(SCHEMA)
-            self.db.execute("PRAGMA user_version=3")
+            self.db.execute("PRAGMA user_version=4")
             self.db.commit()
         except BaseException:
             self.close()
@@ -131,6 +131,13 @@ class Store:
         db.execute("INSERT INTO lexical(user_id,ref,body) VALUES(?,?,?)", (user, ref, indexed(text)))
 
     @staticmethod
+    def _vectors(db, user, ref, fingerprint, parts):
+        db.execute('DELETE FROM vectors WHERE user_id=? AND ref=?', (user, ref))
+        for part in parts:
+            db.execute('INSERT INTO vectors VALUES(?,?,?,?,?,?,?)',
+                (user, ref, fingerprint, dumps(part['vector']), part['start'], part['end'], part['content_digest']))
+
+    @staticmethod
     def _raw(row):
         return {**row, "kind": "raw", "status": "tombstoned" if row["blocked"] else "active",
                 "source_refs": [row["ref"]]}
@@ -166,7 +173,7 @@ class Store:
         return dict(user_id=user, request_id=rid, payload_hash=signature, status='prepared',
                     response=dumps(response), session_id=request.session_id, raw_refs=dumps([s['ref'] for s in sources])), sources
 
-    def accept_add(self, prepared, sources, episode, vector, fingerprint, *, forgetting=()):
+    def accept_add(self, prepared, sources, episode, vector, fingerprint, *, forgetting=(), retained_episodes=()):
         """The receipt, original, buffer and both indexes have ONE commit point."""
         user, rid = prepared['user_id'], prepared['request_id']
         with self.transaction() as db:
@@ -183,12 +190,19 @@ class Store:
                        dumps(episode['source_refs']), 'active', None, None, None, now(), now()))
             self._index(db, user, episode['ref'], episode['text'])
             if vector:
-                db.execute('INSERT INTO vectors VALUES(?,?,?,?)', (user, episode['ref'], fingerprint, dumps(vector)))
+                self._vectors(db, user, episode['ref'], fingerprint, vector)
             db.execute("INSERT INTO requests(user_id,request_id,payload_hash,status,response,session_id,raw_refs,episode_ref) VALUES(?,?,?,?,?,?,?,?)",
                        (user, rid, prepared['payload_hash'], 'done', prepared['response'], prepared['session_id'], prepared['raw_refs'], episode['ref']))
             db.execute("UPDATE working SET accepted_through=?,last_session=? WHERE user_id=?",
                        (sources[-1]['ordinal'], prepared['session_id'], user))
             self._forget(db, user, forgetting)
+            for retained in retained_episodes:
+                item=retained['episode']
+                db.execute('INSERT INTO nodes VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+                           (user,item['ref'],'episode',item['text'],dumps(item['source_refs']),'active',None,None,None,now(),now()))
+                self._index(db,user,item['ref'],item['text'])
+                if retained['vectors']:
+                    self._vectors(db,user,item['ref'],fingerprint,retained['vectors'])
 
     def request(self, user, rid):
         row = self.one("SELECT * FROM requests WHERE user_id=? AND request_id=?", (user, rid))
@@ -315,11 +329,15 @@ class Store:
                 result.append({**node, "score": 1 / (60 + rank), "lexical_rank": rank})
         return result
 
-    def vector_rows(self, user, fingerprint, *, before=None):
-        for row in self.rows("SELECT ref,vector FROM vectors WHERE user_id=? AND fingerprint=?", (user, fingerprint)):
+    def vector_rows(self, user, fingerprint, *, before=None, refs=None):
+        for row in self.rows("SELECT * FROM vectors WHERE user_id=? AND fingerprint=? ORDER BY ref,start", (user, fingerprint)):
+            if refs is not None and row['ref'] not in refs:
+                continue
             node = self.get(user, row["ref"])
             if node and (before is None or (sources := self.raw(user, node["source_refs"])) and all(source["ordinal"] < before for source in sources)):
-                yield node, json.loads(row["vector"])
+                if row['content_digest'] != digest(node['text']):
+                    raise MemoryError('vector_content_mismatch', 503)
+                yield {**node, 'embedding_range': {k: row[k] for k in ('start', 'end', 'content_digest')}}, json.loads(row["vector"])
 
     def source_states(self, user, source_ref):
         return [self._node(row) for row in self.rows("SELECT DISTINCT n.* FROM nodes n,json_each(n.sources) s WHERE n.user_id=? AND s.value=? AND n.status IN ('superseded','conflict')", (user, source_ref))]
@@ -345,6 +363,8 @@ class Store:
         plans = self.reflection_plans(user)
         return {'groups_completed': sum(len(p['receipts']) for p in plans),
                 'groups_unfinished': sum(len(p['groups']) - len(p['receipts']) for p in plans),
+                'groups_with_committed_nodes': sum(bool(g.get('context', {}).get('committed_node_refs'))
+                    for p in plans for g in p['progress'].values()),
                 'unplanned_messages': len(self.unplanned(user)),
                 'settled_through': self.state(user)['settled_through']}
 
@@ -393,8 +413,22 @@ class Store:
             settled = plan['through_ordinal']
         return settled
 
-    def commit_mutation(self, user, mutation, *, watermark, fingerprint, vectors, context=None, group=None):
+    def commit_mutation(self, user, mutation, *, watermark, fingerprint, vectors, context=None, group=None, checkpoint=None):
         with self.transaction() as db:
+            if checkpoint:
+                if group or mutation['links'] or mutation['forget']:
+                    raise MemoryError('reflection_checkpoint_not_independent', 409)
+                row = db.execute('SELECT progress,receipts FROM reflection_plans WHERE user_id=? AND plan_id=?',
+                                 (user, checkpoint['plan_id'])).fetchone()
+                if row is None or any(r['index']==checkpoint['index'] for r in json.loads(row['receipts'])):
+                    raise MemoryError('reflection_checkpoint_plan_invalid', 409)
+                progress = json.loads(row['progress'])
+                entry = progress.setdefault(str(checkpoint['index']), {})
+                entry.update(context=context, committed_node_refs=context.get('committed_node_refs', []),
+                             node_checkpoint=True, input_signature=checkpoint.get('input_signature'))
+                db.execute('UPDATE reflection_plans SET progress=? WHERE user_id=? AND plan_id=?',
+                           (dumps(progress), user, checkpoint['plan_id']))
+                watermark = self.state(user)['settled_through']
             if group:
                 plan = db.execute('SELECT * FROM reflection_plans WHERE user_id=? AND plan_id=?', (user, group['plan_id'])).fetchone()
                 if plan is None:
@@ -403,7 +437,8 @@ class Store:
                 if (type(group['index']) is not int or not 0 <= group['index'] < len(json.loads(plan['groups_json']))
                         or any(r['index'] == group['index'] for r in receipts)):
                     raise MemoryError('reflection_group_already_committed_or_invalid', 409)
-                receipts.append({'index': group['index'], 'refs': [i['ref'] for i in mutation['items']],
+                receipts.append({'index': group['index'], 'refs': list(dict.fromkeys(
+                    [i['ref'] for i in mutation['items']] + group.get('committed_node_refs', []))),
                                  'mutation_digest': digest(mutation), 'completion': group.get('completion', {'outcome': 'mutation'})})
                 progress = json.loads(plan['progress'])
                 progress.pop(str(group['index']), None)
@@ -430,7 +465,7 @@ class Store:
                     db.execute("UPDATE nodes SET status='conflict' WHERE user_id=? AND ref IN (?,?) AND status='active'",
                                (user, edge["from_ref"], edge["to_ref"]))
             for ref, vector in vectors.items():
-                db.execute("INSERT OR REPLACE INTO vectors VALUES(?,?,?,?)", (user, ref, fingerprint, dumps(vector)))
+                self._vectors(db, user, ref, fingerprint, vector)
             self._forget(db, user, mutation["forget"])
             db.execute("UPDATE working SET settled_through=MAX(settled_through,?),state='stopped',context=? WHERE user_id=?",
                        (watermark, dumps(context or {}), user))

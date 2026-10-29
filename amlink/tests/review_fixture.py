@@ -17,7 +17,6 @@ def review_output(payload, output):
             if review['action'] == 'keep':
                 value.update({key: unit['proposal'].get(key) for key in ('text', 'time_expression', 'time_start', 'time_end')})
         else:
-            if unit['proposal'].get('relation') == 'supersedes':
-                value['replacement_quote'] = review.get('replacement_quote')
+            value['replacement_quote'] = review.get('replacement_quote')
         result[f"u{review['position']}"] = value
     return result

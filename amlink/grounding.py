@@ -5,6 +5,22 @@ from .text import digest
 from .projection import range_is_visible
 
 
+def reusable_items(context, shown):
+    """Only full, same-version bodies actually read AND present in this input."""
+    result = {}
+    for ref, node in context.get('items', {}).items():
+        if node.get('kind') == 'episode' or not node.get('text') or node.get('scope_omit_body'):
+            continue
+        version = node.get('content_digest') or digest(node['text'])
+        length = node.get('body_chars', len(node['text']))
+        visible = [v for v in shown if v['origin_ref'] == ref and v['content_digest'] == version]
+        read = [v for v in context.get('read_ranges', []) if v['origin_ref'] == ref and v['content_digest'] == version]
+        read_ok = ranges_complete(read, length) if 'read_ranges' in context else context.get('inspections', {}).get(ref) == version
+        if read_ok and ranges_complete(visible, length):
+            result[ref] = node
+    return result
+
+
 def missing_material(arguments, context):
     mutation, _ = parse_mutation(arguments)
     items = context.get("items", {})
@@ -22,6 +38,12 @@ def missing_material(arguments, context):
         read = [v for v in context.get("read_ranges", []) if v["origin_ref"] == ref and v["content_digest"] == version]
         length = node.get("body_chars", len(node["text"])) if node else 0
         read_ok = ranges_complete(read, length) if "read_ranges" in context else inspected.get(ref) == version
+        # This group's newly reviewed/committed body can be read directly in
+        # the next actual tool input. It is not an old target requiring recall.
+        # A checkpoint alone never grants visibility: the full matching body
+        # must still be present in last_visible after that call returned.
+        if ref in context.get('committed_node_refs', []) and ranges_complete(body, length):
+            read_ok = True
         if not version or not read_ok or not ranges_complete(body, length):
             missing.append({"ref": ref, "need": "same_version_inspect_full_body_in_final_call"})
     for item in mutation.items:

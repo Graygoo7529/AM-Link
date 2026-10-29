@@ -1,5 +1,11 @@
 # 进行中的工作
 
+当前：[100题准备实施与核对](./2026-10-29-hundred-question-readiness-implementation.md)、[执行计划](../phase-2/2026-10-29-hundred-question-readiness-plan.md)、[真实台账](./2026-10-29-hundred-question-readiness-run-ledger.md)。356回归＋3子测试；六类完整预检分版本保留，最终r11完整PersonaMem13/13 Add、6/6 Search。可启动100题本地诊断，剩94题未运行；图语义和同义遗忘仍有真实反例。以下为历史阶段。
+
+最新审读：[扩大测试前的现状复核](./2026-10-29-broad-test-readiness-audit.md)。重新核对赛事背景、源码和真实台账，310回归＋3子测试通过；12个准备包已离线预检。剩余问题与6类数据/26记录/100题建议分开记录，本轮无方法修改或新模型调用。
+
+最新：[10月29日可见增量与检索实施](./2026-10-29-visible-increment-implementation.md)、[运行台账](./2026-10-29-visible-increment-run-ledger.md)、[计划](../phase-2/2026-10-29-visible-increment-execution-plan.md)。工程实施和分段验证done；310回归＋3子测试。整体Reflection/自动图质量未过，后续设计聚焦非法关系拖住合法节点、变化陈述与旧节点混淆，不能仅继续延长时间或扩大失败历史。
+
 当前实施：[工具协议与局部整理修订](./2026-10-28-tool-repair-implementation.md)、[运行台账](./2026-10-28-tool-repair-run-ledger.md)、[执行计划](../phase-2/2026-10-28-tool-contract-and-reflection-repair-plan.md)。已实施统一工具校验、逐项内容修订与依赖检查点；286回归＋3子测试。工具往返16场景对照未达到门槛，未加入生产。真实协议/语义及完整历史验收仍须按报告分别判断。
 
 最新诊断：[整理困难、协议错误与模型接口核查](./2026-10-28-reflection-api-audit.md)。基线 `b000d96`；145 份真实返回按发送 schema 重验，6 次短合成接口探测。确认代理严格约束差异、撤销来源字段歧义与审查异常续做缺口，建议尚未实施；没有方法或配置变更。

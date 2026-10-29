@@ -1,5 +1,29 @@
 # AM-Link 研究可视化
 
+2026-10-29当前：[100题准备实施](../docs/doing/2026-10-29-hundred-question-readiness-implementation.md)、[真实台账](../docs/doing/2026-10-29-hundred-question-readiness-run-ledger.md)。本地页载入r6完整LoCoMo、LongMemEval和最终r11 PersonaMem，包含真实Search和持久评注；LoCoMo另有mini诊断Answer。每份显示前1题、每题最多6个span，隐藏数量明确，全部观测保存在运行档案。贡献摘要与绑定原文、独立节点提交与整组未完成分别展示。完整校验所有Answer后再限制显示；长轨迹的span ID集合每题仅构建一次，避免二次方重复计算。
+
+```powershell
+.\.venv\Scripts\python.exe -m visualization.build --local --workspace --workspace-run ready29-full-r6-00-locomo --workspace-run ready29-full-r6-05-longmemeval --workspace-run ready29-full-r11-17-personamem --max-queries 1 --max-spans 6 --web
+```
+
+当前11数据集/26案例/3运行。更多运行可按登记ID单独加载；可视化只是展示切片，不把页面题数当成实际实验题数。下方为此前阶段。
+
+2026-10-29最新：[可见增量实施](../docs/doing/2026-10-29-visible-increment-implementation.md)、[真实台账](../docs/doing/2026-10-29-visible-increment-run-ledger.md)。局部审查新增中文任务含义，区分新增支持与主体导航；当前载入`visible29-lm4-r1`和`visible29-heldout-r2`。LM04来源2/4但三笔金额齐；新两历史的虚构说明恢复交付，8/8 Add、4/4 Search但4/6整理组、零边。评注保留这些区别。11数据集/26案例，原文/轨迹仅在忽略的本地页，每题最多40span；页面省略不表示运行未采集。
+
+```powershell
+.\.venv\Scripts\python.exe -m visualization.build --local --workspace --workspace-run visible29-lm4-r1 --workspace-run visible29-heldout-r2 --max-spans 40 --web
+```
+
+下方是此前阶段的展示快照。
+
+2026-10-28最新：[来源约束与增量整理](../docs/doing/2026-10-28-grounded-increment-implementation.md)、[16份档案台账](../docs/doing/2026-10-28-grounded-increment-run-ledger.md)。增加“已提交的实际记忆增量”面板，区分新增节点、旧陈述补充来源与导航更新，不把草案当成落库。当前本地页载入 `ground28-lm4-r5` 和 `ground28-controlled-r5`，保留4条持久评注。最终两份档案24/24 Add、11/11 Search，但仅11/18整理组完成；LM04来源4/4未触发Select，控制历史仍有身份混同与错误补来源，整体方法未验收。页面保持11数据集/26案例，每题最多40个span，省略数明确显示；完整轨迹和评注仍在忽略运行目录。
+
+```powershell
+.\.venv\Scripts\python.exe -m visualization.build --local --workspace --workspace-run ground28-lm4-r5 --workspace-run ground28-controlled-r5 --max-spans 40 --web
+```
+
+以下为此前阶段的展示快照。
+
 2026-10-28最新：[工具协议与局部整理修订](../docs/doing/2026-10-28-tool-repair-implementation.md)、[18份档案台账](../docs/doing/2026-10-28-tool-repair-run-ledger.md)。新增失败层、实际输出额度、逐项审查前后、撤销依据与持久支持、未提交待办的展示。6个案例已有本地持久评注；当前本地页突出`tool28-lm4-r3`与`tool28-pv4-r3`：前者来源3/4，后者长历史因研究预算只接收32/41 Add、Search未执行，不能记为方法通过。页面11数据集/26案例，每题最多80个span，省略数量明确显示，完整轨迹仍在运行目录；可改选其他档案重新生成。
 
 ```powershell

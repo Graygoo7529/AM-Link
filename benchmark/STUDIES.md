@@ -1,5 +1,15 @@
 # 案例实验与研究工作区
 
+## 100题完整历史清单
+
+`python -m benchmark.broad prepare --output benchmark/data/plans/<新目录>`仅做离线准备：固定种子、六类数据、26份完整记录、100题、780次Add，冻结数据及源码hash。选题按类别和稳定顺序，不读取答案挑题，也不按证据锚点裁剪历史。不是官方私有套件或正式成绩。
+
+`python -m benchmark.broad run --plan benchmark/data/plans/<目录>/suite.json --indices 0 1 --prefix <新运行前缀> --env-file docs/private/amlink.env`运行指定记录；索引0—25见suite.json。每份新库、先全部Add再Search，默认完整方法、chunk_size20/top_k100；每份最多4000次模型调用/1亿输入字符（r6按长历史预检实耗调高，非实际消耗）。相同清单要求源码和非秘密配置一致；已存在运行不覆盖，失败不内部重试。准备后的源码若改变须建立新清单。
+
+`python -m benchmark.broad status --plan <suite.json> --prefix <运行前缀> --output <汇总.json>`可离线汇总未启动、未完成、中断、失败和完成，未生成report时仍统计已落盘trace的成功调用；接口完成不等于整理或回答正确。
+
+报告仍按下文的研究工作区与可视化方式加载；接收成功、未完成整理、证据与最终可答性须分别评估。
+
 2026-10-07，done。入口是 `python -m benchmark study`。将“来源选择 → 真实 Add/Search → 内部观测 → 评注 → 本地网页”串为一次可复核实验。正式比赛仍由主办方执行 Answer/Eval；这里不增加 AM-Link Answer API。研究靶场可在独立阶段对 Search 的真实返回运行诊断 Answer，不能替代官方 Answer/Eval。
 
 ## 选择数据与运行

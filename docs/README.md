@@ -1,5 +1,15 @@
 # 项目文档
 
+2026-10-29当前：[100题准备实施与核对](./doing/2026-10-29-hundred-question-readiness-implementation.md)、[执行计划](./phase-2/2026-10-29-hundred-question-readiness-plan.md)、[真实台账](./doing/2026-10-29-hundred-question-readiness-run-ledger.md)。工程及六类分版本预检完成，356回归＋3子测试；最终r11完整PersonaMem13/13 Add、6/6 Search。26记录/100题/780 Add已冻结，同版剩94题未运行；质量/正式参赛未验收。以下为历史阶段。
+
+2026-10-29最新复核：[扩大本地测试前的现状与数据预检](./doing/2026-10-29-broad-test-readiness-audit.md)。310回归＋3子测试复验通过；仍有关系阻塞独立节点、变化/归属混淆及长episode嵌入边界问题。已离线核对12个准备包，提出6类数据/26记录/100题完整历史诊断范围；未启动真实大批量或修改方法。
+
+2026-10-29最新交付：[可见增量与检索实施核对](./doing/2026-10-29-visible-increment-implementation.md)、[16份真实档案台账](./doing/2026-10-29-visible-increment-run-ledger.md)、[执行计划](./phase-2/2026-10-29-visible-increment-execution-plan.md)。四项工程改进done，310回归＋3子测试；803次尝试/791响应。旧字段和新增支持、Select与人工图组件有收益；最后新库4/6整理组、零边，自动图与完整历史未验收。以下“仅建议”为实施前历史。
+
+最新复核：[10月29日明显改进点](./doing/2026-10-29-next-improvements-audit.md)：旧节点时间字段未进入自然叙事却要求精确复用；补来源审查混淆“旧事实成立”与“新增原文支持”；导航身份与Search分环节验证仍需改进。本轮只有离线核对和建议，无方法改动或新模型调用。
+
+最新实施：[来源约束、叙事归属与增量整理](./doing/2026-10-28-grounded-increment-implementation.md)、[真实台账](./doing/2026-10-28-grounded-increment-run-ledger.md)、[执行计划](./phase-2/2026-10-28-grounded-increment-plan.md)。四项改进入默认流程；299回归＋3子测试；关系定义体积、真实归属和复用效果分别核查，不将 API 成功等同于图质量通过。
+
 当前实施：[工具协议与局部整理修订](./doing/2026-10-28-tool-repair-implementation.md)、[运行台账](./doing/2026-10-28-tool-repair-run-ledger.md)、[执行计划](./phase-2/2026-10-28-tool-contract-and-reflection-repair-plan.md)。已实施统一工具校验、逐项内容修订与依赖检查点；286回归＋3子测试。工具往返16场景对照未达到门槛，未加入生产。真实协议/语义及完整历史验收仍须按报告分别判断。
 
 最新分析：[整理困难与模型接口核查](./doing/2026-10-28-reflection-api-audit.md)。已提交基线 `b000d96`；离线重验 145 份输出并做 6 次合成接口探测，发现严格工具约束的代理差异、schema 以外的字段歧义及审查异常的修订断点。不是本次请求时间不足；只有诊断与改进建议，未改默认方法。

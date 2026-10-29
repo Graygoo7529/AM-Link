@@ -13,6 +13,7 @@ from .errors import MemoryError
 from .text import digest, dumps
 from .narrative import render
 from .tool_contract import parse_tool, ToolResult
+from .vector_index import MAX_INPUT_BYTES, INDEX_VERSION
 
 
 def tool_body(config, purpose, prompt, payload, tools):
@@ -28,7 +29,7 @@ def tool_body(config, purpose, prompt, payload, tools):
     if purpose == 'reflection':
         contract += ('\nEach proposed item must include ref, kind, text, source_refs, time_expression, time_start and time_end. '
                      'Unknown time fields are explicit null. Always include no_prior_match in reflection_items; do not omit false. '
-                     'Each reflection_relations link must include from_ref, to_ref, relation, source_refs and support. '
+                     'Each reflection_relations link must include connection_position, source_refs and support. '
                      'In support explain what the cited original says about THIS connection; do not omit this field.')
     return {"model": config.llm_model, "temperature": 0,
             "max_completion_tokens": min(config.model_max_tokens, 1024) if purpose in {"bfs", "query_expansion"} else config.model_max_tokens,
@@ -46,7 +47,7 @@ class Providers:
         self.lock = threading.Lock()
         self.calls = self.input_chars = 0
         self.embedding_fingerprint = digest([config.embedding_base_url, config.embedding_model,
-                                            config.embedding_dimensions, "narrative-v1"])
+                                            config.embedding_dimensions, "narrative-v1", INDEX_VERSION])
 
     def close(self):
         self.client.close()
@@ -139,6 +140,8 @@ class Providers:
     def embed(self, texts, deadline):
         if not texts or len(texts) > self.config.embedding_batch:
             raise ValueError("invalid embedding batch size")
+        if any(not text or len(text.encode('utf-8')) > MAX_INPUT_BYTES for text in texts):
+            raise MemoryError('embedding_input_budget', 413)
         return self._post(base=self.config.embedding_base_url, path="/embeddings",
             key=self.config.embedding_api_key, model=self.config.embedding_model, embedding=True, deadline=deadline,
             body={"model": self.config.embedding_model, "input": texts,

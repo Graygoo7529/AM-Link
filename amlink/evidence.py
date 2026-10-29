@@ -52,7 +52,8 @@ def fragment(source, start, end, *, query=""):
             "source_chars": len(text), "shown_chars": end - start,
             "complete": start == 0 and end == len(text), "query": query,
             "origin_kind": "raw" if source["ref"].startswith("raw:") else "item",
-            **{k: source[k] for k in ("role", "ordinal", "session_id", "source_time") if k in source}}
+            **{k: source[k] for k in ("role", "ordinal", "session_id", "source_time", "kind",
+                "time_expression", "time_start", "time_end") if k in source}}
 
 
 def shrink_fragment(value, limit):

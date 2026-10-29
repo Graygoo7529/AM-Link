@@ -1,10 +1,33 @@
 from visualization.spans import evidence_panel
 
 
+def test_select_merge_summary_does_not_claim_full_original_visibility():
+    panel = evidence_panel({'view':'contribution_summary','model_input':{'candidates':[
+        {'position':0,'narrative':'A partial navigation summary.'}]},'member_fragment_map':{'0':[{},{}]}})
+    assert panel['rows'][0]['绑定的完整原文卡数'] == 2
+    assert '不是新证据' in panel['rows'][0]['说明']
+
+
 def test_unknown_or_old_evidence_fields_stay_unknown():
     assert evidence_panel({}) is None
     panel=evidence_panel({'packing_unit':'evidence_group','decisions':[{'ref':'memory:a'}]})
     assert panel['rows'][0]['closure']=='unknown'
+
+
+def test_node_checkpoint_is_displayed_as_saved_but_not_a_completed_group():
+    value = {'group_complete':False,'committed_node_refs':['memory:a'],
+        'mutation':{'items':[{'ref':'memory:a','kind':'fact','text':'A supported fact.','source_refs':['raw:a']}]}}
+    panel = evidence_panel(value)
+    assert '尚未完成' in panel['title'] and panel['rows'][0]['已保存正文'] == 'A supported fact.'
+
+
+def test_increment_panel_distinguishes_support_from_new_nodes_and_requires_commit():
+    value = {'increment': {'created': [], 'support_added': [{'ref': 'memory:a', 'added_source_refs': ['raw:new']}],
+                           'navigation_updated': []}, 'no_item_change': False}
+    assert evidence_panel(value) is None
+    panel = evidence_panel({**value, 'committed': True})
+    assert panel['rows'][0]['数量'] == 0
+    assert panel['rows'][1]['数量'] == 1 and '非草案' in panel['title']
 
 
 def test_disclosure_panel_is_bounded_and_marks_display_counts():
