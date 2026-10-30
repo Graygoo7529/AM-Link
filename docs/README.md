@@ -3,6 +3,7 @@
 当前方法为第三版；研究设施已统一为 [research](../research/README.md)。
 
 1. [方法设计与Add/Search](../DESIGN.md)
+   · [最新分析：从主题相关到回答所需的证据选择](phase-3/2026-10-30-selection-mechanism-review.md)（只读复核、轨迹更正与待讨论方向）
    · [最新：续读实施核对](doing/2026-10-30-reading-continuation-implementation.md)、[执行计划](phase-3/2026-10-30-reading-continuation-execution.md)、[运行台账](doing/2026-10-30-reading-continuation-run-ledger.md)
    · [多部分日志与集合选择案例](../research/cases/2026-10-30-continuation-studies.md)
    · [最新：自然叙事实测、强Answer与后续设计](doing/2026-10-30-narrative-and-answer-findings.md)、[执行与后续计划](phase-3/2026-10-30-narrative-and-answer-plan.md)
