@@ -41,7 +41,7 @@ class AnswerTests(unittest.TestCase):
                 main(["--run", str(run), "--env-file", str(env_file), "--answer-id", "answer-one"])
             complete.assert_called_once()
             self.assertEqual(complete.call_args.kwargs["api_key"], "test-key")
-            self.assertEqual(complete.call_args.kwargs["model"], "gpt-5.6-luna")
+            self.assertEqual(complete.call_args.kwargs["model"], "gpt-4o-mini")
             self.assertEqual(complete.call_args.kwargs["timeout"], 45)
             sent = complete.call_args.kwargs["messages"][1]["content"]
             sent = json.loads(sent)

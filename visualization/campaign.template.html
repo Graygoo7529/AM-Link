@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AM-Link · 100 题真实测试</title>
+<style>
+:root{color-scheme:light dark;--bg:#f4f5f7;--fg:#202630;--muted:#596375;--line:#cbd2dc;--blue:#2563a7;--panel:#fff}
+@media(prefers-color-scheme:dark){:root{--bg:#15191f;--fg:#e4e8ef;--muted:#adb8c8;--line:#3b4554;--blue:#80bbfa;--panel:#212833}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,sans-serif}main{max-width:1180px;margin:auto;padding:32px 24px}h1{font-size:30px;margin:0}h2{font-size:22px}small,.muted{color:var(--muted)}.stats{display:flex;gap:35px;flex-wrap:wrap;margin:25px 0}.stat strong{display:block;font-size:27px}.controls{display:flex;gap:12px;flex-wrap:wrap;margin:25px 0}select,input{font:inherit;padding:9px;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px}input{min-width:230px;flex:1}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:10px;border-bottom:1px solid var(--line)}button{font:inherit;background:transparent;color:var(--blue);border:0;text-align:left;cursor:pointer;padding:0}button:hover{text-decoration:underline}.layout{display:grid;grid-template-columns:minmax(290px,1fr) minmax(0,1.8fr);gap:30px}.list{max-height:75vh;overflow:auto}.question{display:block;padding:12px 4px;border-bottom:1px solid var(--line);width:100%}.question.active{font-weight:700;color:var(--fg)}.detail{min-width:0}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;background:var(--panel);padding:16px;border-radius:6px;margin:10px 0}summary{cursor:pointer;color:var(--blue);padding:10px 0}details{border-top:1px solid var(--line);margin-top:15px}.tags{color:var(--muted);font-size:13px}.rule{margin-bottom:25px;max-width:95ch}@media(max-width:780px){.layout{grid-template-columns:1fr}.list{max-height:300px}main{padding:20px 14px}}
+</style></head><body><main>
+<h1>AM-Link · 100 题真实测试</h1>
+<p class="muted">固定方法 · 完整历史 · 真实 Add → Search → Answer → 评分</p>
+<p class="rule">mini 初评与 Codex 逐题复核分别保留。复核是模型审读，非人类标注；这是公开研究样本的本地诊断，不是官方成绩。PersonaMem 为自由回答对照，部分偏好依据较弱。参考答案只用于评分，未提供给 Add / Search / Answer。</p>
+<div class="stats" id="stats"></div>
+<p class="muted" id="audit"></p>
+<table><thead><tr><th>数据集</th><th>Add 成功</th><th>Search 成功</th><th>mini 初评正确</th><th>Codex 复核正确</th></tr></thead><tbody id="families"></tbody></table>
+<div class="controls"><select id="family" aria-label="数据集"><option value="">全部数据集</option></select><select id="label" aria-label="复核结论"><option value="">全部结论</option><option value="correct">复核正确</option><option value="incorrect">复核未达标</option><option value="uncertain">复核不确定</option></select><input id="filter" aria-label="搜索题目" placeholder="搜索题目、回答或案例编号"></div>
+<div class="layout"><nav class="list" id="questions" aria-label="题目列表"></nav><article class="detail" id="detail"></article></div>
+</main><script>
+const D=/* CAMPAIGN_DATA */;
+const $=x=>document.getElementById(x),labels={correct:'正确',incorrect:'未达标',uncertain:'不确定',error:'评分失败',skipped:'跳过'};
+const names={locomo:'LoCoMo · 跨会话生活',longmemeval:'LongMemEval · 长历史',perltqa:'PerLTQA · 中文人物',personamem:'PersonaMem · 偏好与遗忘',beam:'BEAM · 开发项目演变','clbench-life':'CL-bench · 复杂材料任务'};
+function el(tag,text){let n=document.createElement(tag);n.textContent=text;return n}
+const t=D.totals,completed=D.rows.filter(r=>r.answer_status==='ok').length,reviewed=D.rows.filter(r=>r.review.label).length,passed=D.rows.filter(r=>r.review.label==='correct').length;
+$('audit').textContent=`mini 初评：${D.rows.filter(r=>r.machine.label==='correct').length} 题正确、${D.rows.filter(r=>r.machine.label==='incorrect').length} 题未达标、${D.rows.filter(r=>r.machine.status==='error').length} 题评分协议失败。Codex 复核：${passed} 题正确、${D.rows.filter(r=>r.review.label==='incorrect').length} 题未达标、${D.rows.filter(r=>r.review.label==='uncertain').length} 题不确定；${reviewed} 题审读回答与标注，其中 ${D.rows.filter(r=>r.review.evidence_read).length} 题进一步核对了实际原文。不确定和评分失败均保留在总分母中。`;
+for(const [n,v] of [['成功 Add',`${t.add_success} / ${t.adds}`],['成功 Search',`${t.search_success} / ${t.questions}`],['完成 Answer',`${completed} / 100`],['Codex 复核正确',`${passed} / ${reviewed}`]]){let c=el('div','');c.className='stat';c.append(el('small',n),el('strong',v));$('stats').append(c)}
+for(const [name,f] of Object.entries(D.families)){let o=el('option',names[name]||name);o.value=name;$('family').append(o);let rs=D.rows.filter(r=>r.family===name),tr=el('tr','');for(const value of [names[name]||name,`${f.add_success}/${f.adds}`,`${f.search_success}/${f.questions}`,`${f.correct||0}/${f.questions}`,`${rs.filter(r=>r.review.label==='correct').length}/${rs.length}`])tr.append(el('td',value));$('families').append(tr)}
+function block(root,title,text){root.append(el('h2',title),el('pre',text||'尚未完成'))}
+function show(r){
+  let root=$('detail');root.replaceChildren(el('h2',r.question));
+  let tags=el('p',`${names[r.family]||r.family} · ${r.run} · ${r.task}`);tags.className='tags';root.append(tags);
+  block(root,'实际回答',r.answer);
+  block(root,'Codex 逐题复核',`${labels[r.review.label]||'待复核'}\n${r.review.reason||''}`);
+  block(root,'mini 初评',`${labels[r.machine.label||r.machine.status]||'待评'}\n${(r.machine.criteria||[]).map(c=>`${c.number}. ${c.verdict}：${c.reason}`).join('\n')}`);
+  if(r.coverage.length){
+    const stages=[['source_active','原文存在'],['recalled','候选关联来源'],['visible_full_fragment','Select 看见标注片段'],['returned_full_fragment','最终交付标注片段']];
+    block(root,'标注原文经过了哪里',stages.map(([key,name])=>`${name}：${r.coverage.filter(c=>c[key]).length}/${r.coverage.length}`).join(' → '));
+    root.append(el('small','按标注原文做字面匹配，非必要事实覆盖率；未匹配可能是同义表达或分段。Query 全候选为同版离线复算，已核对实际轨迹前缀。'));
+  }
+  for(const [title,text] of [['参考答案 / 原评分要求',JSON.stringify(r.reference,null,2)],['Search 实际交付的原文',r.evidence.join('\n\n────────\n\n')||'空结果'],['原始评分记录',JSON.stringify(r.machine,null,2)]]){let box=el('details','');box.append(el('summary',title),el('pre',text));root.append(box)}
+}
+function render(){let term=$('filter').value.toLowerCase();let rs=D.rows.filter(r=>(!$('family').value||r.family===$('family').value)&&(!$('label').value||r.review.label===$('label').value)&&(!term||`${r.question} ${r.answer} ${r.task}`.toLowerCase().includes(term)));$('questions').replaceChildren();for(const r of rs){let b=el('button',`${labels[r.review.label]||'待复核'} · ${r.question}`);b.className='question';b.onclick=()=>{for(const x of $('questions').children)x.classList.remove('active');b.classList.add('active');show(r)};$('questions').append(b)}if(rs.length){$('questions').firstChild.classList.add('active');show(rs[0])}else $('detail').replaceChildren(el('p','没有匹配题目'))}
+for(const key of ['family','label','filter'])$(key).addEventListener('input',render);render();
+</script></body></html>

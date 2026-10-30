@@ -43,6 +43,7 @@ def main(argv=None):
     parser.add_argument("--run-id", default=None)
     parser.add_argument("--plan-only", action="store_true")
     parser.add_argument("--no-view", action="store_true")
+    parser.add_argument("--no-register", action="store_true", help="batch controller registers results serially")
     args = parser.parse_args(argv)
     if args.case and any((args.record, args.task, args.turn)):
         parser.error("case binding supplies record/task/turn IDs")
@@ -119,7 +120,8 @@ def main(argv=None):
         "models_enabled": args.phase1_models if args.target == "phase1" else None,
         "answer": "not executed by this runner", "retries": retry_policy,
         "metric_cutoffs": "only queries requested at least k results are eligible for @k"})
-    register(output)
+    if not args.no_register:
+        register(output)
     if not args.no_view:
         publish()
     print(json.dumps({"run": str(output), "summary": report["summary"],

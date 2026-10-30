@@ -31,7 +31,16 @@ flowchart LR
 | 缺失/歧义 | ScriptMem 缺真实历史、PersonaMem 历史未取得时拒绝回放；CL-bench 未分离的单轮 context/task 记入 exclusions。 |
 | 隔离与重试 | 每个 run 使用独立 user/request/session namespace；顺序回放；当前 profile 不自动重试。 |
 
-有证据标注的 LoCoMo/Refined 可做字面证据召回诊断；CL-bench/Life、BEAM 可先观察写入与检索结果。字面匹配会漏掉正确摘要/改写，不能直接作为 Mem0 等抽取式系统的最终质量排名。通用 Answer/rubric judge 尚未实现（已有短片段诊断 Answer）；当前结果既不是各源原始 QA 分数，也不是比赛官方成绩。[接口依据](https://agentmemories.ai/api-guide)仅用于待测对象边界。
+有证据标注的 LoCoMo/Refined 可做字面证据召回诊断。字面匹配会漏掉正确摘要/改写，不能直接作为抽取式系统的最终质量排名。2026-10-30 已接通 `gpt-4o-mini` 诊断 Answer 与逐项 rubric 评分：Answer 只看到问题和真实 Search 输出，评分侧才读取答案标注。PersonaMem 采用自由回答诊断，其它数据分别按答案/评分要求核对；均不是各源官方指标或比赛成绩。见 [100 题执行计划](../docs/phase-3/2026-10-30-hundred-answer-execution.md)。
+
+完整批量测试先冻结，再执行；不要复用既有运行前缀：
+
+```powershell
+.\.venv\Scripts\python.exe -m benchmark.broad prepare --output benchmark/data/plans/<new-plan>
+.\.venv\Scripts\python.exe -m benchmark.campaign --plan benchmark/data/plans/<new-plan>/suite.json --prefix <new-run> --env-file docs/private/amlink.env --workers 3
+```
+
+每份记录使用独立新库，完整 Add 后 Search，再 Answer/Eval；最多三个历史并行，注册入口串行写入。单个失败记录不阻塞其它记录，失败不重试、不从总分母移除。完整轨迹、标准答案、判断理由和用量保存在忽略的数据目录，秘密配置不进入快照。
 
 ## 构建与查看环境
 
@@ -95,9 +104,9 @@ Mem0 的默认实例可能访问外部模型，由执行者的包配置决定。
 
 ## 扩展方向
 
-AM-Link 自身的内部埋点使用 [可观测性标准接口 v1](./OBSERVABILITY.md)：统一来源引用、父子步骤、候选排序、上下文、模型用量与失败信息。接口定义、recorder 和导入校验已实现，二期实际埋点尚未接入。[研究可视化](../visualization/README.md) 可将这些记录连接到样本和理论案例。
+AM-Link 自身的内部埋点使用 [可观测性标准接口 v1](./OBSERVABILITY.md)：统一来源引用、父子步骤、候选排序、上下文、模型用量与失败信息。第三版 Add/Search、整理、Select、嵌入及测试侧 Answer/Eval 已接入。[研究可视化](../visualization/README.md) 可将这些记录连接到样本和理论案例。
 
-保持环境策略独立，可以继续加入增量历史检查点、干扰历史、更新时间过滤、特定能力选题，以及“统一 Answer → 来源专用 Eval”阶段。后者必须固定 answer/judge 版本和预算，单独记录调用与费用，才能公平比较抽取、压缩和原文检索系统。当前不把 rubric 当 evidence，也不凭关键词猜 gold spans。
+保持环境策略独立，可以继续加入增量历史检查点、干扰历史、更新时间过滤及特定能力选题。当前已实现统一 Answer → 本地逐项 Eval 并完成六类100题，详见[报告](../docs/doing/2026-10-30-hundred-answer-report.md)。必须固定 answer/judge 版本和预算，单独记录用量，并审读自动判分；本地适配不等于来源官方评分。当前不把 rubric 当 evidence，也不凭关键词猜 gold spans。
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s benchmark/tests -v

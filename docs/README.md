@@ -2,6 +2,8 @@
 
 当前：第三版清洁重构。按顺序阅读：
 
+最新完成：[100 题真实测试报告](doing/2026-10-30-hundred-answer-report.md)、[运行台账](doing/2026-10-30-hundred-answer-ledger.md)、[计划核对](phase-3/2026-10-30-hundred-answer-execution.md)。780 Add/100 Search/100 Answer均完成，复核51正确/47未达标/2不确定；本轮冻结记忆方法，只扩展测试和评价。
+
 1. [设计总览](../DESIGN.md)
 2. [执行计划](phase-3/2026-10-29-clean-rebuild-plan.md)
 3. [实施与验证](doing/2026-10-29-clean-rebuild-implementation.md)

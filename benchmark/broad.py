@@ -103,7 +103,7 @@ def prepare(output, seed=20261029):
     return plan
 
 
-def run(plan_path, indices, prefix, env_file):
+def run(plan_path, indices, prefix, env_file, *, no_register=False):
     from amlink.config import load_env_file, Config
     from benchmark.study import main as study
     import os
@@ -144,7 +144,7 @@ def run(plan_path, indices, prefix, env_file):
         try:
             study(['--dataset-pack', str(pack_path), '--target', 'native', '--factory', 'amlink.native:factory',
                    '--run-id', run_id, '--system-name', 'AM-Link clean rebuild', '--system-version', '0.3.0-clean',
-                   '--chunk-size', '20', '--top-k', '100', '--no-view'])
+                   '--chunk-size', '20', '--top-k', '100', '--no-view'] + (['--no-register'] if no_register else []))
         finally:
             if directory.exists():
                 shutil.copyfile(plan_path.parent / 'method-snapshot.json', directory / 'method-source-snapshot.json')
