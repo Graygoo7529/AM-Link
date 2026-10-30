@@ -3,6 +3,12 @@ import pytest
 from research.benchmark.broad import choose_tasks, run
 
 
+def test_broad_root_locates_production_sources_after_research_move():
+    from research.benchmark.broad import ROOT,source_hashes
+    assert (ROOT/'amlink/engine.py').is_file()
+    assert 'amlink/engine.py' in source_hashes()
+
+
 def test_task_selection_is_independent_of_gold_answer_and_balances_categories():
     record = dict(id='r', tasks=[dict(id=str(i), input={'text':f'Question {i}'},
         attributes={'category':i % 3}, annotations={'answer':'gold'}) for i in range(12)])

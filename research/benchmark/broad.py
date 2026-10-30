@@ -142,8 +142,9 @@ def run(plan_path, indices, prefix, env_file, *, no_register=False):
         if directory.exists():
             raise ValueError('run already exists; choose a new prefix, never overwrite or resume a study')
         try:
+            from amlink import __version__
             study(['--dataset-pack', str(pack_path), '--target', 'native', '--factory', 'amlink.native:factory',
-                   '--run-id', run_id, '--system-name', 'AM-Link clean rebuild', '--system-version', '0.3.0-clean',
+                   '--run-id', run_id, '--system-name', 'AM-Link', '--system-version', __version__,
                    '--chunk-size', '20', '--top-k', '100', '--no-view'] + (['--no-register'] if no_register else []))
         finally:
             if directory.exists():

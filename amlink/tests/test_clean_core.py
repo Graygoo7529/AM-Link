@@ -41,12 +41,14 @@ class Fake:
         if self.fail_tool==name:
             raise MemoryError('model_tool_schema_invalid',502)
         if name in self.script:
-            return self.script[name](content,schema)
+            result=self.script[name](content,schema)
+            if name=='select_memory':result.setdefault('read_more',[])
+            return result
         if name=='organize_memory':
             return {'notes':[{'title':'Paris trip','text':'Maya visited Paris.','sources':[1]}]}
         if name in ('select_memory','finalize_evidence'):
             count=int(schema['properties']['positions']['description'].split('through ')[1].split(';')[0])
-            return {'positions':list(range(1,count+1)),**({'queries':[]} if 'queries' in schema['properties'] else {})}
+            return {'positions':list(range(1,count+1)),**({'queries':[],'read_more':[]} if 'queries' in schema['properties'] else {})}
         if name=='forget_intent':
             return {'action':'all' if 'all' in content.lower() else 'topic'}
         if name=='forget_scope':
@@ -177,13 +179,19 @@ def test_select_order_is_preserved(build):
     p.script['select_memory']=select
     result=search(e,'Paris or Lyon')
     shown=[c for n,c in p.calls if n=='select_memory'][-1]
-    ref=result[0]['id']
-    assert f'Passage 2 — {ref}' in shown
+    body=s.corpus('u');top=next(r for r in body if r['ref']==result[0]['id'])
+    assert shown.index('[2]') < shown.index(top['text'],shown.index('[2]'))
 
 def test_two_pass_search_from_observed_link(build):
-    e,p,s=build()
-    e.add(request('a','Maya knows Rowan.'))
-    e.add(request('b','Rowan lives in Ghent.'))
+    e,p,s=build(candidate_limit=1)
+    e.add(request('a','Maya knows Rowan.',session='one'))
+    e.add(request('b','Rowan lives in Ghent.',session='two'))
+    rows=[r for r in s.corpus('u') if r['kind']=='episode']
+    looked_up=[]
+    def query(q,c,d):
+        looked_up.append(q)
+        return [next(r for r in rows if ('Ghent' if q=='Rowan lives' else 'Maya') in r['text'])|{'score':1}]
+    e._query=query
     count=[0]
     def select(content,schema):
         count[0]+=1
@@ -191,7 +199,7 @@ def test_two_pass_search_from_observed_link(build):
     p.script['select_memory']=select
     search(e,'Where does the friend of Maya live?')
     assert count[0]==1 and sum(name=='finalize_evidence' for name,_ in p.calls)==1
-    assert any(name=='embed' and 'Rowan lives' in text for name,text in p.calls)
+    assert looked_up==['Where does the friend of Maya live?','Rowan lives']
 
 def test_source_time_is_readable_and_unchanged(build):
     e,p,s=build(); e.add(request(text='I went yesterday.'))
@@ -296,7 +304,7 @@ def test_navigation_backlinks_only_expand_actual_support(build):
     p.script['organize_memory']=lambda c,sc:{'notes':[{'title':'Meeting','text':'Maya knows Rowan in Ghent.','sources':[1,2]}]}
     e.add(request('a','Maya knows Rowan.')); e.add(request('b','Rowan lives in Ghent.'))
     corpus=s.corpus('u'); maya=next(r for r in corpus if r['kind']=='episode' and 'Maya' in r['text'])
-    disclosed=e._disclose([maya|{'score':1.0}],corpus)
+    disclosed,_=e._disclose([maya|{'score':1.0}],corpus)
     assert len(disclosed)==2 and any('Ghent' in r['text'] for r in disclosed)
 
 def test_note_is_never_delivered_as_fabricated_evidence(build):
@@ -340,4 +348,8 @@ def test_original_recorded_order_survives_across_adds(build):
     e,p,s=build(); e.add(request('a','Quota 1000.')); e.add(request('b','Quota 1200.'))
     rows=sorted((r for r in s.corpus('u') if r['kind']=='episode'),key=lambda r:r['sequence'])
     assert [r['text'] for r in rows]==['Quota 1000.','Quota 1200.']
-    assert 'intake order, not an event date' in search(e,'quota')[0]['content']
+    result=search(e,'quota')
+    assert 'not an event date' in result[0]['content']
+    earlier=next(r for r in result if 'Quota 1000.' in r['content'])
+    later=next(r for r in result if 'Quota 1200.' in r['content'])
+    assert 'Recorded before Evidence' in earlier['content'] and 'Latest of these' in later['content']

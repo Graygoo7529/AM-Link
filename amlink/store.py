@@ -10,7 +10,7 @@ from pathlib import Path
 from .errors import MemoryError
 from .text import digest, dumps, now
 
-VERSION=300
+VERSION=301
 SCHEMA="""
 CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);
 CREATE TABLE requests(user_id TEXT,request_id TEXT,payload_hash TEXT,response TEXT,PRIMARY KEY(user_id,request_id));
@@ -112,7 +112,11 @@ class Store:
         db.execute('INSERT OR IGNORE INTO items VALUES(?,?,?,?,?,?)',
                    (user,item['ref'],item['kind'],dumps(body),struct.pack('<1024f',*vector),'active'))
 
-    def accept(self,request,sources,items,blocked):
+    def confirmation(self,user):
+        rows=self.rows('SELECT value FROM meta WHERE key=?',('confirmation:'+digest(user),))
+        return json.loads(rows[0]['value']) if rows else None
+
+    def accept(self,request,sources,items,blocked,confirmation=None):
         response=dict(success=True,request_id=request.request_id,user_id=request.user_id,session_id=request.session_id)
         with self.transaction() as db:
             old=self.replay(request)
@@ -120,6 +124,12 @@ class Store:
                 return old
             db.execute('INSERT INTO requests VALUES(?,?,?,?)',
                        (request.user_id,request.request_id,digest(request.model_dump(mode='json')),dumps(response)))
+            key='confirmation:'+digest(request.user_id)
+            if confirmation is None:
+                db.execute('DELETE FROM meta WHERE key=?',(key,))
+            else:
+                db.execute('INSERT INTO meta VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                           (key,dumps(confirmation)))
             for source in sources:
                 status='blocked' if source['id'] in blocked else 'instruction' if source.get('instruction') else 'active'
                 cursor=db.execute('INSERT INTO sources(user_id,id,body,status) VALUES(?,?,?,?)',

@@ -20,7 +20,7 @@ class Providers:
         self.input_chars=0
         self.responses=0
         self.usage={'input_tokens':0,'output_tokens':0,'cached_tokens':0}
-        self.embedding_fingerprint=f'{config.embedding_base_url}|text-embedding-v4|1024|passages-v1'
+        self.embedding_fingerprint=f'{config.embedding_base_url}|text-embedding-v4|1024|passages-v2'
 
     def close(self):
         self.client.close()
@@ -125,4 +125,4 @@ def positions_schema(maximum):
     # The tool describes the data shape. The caller validates cardinality, identity
     # and scope against its actual input, without exposing schema limits as content.
     return {'type':'array','items':{'type':'integer'},
-            'description':f'Ordered unique passage numbers from 1 through {maximum}; empty is allowed.'}
+            'description':f'Ordered unique offered position numbers from 1 through {maximum}; empty is allowed.'}

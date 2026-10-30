@@ -1,11 +1,47 @@
 {
-  "version": 1,
   "campaigns": [
     {
+      "description": "方法基线4191890；780 Add、100 Search、100 Answer。公开研究集的本地诊断，非官方成绩。",
       "id": "hundred30",
       "label": "第三版 · 六类26历史100题",
-      "plan": "research/benchmark/data/plans/clean30-hundred-answer",
-      "description": "方法基线4191890；780 Add、100 Search、100 Answer。公开研究集的本地诊断，非官方成绩。"
+      "plan": "research/benchmark/data/plans/clean30-hundred-answer"
+    },
+    {
+      "description": "5个短历史、6题；独立于公开面板。mini误判与人工复核并存。",
+      "id": "reading30-controls-r2",
+      "label": "reading · 初始合成控制",
+      "plan": "research/benchmark/data/plans/reading30-controls-r2"
+    },
+    {
+      "description": "六类12份完整历史400 Add；逐句版本暴露阅读和编号问题，保留全部失败。",
+      "id": "reading30-public-r1",
+      "label": "reading · 首轮完整历史38题",
+      "plan": "research/benchmark/data/plans/reading30-public-r1"
+    },
+    {
+      "description": "同一六类12份历史、新库重建；400 Add、36 Search成功；非独立新增38题。",
+      "id": "reading30-public-r2",
+      "label": "reading · 短段落完整历史38题",
+      "plan": "research/benchmark/data/plans/reading30-public-r2"
+    },
+    {
+      "description": "空锚点显示修正后的新库10 Add、6题，不能替代完整历史效果验收。",
+      "id": "reading30-controls-r3",
+      "label": "reading · 最终边界控制",
+      "plan": "research/benchmark/data/plans/reading30-controls-r3"
+    },
+    {
+      "description": "5个人工完整短历史，10 Add；独立于公开面板。",
+      "id": "continuation30-controls-r1",
+      "label": "continuation · 6题机制控制",
+      "plan": "research/benchmark/data/plans/continuation30-controls-r1"
+    },
+    {
+      "description": "555 Add；原38题＋额外6份历史23题，真实mini/v4及GPT-5.4 Answer。公开研究集，不是盲测。",
+      "id": "continuation30-public-r1",
+      "label": "continuation · 六类18历史61题",
+      "plan": "research/benchmark/data/plans/continuation30-public-r1"
     }
-  ]
+  ],
+  "version": 1
 }

@@ -45,6 +45,16 @@ def test_study_identity_and_completeness():
         validate_studies(catalog,[row])
 
 
+@pytest.mark.parametrize("value", [None, [], "", 0])
+def test_failed_call_artifact_preserves_non_object_result(tmp_path, value):
+    path = tmp_path / 'result.json'
+    path.write_text(json.dumps(value), encoding='utf8')
+    reference = {"artifact": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+    result = artifact_view(tmp_path, reference)
+    assert result['value'] == value
+    assert not result['projected']
+
+
 def test_page_payload_preserves_complete_api_evidence(tmp_path):
     directory=tmp_path/'run';directory.mkdir()
     digest=fixture(directory,task_count=2);span_fixture(directory,digest)

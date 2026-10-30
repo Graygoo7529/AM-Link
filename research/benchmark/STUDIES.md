@@ -39,11 +39,11 @@ main(["--case", "lm4", "--scope", "full", "--target", "native",
 ## 独立Answer、评分与评注
 
 ```powershell
-.\.venv\Scripts\python.exe -m research.benchmark answer --run research/benchmark/data/runs/<run-id> --env-file docs/private/amlink.env --model gpt-4o-mini --answer-id <new-answer> --max-questions 100 --max-completion-tokens 4096 --timeout 90
+.\.venv\Scripts\python.exe -m research.benchmark answer --run research/benchmark/data/runs/<run-id> --env-file docs/private/amlink.env --answer-id <new-answer> --max-questions 100
 .\.venv\Scripts\python.exe -m research.benchmark workspace publish
 ```
 
-Answer只接收问题和Search真实输出，标注仅评分侧可见。campaign将mini评分保留在evaluation.jsonl；协议失败不重发，Codex复核另存且不覆盖原评分。费用无可核验单价时保持未知。
+Answer默认GPT-5.4、medium、120秒、8192 completion tokens（含推理）；只接收问题和Search真实输出，标注仅评分侧可见。可显式指定其它研究模型，默认推理参数只随默认型号附加，无自动切换。campaign使用同一Answer默认，将mini辅助评分保留在evaluation.jsonl；协议失败不重发，Codex复核另存且不覆盖原评分。费用无可核验单价时保持未知。
 
 页面可下载评注文件，然后导入：
 

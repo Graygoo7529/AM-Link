@@ -42,7 +42,7 @@ def artifact_view(directory, reference):
     if digest != reference["sha256"]:
         raise ValueError("artifact digest mismatch")
     value = json.loads(blob)
-    if value.get("schema_version") == "amlink.artifact.v1":
+    if isinstance(value, dict) and value.get("schema_version") == "amlink.artifact.v1":
         value = value["text"]
         try:
             value = json.loads(value)

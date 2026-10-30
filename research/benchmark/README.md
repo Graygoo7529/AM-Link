@@ -31,7 +31,7 @@ flowchart LR
 | 缺失/歧义 | ScriptMem 缺真实历史、PersonaMem 历史未取得时拒绝回放；CL-bench 未分离的单轮 context/task 记入 exclusions。 |
 | 隔离与重试 | 每个 run 使用独立 user/request/session namespace；顺序回放；当前 profile 不自动重试。 |
 
-有证据标注的 LoCoMo/Refined 可做字面证据召回诊断。字面匹配会漏掉正确摘要/改写，不能直接作为抽取式系统的最终质量排名。2026-10-30 已接通 `gpt-4o-mini` 诊断 Answer 与逐项 rubric 评分：Answer 只看到问题和真实 Search 输出，评分侧才读取答案标注。PersonaMem 采用自由回答诊断，其它数据分别按答案/评分要求核对；均不是各源官方指标或比赛成绩。见 [100 题执行计划](../../docs/phase-3/2026-10-30-hundred-answer-execution.md)。
+有证据标注的 LoCoMo/Refined 可做字面证据召回诊断。字面匹配会漏掉正确摘要/改写，不能直接作为抽取式系统的最终质量排名。2026-10-30 研究Answer默认已升级为 `gpt-5.4`、medium推理；Answer只看到问题和真实Search输出，评分侧才读取标注。旧100题及reading30仍保留mini原回答，不能把新旧模型混合报告方法收益。逐项rubric Judge仍为mini，只作诊断，需审读有争议结果。PersonaMem采用自由回答，其它按来源答案/要求核对；均非官方成绩。见[最新固定证据对照](../../docs/doing/2026-10-30-narrative-and-answer-findings.md)。
 
 完整批量测试先冻结，再执行；不要复用既有运行前缀：
 

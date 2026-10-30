@@ -4,11 +4,30 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from research.benchmark.answer import main
+from research.benchmark.answer import main, render_context, _complete
 from research.benchmark.observability import ObservationRecorder, VERSION
 
 
 class AnswerTests(unittest.TestCase):
+    def test_provider_request_records_reasoning_only_when_requested(self):
+        for model, effort in (("gpt-5.4", "medium"), ("gpt-4o-mini", None)):
+            with self.subTest(model=model), patch("research.benchmark.answer.urllib.request.urlopen") as send:
+                send.return_value.__enter__.return_value.read.return_value = b'{"choices": []}'
+                result = _complete(api_key="test-key", base_url="https://provider.invalid/v1/",
+                    timeout=120, model=model, max_completion_tokens=8192,
+                    messages=[{"role": "user", "content": "Question and exact evidence"}],
+                    reasoning_effort=effort)
+                send.assert_called_once()
+                request = send.call_args.args[0]
+                payload = json.loads(request.data)
+                self.assertEqual(request.full_url, "https://provider.invalid/v1/chat/completions")
+                self.assertEqual(payload["model"], model)
+                if effort is None:
+                    self.assertNotIn("reasoning_effort", payload)
+                else:
+                    self.assertEqual(payload["reasoning_effort"], effort)
+                self.assertEqual(result, {"choices": []})
+
     def test_answer_only_receives_query_and_returned_search_content(self):
         with tempfile.TemporaryDirectory() as tmp:
             run = Path(tmp) / "run"
@@ -41,12 +60,13 @@ class AnswerTests(unittest.TestCase):
                 main(["--run", str(run), "--env-file", str(env_file), "--answer-id", "answer-one"])
             complete.assert_called_once()
             self.assertEqual(complete.call_args.kwargs["api_key"], "test-key")
-            self.assertEqual(complete.call_args.kwargs["model"], "gpt-4o-mini")
-            self.assertEqual(complete.call_args.kwargs["timeout"], 45)
+            self.assertEqual(complete.call_args.kwargs["model"], "gpt-5.4")
+            self.assertEqual(complete.call_args.kwargs["reasoning_effort"], "medium")
+            self.assertEqual(complete.call_args.kwargs["max_completion_tokens"], 8192)
+            self.assertEqual(complete.call_args.kwargs["timeout"], 120)
             sent = complete.call_args.kwargs["messages"][1]["content"]
-            sent = json.loads(sent)
-            self.assertEqual(sent, {"question": "Who owns the blue bike?", "retrieved_memories": [
-                {"rank": 1, "content": "Lina owns the blue bike."}]})
+            self.assertEqual(sent, render_context("Who owns the blue bike?", [
+                {"rank": 1, "content": "Lina owns the blue bike."}]))
             self.assertNotIn("GOLD_MUST_NOT_BE_SENT", json.dumps(sent))
             register.assert_called_once()
             publish.assert_called_once()
@@ -58,6 +78,10 @@ class AnswerTests(unittest.TestCase):
             self.assertEqual(events[1]["parent_span_id"], events[2]["span_id"])
             self.assertEqual(events[1]["model"]["name"], "gpt-5.6-luna")
             self.assertEqual(json.loads((answer_dir / "answer-run.json").read_text())["request_retries"], 0)
+            request = events[1]['inputs'][-1]
+            recorded = json.loads((run / request['artifact']).read_text(encoding='utf8'))
+            self.assertEqual(recorded['reasoning_effort'], 'medium')
+            self.assertEqual(recorded['messages'], complete.call_args.kwargs['messages'])
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ from .providers import Providers
 from .schemas import AddRequest, SearchRequest
 from .store import Store
 from .observation import Observer
+from . import __version__
 
 
 def create_app(*, config=None, store=None, providers=None):
@@ -32,7 +33,7 @@ def create_app(*, config=None, store=None, providers=None):
         providers.close()
         store.close()
 
-    app = FastAPI(title="AM-Link", version="0.3.0-clean", lifespan=lifespan)
+    app = FastAPI(title="AM-Link", version=__version__, lifespan=lifespan)
 
     @app.exception_handler(MemoryError)
     async def memory_error(_request: Request, error: MemoryError):
@@ -52,7 +53,7 @@ def create_app(*, config=None, store=None, providers=None):
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "version": "0.3.0-clean"}
+        return {"status": "ok", "version": __version__}
 
     @app.post("/v1/memory/add", dependencies=[Depends(authorize)])
     async def add(request: AddRequest):

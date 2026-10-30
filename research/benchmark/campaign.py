@@ -12,7 +12,7 @@ from research.benchmark.core import write_json
 
 
 def record(plan_path, index, prefix, env_file):
-    from research.benchmark.answer import main as answer
+    from research.benchmark.answer import main as answer, MODEL
     from research.benchmark.evaluate import evaluate
     plan = json.loads(plan_path.read_text(encoding='utf-8'))
     spec = plan['records'][index]
@@ -24,9 +24,9 @@ def record(plan_path, index, prefix, env_file):
         row['memory_error'] = type(error).__name__
     if (directory/'report.json').exists():
         try:
-            answer(['--run',str(directory),'--env-file',str(env_file),'--model','gpt-4o-mini',
-                    '--answer-id','hundred','--max-questions','100','--timeout','90',
-                    '--max-completion-tokens','4096','--no-view','--no-register'])
+            answer(['--run',str(directory),'--env-file',str(env_file),'--model',MODEL,
+                    '--answer-id','hundred','--max-questions','100',
+                    '--no-view','--no-register'])
             values = evaluate(directory,env_file)
             row.update(judged=sum(r['status']=='ok' for r in values),
                        correct=sum(r.get('label')=='correct' for r in values))
@@ -48,9 +48,11 @@ def main():
     plan=json.loads(args.plan.read_text(encoding='utf-8'))
     # Freeze public configuration once before spawning independent database workers.
     broad.run(args.plan,[],args.prefix,args.env_file,no_register=True)
+    from research.benchmark.answer import MODEL, REASONING_EFFORT, PROMPT_VERSION
     with (args.plan.parent/'campaign.json').open('x',encoding='utf-8') as stream:
         json.dump(dict(prefix=args.prefix,workers=args.workers,started=time.time(),pid=os.getpid(),
-                       plan_sha256=broad.sha(args.plan),answer_model='gpt-4o-mini',judge_model='gpt-4o-mini'),stream)
+                       plan_sha256=broad.sha(args.plan),answer_model=MODEL,answer_reasoning_effort=REASONING_EFFORT,
+                       answer_prompt_version=PROMPT_VERSION,judge_model='gpt-4o-mini'),stream)
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
         futures=[pool.submit(record,args.plan,r['index'],args.prefix,args.env_file) for r in plan['records']]
         for future in as_completed(futures):
