@@ -1,112 +1,73 @@
 from __future__ import annotations
-
-import os
 import math
+import os
 from dataclasses import dataclass, fields
 from pathlib import Path
 from urllib.parse import urlsplit
 
-
 @dataclass(frozen=True)
 class Config:
-    db_path: str = "amlink/data/memory.sqlite3"
-    mode: str = "graph"
-    reflection_threshold: int = 8
-    reflection_min_adds: int = 2
-    reflection_chars: int = 6000
-    batch_chars: int = 18000
-    batch_messages: int = 32
-    max_batches: int = 64
-    max_request_chars: int = 64000
-    max_request_messages: int = 128
-    old_candidates: int = 32
-    select_threshold: int = 5
-    candidate_limit: int = 64
-    max_hops: int = 3
-    max_nodes: int = 32
-    max_neighbors: int = 8
-    preview_chars: int = 1200
-    result_chars: int = 7000
-    context_chars: int = 24000
-    model_input_chars: int = 80000
-    request_seconds: float = 1740.0
-    model_timeout: float = 120.0
-    model_max_tokens: int = 5000
-    search_model: bool = True
-    reflection_steps: int = 16
-    search_steps: int = 8
-    llm_base_url: str = "https://api.zhizengzeng.com/v1"
-    llm_api_key: str = ""
-    llm_model: str = "gpt-4o-mini"
-    embedding_enabled: bool = True
-    embedding_base_url: str = "https://api.zhizengzeng.com/v1"
-    embedding_api_key: str = ""
-    embedding_model: str = "text-embedding-v4"
+    db_path: str = 'amlink/data/memory.sqlite3'
+    llm_base_url: str = 'https://api.zhizengzeng.com/v1'
+    llm_api_key: str = ''
+    llm_model: str = 'gpt-4o-mini'
+    embedding_base_url: str = 'https://api.zhizengzeng.com/v1'
+    embedding_api_key: str = ''
+    embedding_model: str = 'text-embedding-v4'
     embedding_dimensions: int = 1024
     embedding_batch: int = 10
-    auth_scheme: str = "none"
-    api_key: str = ""
-    max_provider_calls: int = 10000
-    max_provider_input_chars: int = 50000000
+    model_timeout: float = 90.0
+    request_seconds: float = 1740.0
+    model_input_chars: int = 80000
+    model_max_tokens: int = 4096
+    reflection_batch: int = 16
+    reflection_min_adds: int = 2
+    reflection_chars: int = 12000
+    reflection_max_items: int = 6
+    candidate_limit: int = 24
+    result_chars: int = 24000
+    max_provider_calls: int = 0
+    max_provider_input_chars: int = 0
+    auth_scheme: str = 'none'
+    api_key: str = ''
 
     def __post_init__(self):
-        if self.mode not in {"raw", "graph"} or self.llm_model != "gpt-4o-mini":
-            raise ValueError("mode must be raw/graph; generative model must be gpt-4o-mini")
-        if self.embedding_model != "text-embedding-v4":
-            raise ValueError("embedding model must be text-embedding-v4 for the academic track")
-        if self.auth_scheme not in {"none", "bearer", "token", "x-api-key"}:
-            raise ValueError("unsupported authentication scheme")
-        for address in (self.llm_base_url, self.embedding_base_url):
-            parsed = urlsplit(address)
-            if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
-                raise ValueError("provider URL must be a clean HTTP(S) base without credentials/query")
+        if self.llm_model != 'gpt-4o-mini' or self.embedding_model != 'text-embedding-v4' or self.embedding_dimensions != 1024:
+            raise ValueError('required models: gpt-4o-mini and text-embedding-v4/1024')
+        if not 1 <= self.embedding_batch <= 10 or not 1 <= self.candidate_limit <= 24:
+            raise ValueError('invalid batch or candidate limit')
+        if self.request_seconds >= 1800 or self.model_timeout > self.request_seconds:
+            raise ValueError('invalid request deadline')
         for field in fields(self):
-            value = getattr(self, field.name)
-            if type(value) in (int, float) and not math.isfinite(value):
-                raise ValueError(f"{field.name} must be finite")
-            if type(value) in (int, float) and value <= 0 and field.name != "max_hops":
-                raise ValueError(f"{field.name} must be positive")
-        if not 0 <= self.max_hops <= 8:
-            raise ValueError("invalid graph depth")
-        if self.embedding_batch > 10:
-            raise ValueError("text-embedding-v4 accepts at most 10 texts per batch")
-        if self.reflection_steps < 1 or self.search_steps < 1:
-            raise ValueError("tool loops must have a positive step budget")
-        if self.model_timeout > self.request_seconds:
-            raise ValueError("model timeout must fit request deadline")
-        if self.request_seconds >= 1800:
-            raise ValueError("request deadline must leave headroom below the official 30 minute limit")
+            v = getattr(self,field.name)
+            if field.name in {'max_provider_calls','max_provider_input_chars'} and v == 0:
+                continue
+            if type(v) in (int,float) and (not math.isfinite(v) or v <= 0):
+                raise ValueError(f'{field.name} must be positive and finite')
+        for base in (self.llm_base_url, self.embedding_base_url):
+            url=urlsplit(base)
+            if url.scheme not in {'http','https'} or not url.hostname or url.username or url.password or url.query or url.fragment:
+                raise ValueError('invalid provider URL')
+        if self.auth_scheme not in {'none','bearer','token','x-api-key'}:
+            raise ValueError('invalid authentication scheme')
+        if self.auth_scheme != 'none' and not self.api_key:
+            raise ValueError('authenticated service requires an API key')
 
     @classmethod
     def from_env(cls):
-        defaults = cls()
-        values = {}
-        for field in fields(cls):
-            name = "AML2_" + field.name.upper()
-            if name not in os.environ:
-                continue
-            raw, default = os.environ[name], getattr(defaults, field.name)
-            if isinstance(default, bool):
-                if raw.lower() not in {"true", "false", "1", "0"}:
-                    raise ValueError(f"{name} must be true/false")
-                values[field.name] = raw.lower() in {"true", "1"}
-            else:
-                values[field.name] = type(default)(raw)
-        return cls(**values)
+        defaults=cls()
+        return cls(**{f.name:type(getattr(defaults,f.name))(os.environ['AML3_'+f.name.upper()])
+                      for f in fields(cls) if 'AML3_'+f.name.upper() in os.environ})
 
     def public(self):
-        # No secret-bearing settings or local filesystem paths in run artifacts.
-        return {f.name: getattr(self, f.name) for f in fields(self)
-                if "key" not in f.name and f.name != "db_path"}
-
+        return {f.name:getattr(self,f.name) for f in fields(self) if 'key' not in f.name and f.name != 'db_path'}
 
 def load_env_file(path: Path):
-    """Explicit opt-in, AML2_* only; never prints values or discovers old keys."""
-    for line in path.read_text(encoding="utf-8-sig").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
+    valid={f.name.upper() for f in fields(Config)}
+    for line in path.read_text(encoding='utf-8-sig').splitlines():
+        if not line.strip() or line.lstrip().startswith('#'):
             continue
-        name, separator, value = line.partition("=")
-        if not separator or not name.startswith("AML2_"):
-            raise ValueError("environment file must contain AML2_* assignments")
-        os.environ[name] = value.strip().strip('"').strip("'")
+        name,sep,value=line.strip().partition('=')
+        if not sep or not name.startswith(('AML2_','AML3_')) or name[5:] not in valid:
+            raise ValueError('unsupported configuration assignment')
+        os.environ['AML3_'+name[5:]]=value.strip().strip('"').strip("'")

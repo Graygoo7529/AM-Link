@@ -1,16 +1,11 @@
-"""Native arena factory, isolated SQLite database and standard observations."""
 from __future__ import annotations
 
 import sqlite3
-import hashlib
 from dataclasses import replace
-from pathlib import Path
-
-from pydantic import ValidationError
 
 from benchmark.targets import TargetResponse
+from pydantic import ValidationError
 
-from . import __version__
 from .config import Config
 from .engine import Engine
 from .errors import MemoryError
@@ -18,31 +13,36 @@ from .observation import Observer
 from .providers import Providers
 from .schemas import AddRequest, SearchRequest
 from .store import Store
-from .text import dumps
+from . import __version__
+from .text import dumps,digest
+from pathlib import Path
 
 
 class NativeTarget:
     def __init__(self, config, recorder=None, artifacts=None, *, providers=None):
         self.config = config
         self.observer = Observer(recorder, artifacts)
-        if config.mode == "graph" and providers is None and not config.llm_api_key:
-            raise ValueError("graph mode requires AML2_LLM_API_KEY")
-        if config.mode == "graph" and config.embedding_enabled and providers is None and not config.embedding_api_key:
-            raise ValueError("embedding requires AML2_EMBEDDING_API_KEY")
+        if providers is None and (not config.llm_api_key or not config.embedding_api_key):
+            raise ValueError('LLM and embedding credentials are required; there is one default method')
         self.providers = providers or Providers(config, self.observer)
         self.model_capture_complete = providers is None
+        self.model_configuration = {
+            "llm": config.llm_model,
+            "embedding": config.embedding_model,
+            "embedding_dimensions": config.embedding_dimensions,
+            "internal_retries": 0,
+        }
+        self.adapter_notes = [
+            "atomic episode and complete indexes; bounded navigation-note organization",
+            "Search returns exact inspected originals; no raw fallback, no internal retry",
+        ]
         self.store = Store(config.db_path)
         self.engine = Engine(config, self.store, self.providers, self.observer)
         if artifacts:
-            (artifacts.directory / "amlink-method.json").write_text(
-                dumps({"version": __version__, "config": config.public(), "retries": 0,
-                       "source_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
-                                         for p in sorted(Path(__file__).parent.glob("*.py"))},
-                       "embedding_scope": "structured episode and memory items; raw events remain provenance",
-                       "answer": "not part of AM-Link"}) + "\n", encoding="utf-8")
-
-    def set_observation_parent(self, parent):
-        self.observer.bind(parent)
+            (artifacts.directory / 'amlink-method.json').write_text(dumps({
+                'version':__version__,'config':config.public(),'internal_retries':0,
+                'sources':{p.name:p.read_text(encoding='utf-8') for p in Path(__file__).parent.glob('*.py')}
+            }),encoding='utf-8')
 
     def _call(self, operation, request):
         try:
@@ -61,6 +61,9 @@ class NativeTarget:
 
     def search(self, request):
         return self._call("search", request)
+
+    def set_observation_parent(self, parent):
+        self.observer.bind(parent)
 
     def close(self):
         self.providers.close()

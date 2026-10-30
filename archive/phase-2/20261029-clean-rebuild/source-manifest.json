@@ -1,0 +1,561 @@
+{
+  "purpose": "r11 source and design preservation; runtime data intentionally cleared",
+  "files": {
+    "AGENTS-r11.md": {
+      "bytes": 42180,
+      "sha256": "763893504b7b15bebdb1b360e39ccd2ecb07fba2b745316a52bf526bf5c57ea2"
+    },
+    "AGENTS-transition.md": {
+      "bytes": 42888,
+      "sha256": "5e7c2db462962d2c994c733901579ef13c28d6cc12bec6cb1f22f3bd2b229c40"
+    },
+    "ARCHIVE-MANIFEST.txt": {
+      "bytes": 326,
+      "sha256": "0c8acab0d168961551dc3253af44e7ba6f37774df53bca1c6b9f169cb8b7a9bd"
+    },
+    "DESIGN-r11.md": {
+      "bytes": 32149,
+      "sha256": "2047c3f39d66c90893abf45cd0da8716556072e428082b1e7d1c821ebb559e24"
+    },
+    "docs-README-r11.md": {
+      "bytes": 12109,
+      "sha256": "7ff875e68e7d549049b3d56aeea7a7e855cd2793a78f85fd9affbe96523192d2"
+    },
+    "README-r11.md": {
+      "bytes": 5361,
+      "sha256": "80397d42fe2d1ee893803b2157959b31c2e625e732c6c975c3b539b3a5974ae5"
+    },
+    "README.md": {
+      "bytes": 1190,
+      "sha256": "4e6fcffddc0150cecdc6eeab564d162dfdc864c1860e1fbb2eebad1f359cb02a"
+    },
+    "visualization-README-r11.md": {
+      "bytes": 12214,
+      "sha256": "d2e477882e5a77088df5a6c650e984db4a287636b05858e57cb54ee8ff63560b"
+    },
+    "amlink-r11-unstable/api.py": {
+      "bytes": 3223,
+      "sha256": "c0070619540eef9475af527f882e783030e6725c3cafd77e737610127cf259d7"
+    },
+    "amlink-r11-unstable/config.py": {
+      "bytes": 4779,
+      "sha256": "0c57ef936e85104b3344bdb7736eda2bcdb05be758b24a9a05b1f9000e8d4385"
+    },
+    "amlink-r11-unstable/drafts.py": {
+      "bytes": 30179,
+      "sha256": "6a70c2d329729fcb25eb18ce8b73d64545cc53efd010b78d7a78321f53b0d25b"
+    },
+    "amlink-r11-unstable/engine.py": {
+      "bytes": 150040,
+      "sha256": "dd7c462db5cdaf3d0285e776678406d53dff7ca0a09d152ee332daa06020ad69"
+    },
+    "amlink-r11-unstable/errors.py": {
+      "bytes": 500,
+      "sha256": "8e6c4b18fc8a3a8d687167309c6275e648431f9ece0f09725b7af1a2d60398c9"
+    },
+    "amlink-r11-unstable/evidence.py": {
+      "bytes": 11750,
+      "sha256": "175eedbbdfd126f5c1b1aa034520f6bec075aaae3e725eedb36d4f1f016f0140"
+    },
+    "amlink-r11-unstable/grounding.py": {
+      "bytes": 4856,
+      "sha256": "1f040dc15d21a9dfa1bc92dd702b0cc0c55c9dafab37c01913277536564c038f"
+    },
+    "amlink-r11-unstable/intake.py": {
+      "bytes": 10121,
+      "sha256": "2ef4c6d5a2590839e86a0b91ae4013043d14ed3b531977b3be2c0ce038fb2a0e"
+    },
+    "amlink-r11-unstable/local_reflection.py": {
+      "bytes": 7512,
+      "sha256": "0fbbd45f870f685b1369a03bbd18cfe20fa2fff47fa5a8cc51b819b79576862d"
+    },
+    "amlink-r11-unstable/narrative.py": {
+      "bytes": 18265,
+      "sha256": "cbe25c96bc6b89b3ea654c5cd312295a1bada710e97e0be115abc411d7b1249e"
+    },
+    "amlink-r11-unstable/native.py": {
+      "bytes": 2969,
+      "sha256": "fafa3f76b33ef520468b61738a06a3eda83a0e8068ce743832b9337fbd6fa4c6"
+    },
+    "amlink-r11-unstable/observation.py": {
+      "bytes": 2898,
+      "sha256": "f9ea09d9b801d5dc551e7788f701512eaa7e03d54570f127241d2266381e6c7c"
+    },
+    "amlink-r11-unstable/packing.py": {
+      "bytes": 14128,
+      "sha256": "892f8d3f0cfdc29755058492208d475d8c1f61f66a0df90ddb7b3a0c8b576f8a"
+    },
+    "amlink-r11-unstable/packing_experiment.py": {
+      "bytes": 2922,
+      "sha256": "cc7db894e243dd2a4e6a1f6242d071fb47704ee941f597199919b27bf21a6861"
+    },
+    "amlink-r11-unstable/projection.py": {
+      "bytes": 4345,
+      "sha256": "c9553a1acdcd0acc02bb2516b78c82d2618c21413c07313b52ac3cc687f5f178"
+    },
+    "amlink-r11-unstable/PROTOCOL.md": {
+      "bytes": 5576,
+      "sha256": "76b0aec16ce38151d195ff94f78c69b7385626d3d5904fcfd615974cac9ad7a0"
+    },
+    "amlink-r11-unstable/providers.py": {
+      "bytes": 8783,
+      "sha256": "61669383fccf068dabc1e35992cb369054adcb998a613b73999c155d4ec92547"
+    },
+    "amlink-r11-unstable/README.md": {
+      "bytes": 9567,
+      "sha256": "9b7db6d946f3331e77b8bd8f53e340f9b93a2bf93128642185c662d1f39bbb6b"
+    },
+    "amlink-r11-unstable/reflection.py": {
+      "bytes": 24312,
+      "sha256": "95e230abb439f7f0c81c47420006521b6734f91806adddb3bb7895c61615e3ed"
+    },
+    "amlink-r11-unstable/reflection_policy.py": {
+      "bytes": 3444,
+      "sha256": "d1762ebb4dd83f092f7ec8853e1638f540126d15e3d303dab05b7330ce715cf5"
+    },
+    "amlink-r11-unstable/relation_choices.py": {
+      "bytes": 2410,
+      "sha256": "ac8b653f8a7c8258a7724fea61d382bbb2d9ebbe6300694643fd310d61a51a71"
+    },
+    "amlink-r11-unstable/requirements.txt": {
+      "bytes": 104,
+      "sha256": "a0464e39243b05512d8bb3cd942075accaa70b1ad42bb9e07bdfe8cea1c5b73f"
+    },
+    "amlink-r11-unstable/review_session.py": {
+      "bytes": 14781,
+      "sha256": "f36fdabf50fd52b05444bb0dddce2bf73a422138ea4bb36e677f6951b299cc7d"
+    },
+    "amlink-r11-unstable/schemas.py": {
+      "bytes": 4480,
+      "sha256": "20e743aae9a8dd6104d3ad40d575a7a75deb7c993751ece5c6180462737df5a1"
+    },
+    "amlink-r11-unstable/selection.py": {
+      "bytes": 2012,
+      "sha256": "5ccf8023d4aadfa34b476a49cf7977930a38ac50617f80c8ab7e218eb1953ec5"
+    },
+    "amlink-r11-unstable/store.py": {
+      "bytes": 27655,
+      "sha256": "8ec439d8a40f89f3d110097c481a65b711e88a197a42e9a4371ad1e9bb3cde86"
+    },
+    "amlink-r11-unstable/text.py": {
+      "bytes": 1877,
+      "sha256": "7eb35ab3509c7d4a8d6e727e6506c58c4ddfe1b86973c079379c8732f0e88db1"
+    },
+    "amlink-r11-unstable/tool_contract.py": {
+      "bytes": 4762,
+      "sha256": "7385457e72a5c034a6fde475e088dd4437dc201695aed4b42ca02faa8261b4a9"
+    },
+    "amlink-r11-unstable/vector_index.py": {
+      "bytes": 2263,
+      "sha256": "8fb9f9f8d96d10f99dcd37f874153aa8479f35f90e46e45ff1697910dc71b383"
+    },
+    "amlink-r11-unstable/__init__.py": {
+      "bytes": 90,
+      "sha256": "537aed2357c92cce344caa4cbbce8b69880748597f8449cbc6d6a91c85d92f84"
+    },
+    "amlink-r11-unstable/__main__.py": {
+      "bytes": 791,
+      "sha256": "055d78965d1f1a365ea4e8d22af1d22f8e757726d8a0665ace6c30d43a787b60"
+    },
+    "amlink-r11-unstable/tests/review_fixture.py": {
+      "bytes": 1196,
+      "sha256": "72f3cbf89b07a037b590fec596d50bc6835d9f28838279a3342f06c1fdec19bb"
+    },
+    "amlink-r11-unstable/tests/test_convergence.py": {
+      "bytes": 16774,
+      "sha256": "c08e226cdfa23f21083d215e48ae11711d84aaa7e9465112db71807f67f25abf"
+    },
+    "amlink-r11-unstable/tests/test_core_repairs.py": {
+      "bytes": 23793,
+      "sha256": "d42db31c96a786b6ce6a35b4e9767249d749453dc72656731f2d210e6d247cd5"
+    },
+    "amlink-r11-unstable/tests/test_delivery_contract.py": {
+      "bytes": 19476,
+      "sha256": "9380165bf38aa37b34803bc702a5a476c835579c33dcfe9a219e05c925934282"
+    },
+    "amlink-r11-unstable/tests/test_disclosure.py": {
+      "bytes": 2504,
+      "sha256": "7e53763d93fc3068dc990dbd8930ab102d5bf5d40dba3d82a38aa1a8fcc3ed80"
+    },
+    "amlink-r11-unstable/tests/test_draft_review.py": {
+      "bytes": 2144,
+      "sha256": "e16fceafa62975ee6e64765d616faa5985a9c7fdc5e08e4c9771453d93e80f27"
+    },
+    "amlink-r11-unstable/tests/test_embedding_v4.py": {
+      "bytes": 4762,
+      "sha256": "d6d09d77b2d3db3c4cd1ac707e9ad3b14aec9dca28341bf0615ea0ad7483b0b0"
+    },
+    "amlink-r11-unstable/tests/test_evidence_contract.py": {
+      "bytes": 9388,
+      "sha256": "19dde56c492071858739673b6f009f1e99a73ee5c9d8dbef437c762e81a7748f"
+    },
+    "amlink-r11-unstable/tests/test_forget_scope.py": {
+      "bytes": 7299,
+      "sha256": "8a01a1611940e7a8d38244e0987ea3d56e64cb986f1efb1506f90a784cef174a"
+    },
+    "amlink-r11-unstable/tests/test_grounded_increment.py": {
+      "bytes": 9547,
+      "sha256": "868f834004ee3ba70be3545674ed8806ec9b717011999951adafea5ae37b008b"
+    },
+    "amlink-r11-unstable/tests/test_live_selection.py": {
+      "bytes": 5140,
+      "sha256": "1556d0d0c3275ac6edd591adf358275dfc359b4e354014a7d45a01f96926ee24"
+    },
+    "amlink-r11-unstable/tests/test_local_reflection.py": {
+      "bytes": 9300,
+      "sha256": "e9b4122650b19a8152ff426844085f339724a430a1689ee931c440057b335972"
+    },
+    "amlink-r11-unstable/tests/test_memory_integrity.py": {
+      "bytes": 10580,
+      "sha256": "00bcfce76621d1e069f986286da7d36fe2cdaea27febaee288db7793d0b05567"
+    },
+    "amlink-r11-unstable/tests/test_method_convergence.py": {
+      "bytes": 13237,
+      "sha256": "633ad7fe53b219b15aff7715f37e5601441d72cc8f1118897b771d5fa7a57eba"
+    },
+    "amlink-r11-unstable/tests/test_packing.py": {
+      "bytes": 3686,
+      "sha256": "16973d8cfc5c58b1f8f19e122f83ccc3828a7d35ad35b9fefe30f7dab0adbcba"
+    },
+    "amlink-r11-unstable/tests/test_packing_experiment.py": {
+      "bytes": 977,
+      "sha256": "99dc97f744c665a062c5da11b3e90b03c65fa84d8110b58130d59951869a0a65"
+    },
+    "amlink-r11-unstable/tests/test_projection.py": {
+      "bytes": 6686,
+      "sha256": "67d8164df071f93614141ca3ca96b5228655a2d309637cdedc1db39c0deb9455"
+    },
+    "amlink-r11-unstable/tests/test_readiness_checkpoints.py": {
+      "bytes": 10377,
+      "sha256": "fe93f60605aebf212735c3f82936a661d9b1d7eea468128d51dbd89d49106eb8"
+    },
+    "amlink-r11-unstable/tests/test_refactor.py": {
+      "bytes": 5621,
+      "sha256": "e0032842ea1aa50f1c5d670491ec6af0d3d43de3f2cd191ce9c3c0acb19934f3"
+    },
+    "amlink-r11-unstable/tests/test_reflection_evidence.py": {
+      "bytes": 9925,
+      "sha256": "6b0cff836f6d2e6e1f7fb0ca218bed48f10b6e8e4de3c6c8d1dfc9c6cde84c84"
+    },
+    "amlink-r11-unstable/tests/test_reflection_policy.py": {
+      "bytes": 2657,
+      "sha256": "40f6534db75017c1c1a274e61a38c33eba27ccf1109113df4a3505f2ba33292e"
+    },
+    "amlink-r11-unstable/tests/test_review_closure.py": {
+      "bytes": 5964,
+      "sha256": "b84a3f1bd2681ad68950a27d95f035f1adc25178102d515ac02d4efd1ea3ee53"
+    },
+    "amlink-r11-unstable/tests/test_staged_reflection.py": {
+      "bytes": 9193,
+      "sha256": "5f764da9fdfeb44712d578300ebfc7b128d28473b919648e716e810c0f3bd4d7"
+    },
+    "amlink-r11-unstable/tests/test_tool_contract_repair.py": {
+      "bytes": 14509,
+      "sha256": "d6c350317ee87db970153206a92abd58c7217f53783d1a41fe6c80e0a1824947"
+    },
+    "amlink-r11-unstable/tests/test_vector_passages.py": {
+      "bytes": 2541,
+      "sha256": "099716cb62c20def12f8cd4a97df7f7b1f4f3c2862660b117718c018ea78ed4a"
+    },
+    "amlink-r11-unstable/tests/test_visible_increment.py": {
+      "bytes": 9337,
+      "sha256": "a30a4b79b483b24fd62b66e67687c47dbc14742a91fe1ec5296c70eea7e24570"
+    },
+    "docs/doing/2026-10-04-benchmark-arena.md": {
+      "bytes": 5476,
+      "sha256": "b79e88c7ac109ba4be5fcd93177be76c88c477ffa13c7b51984e5dc450409c15"
+    },
+    "docs/doing/2026-10-04-dataset-benchmark-plan.md": {
+      "bytes": 3383,
+      "sha256": "4497d3490538d5a44e2630784c5c8a6ebf5d1671c19d01aa9dcc7ad39b477bc3"
+    },
+    "docs/doing/2026-10-04-dataset-preparation.md": {
+      "bytes": 5505,
+      "sha256": "2fafc42195fdff7101ebbc700bce20ae8dbeb0f413b50db90eb2a420771a2ef1"
+    },
+    "docs/doing/2026-10-04-dataset-research.md": {
+      "bytes": 10221,
+      "sha256": "b40d1f3ea591e0f3bb1b8c1a6025f3ae5d82f457e20b2e8c05f0e6f951622ad5"
+    },
+    "docs/doing/2026-10-05-case-library-viewer.md": {
+      "bytes": 1655,
+      "sha256": "06836ea9f39acf6a764ac8c29a9911ea981ab9dbdfbc6f8b69139fec28318188"
+    },
+    "docs/doing/2026-10-05-case-study-expansion.md": {
+      "bytes": 3833,
+      "sha256": "f01e2104d909f02e75bc1048925e75b0081a217fec20c0fa2abecf614db256ad"
+    },
+    "docs/doing/2026-10-05-dataset-decoupling.md": {
+      "bytes": 9278,
+      "sha256": "d271fef7aeb7c26b16fd3fe0e3805be55df666aeb3d0b4586c83dbbae5d26ba7"
+    },
+    "docs/doing/2026-10-05-research-visualization.md": {
+      "bytes": 1724,
+      "sha256": "c41574e3ce03c8753155cbcf7d3e0b195743b051869d4595e373d195e0bfd563"
+    },
+    "docs/doing/2026-10-07-dataset-research.md": {
+      "bytes": 4988,
+      "sha256": "a4ab41d3b1b6db18b9b65f904e1a6814135351043ad35b688650df98b0f836b6"
+    },
+    "docs/doing/2026-10-07-huggingface-retry.md": {
+      "bytes": 3465,
+      "sha256": "b08f8049f6c51f7ecf9bc497d6e9aed35e4580d26ca4c45a0c32108f2af35b80"
+    },
+    "docs/doing/2026-10-07-research-infrastructure.md": {
+      "bytes": 4967,
+      "sha256": "d76abf1eb65da264d422b9c6939e74eee49a29432f0dfae7186df9b763aeb011"
+    },
+    "docs/doing/2026-10-08-amlink-answer-research.md": {
+      "bytes": 7549,
+      "sha256": "97059f733967376e3da2cfb98a13fdda3a2e9fa31f9a0c8e55aed6dfa066a328"
+    },
+    "docs/doing/2026-10-08-amlink-implementation.md": {
+      "bytes": 8161,
+      "sha256": "858bd07e0b6788e9ad6fd42ed9e10cf15ba507f23ca8a758a828e984d67fdcaf"
+    },
+    "docs/doing/2026-10-08-memory-research-survey.md": {
+      "bytes": 17666,
+      "sha256": "4d99a0989bfa46d3e2f7cb24c84ff56b6dcd6a429949117555660fb9defbf8f6"
+    },
+    "docs/doing/2026-10-11-amlink-100-rerun-analysis.md": {
+      "bytes": 15556,
+      "sha256": "ce103e99e634c604c0627fc12256bcbd65e45cc56f63d98be11473a71e3ba637"
+    },
+    "docs/doing/2026-10-11-amlink-core-audit.md": {
+      "bytes": 17414,
+      "sha256": "a8264e1b66ac4daacfd3802341b4a42350629dec62aec0e685897e099040fe59"
+    },
+    "docs/doing/2026-10-11-amlink-core-repairs.md": {
+      "bytes": 14550,
+      "sha256": "8c5835564c82f77bd08be8108c7097cbf86bfac47e20c8ddb2729ae20d0a8a4e"
+    },
+    "docs/doing/2026-10-11-amlink-refactor-implementation.md": {
+      "bytes": 7055,
+      "sha256": "62d5ca728cf8f8191523e5deaf51e00b5e058519dc8837e735996e35b5f4442c"
+    },
+    "docs/doing/2026-10-13-amlink-expanded-validation.md": {
+      "bytes": 12085,
+      "sha256": "d11d0f3b1bfb28f175003f2f271cdbdd9da895b9a94dbaf551e1107446a282b1"
+    },
+    "docs/doing/2026-10-14-amlink-100-rerun-review.md": {
+      "bytes": 8584,
+      "sha256": "b26cb141536cc5952c592eac023adf12b53514065824099adab345cb6ef6f253"
+    },
+    "docs/doing/2026-10-14-real-model-chain-report.md": {
+      "bytes": 10668,
+      "sha256": "4f81c451a9778ae9ab4055e3f81dfafbc5a191921d85d9711131978786e8e31e"
+    },
+    "docs/doing/2026-10-15-evidence-chain-repair.md": {
+      "bytes": 7964,
+      "sha256": "6d93627a31445dc26040285d79f0b3862936d82107b2926ebd294d145858c092"
+    },
+    "docs/doing/2026-10-23-commit-readiness.md": {
+      "bytes": 5864,
+      "sha256": "597958c806703a47833887136879cbde61fe791addd99d1cc9827801047094d3"
+    },
+    "docs/doing/2026-10-23-design-status-audit.md": {
+      "bytes": 14680,
+      "sha256": "4be833cf63f96f8c912bf781488869a81605d7654fdb777e9c35c36a0af4e431"
+    },
+    "docs/doing/2026-10-23-evidence-loop-implementation.md": {
+      "bytes": 11992,
+      "sha256": "dfcaeb643ffbb68f522001dcd986588d41a2311ac4c4d9d8df094d6b03e4002a"
+    },
+    "docs/doing/2026-10-23-reflection-convergence-audit.md": {
+      "bytes": 11441,
+      "sha256": "a5d0cebc54207bd1b14908ba3ec4b682e3f9a8f351ac2bfcc74af9073d7543a7"
+    },
+    "docs/doing/2026-10-23-reflection-convergence-implementation.md": {
+      "bytes": 12265,
+      "sha256": "844a39acbcbac1756e757445b64795d779df6b9ed0fbbaa5de7cb1006a0612a8"
+    },
+    "docs/doing/2026-10-24-broad-method-implementation.md": {
+      "bytes": 15111,
+      "sha256": "042ce67750de462cb70bc08c8307cba8de49aa5118b910e26ad9af1cafa3154d"
+    },
+    "docs/doing/2026-10-24-broad-run-ledger.md": {
+      "bytes": 7354,
+      "sha256": "0513ecdbfb20105dd06f75a50d0970895c46e7d7758fa5f7d87d723da3de8eb8"
+    },
+    "docs/doing/2026-10-26-convergence-audit-and-reset.md": {
+      "bytes": 7331,
+      "sha256": "8bc4bf2cd3e734c4bb27040a6e9215d10dae508fce48c9a23975ec624aa003d3"
+    },
+    "docs/doing/2026-10-26-evidence-and-draft-implementation.md": {
+      "bytes": 10774,
+      "sha256": "684b728dbd402c10be2d41f557c3cea120d8580ab438755b89a711e26d0c6867"
+    },
+    "docs/doing/2026-10-26-live-method-implementation.md": {
+      "bytes": 8055,
+      "sha256": "55b632ba4d7abb19921f5577b7f7d8ee51e500a01e9fa23a34facd8f2522ea33"
+    },
+    "docs/doing/2026-10-26-live-run-ledger.md": {
+      "bytes": 7937,
+      "sha256": "feaca9886b13185891e6f54b2bca99a77e2780983941c41e976fda53dd1557b8"
+    },
+    "docs/doing/2026-10-26-local-narrative-implementation.md": {
+      "bytes": 13459,
+      "sha256": "5fba0622928e953bf1be6c1e9210461061891fd3474e23aef7f03737c8e2e4fe"
+    },
+    "docs/doing/2026-10-26-observation-reset-and-design-audit.md": {
+      "bytes": 3987,
+      "sha256": "1812d7e798dd2f5e4ed6d6d284d5eef1607e1ca9533d8f43aec23b96f05c366c"
+    },
+    "docs/doing/2026-10-26-run-ledger.md": {
+      "bytes": 3910,
+      "sha256": "86d8a8ec76dbf76be8131a3fce39a9187d5bb352d433dc731c3bab6edf5194e0"
+    },
+    "docs/doing/2026-10-27-add-failure-review.md": {
+      "bytes": 10651,
+      "sha256": "0ddfa90c4fb1ee43bc389bf01c8134e2822f23f0ae250b4673bfd053157c1c84"
+    },
+    "docs/doing/2026-10-27-convergence-implementation.md": {
+      "bytes": 11682,
+      "sha256": "c23e7cc6f7d14dbd9395d3bd17dbdf7b0b0e2e004f4306a526279fd6809c0814"
+    },
+    "docs/doing/2026-10-27-delivery-contract-implementation.md": {
+      "bytes": 12930,
+      "sha256": "a6bec4fed3d00856fb9e8f101cb5e84c9c5441423279d00d629a6e0c123856f7"
+    },
+    "docs/doing/2026-10-28-embedding-v4-migration.md": {
+      "bytes": 7132,
+      "sha256": "3f1047a17a572a63661b830009ffa226928e681125291b80495d2714da5e5953"
+    },
+    "docs/doing/2026-10-28-embedding-v4-verification.md": {
+      "bytes": 5220,
+      "sha256": "7e5e38c5121f01089616c9514997d4e966c08afe8da572e00053a27a187d4acd"
+    },
+    "docs/doing/2026-10-28-grounded-increment-implementation.md": {
+      "bytes": 7412,
+      "sha256": "812332fdadcfe4c1afa01f448ad89d41ea7753ace1c9605053e0ce613249590b"
+    },
+    "docs/doing/2026-10-28-grounded-increment-run-ledger.md": {
+      "bytes": 7294,
+      "sha256": "01c6b34c0c0d5a1fc2542bfc9b0aaa8b74eaa960807a7595b6722dc4d47bfafb"
+    },
+    "docs/doing/2026-10-28-memory-integrity-implementation.md": {
+      "bytes": 10811,
+      "sha256": "259706f83d9bf0219525f2a7755209fec34d96a4bef0907a9b0531c2f72cb590"
+    },
+    "docs/doing/2026-10-28-practical-improvement-audit.md": {
+      "bytes": 7919,
+      "sha256": "ac6faeb96bfd59534bc68b0e684cd1051ee89453f678b74727dec2d2b999320e"
+    },
+    "docs/doing/2026-10-28-reflection-api-audit.md": {
+      "bytes": 15588,
+      "sha256": "1f1a61ac3d8e31c794e0f28de571d1d8583650ec825bac0daa17dfbf2d015564"
+    },
+    "docs/doing/2026-10-28-tool-repair-implementation.md": {
+      "bytes": 10652,
+      "sha256": "00ed2c2cd5ee0cdbad72cd7600d186323e5758f9080b964e7e9d5987385359d8"
+    },
+    "docs/doing/2026-10-28-tool-repair-run-ledger.md": {
+      "bytes": 8742,
+      "sha256": "780243ae150950c86dd3ae3b31d7c7197afed517533438d609620979558586fe"
+    },
+    "docs/doing/2026-10-29-broad-test-readiness-audit.md": {
+      "bytes": 10086,
+      "sha256": "97f0c28d6c6a3e8df0ab07b79e755bb2e7512a4265a259cd4ded0deb20cc2eeb"
+    },
+    "docs/doing/2026-10-29-hundred-question-readiness-implementation.md": {
+      "bytes": 23005,
+      "sha256": "549ff847f047addba94f577ded3bc0b76e52dec1ee9def103a2b2411c7e22379"
+    },
+    "docs/doing/2026-10-29-hundred-question-readiness-run-ledger.md": {
+      "bytes": 9819,
+      "sha256": "55713e48139aa19678fd60a7351e6a2d8ad6709a00759746f1ca59c9657ac747"
+    },
+    "docs/doing/2026-10-29-next-improvements-audit.md": {
+      "bytes": 5718,
+      "sha256": "e9d8c3813cd6aa8333a591df09578956a977b24aaef51fe07f50487aabf48b06"
+    },
+    "docs/doing/2026-10-29-visible-increment-implementation.md": {
+      "bytes": 6232,
+      "sha256": "c397f1884c5e68c2daa1072562710ca9476312b4b8a9135e7e687eb562a24d4d"
+    },
+    "docs/doing/2026-10-29-visible-increment-run-ledger.md": {
+      "bytes": 8764,
+      "sha256": "fadce3954c0990f959bda7a13da5aec7af2129750d2a1344271cf01e3182ac3e"
+    },
+    "docs/doing/README.md": {
+      "bytes": 10904,
+      "sha256": "84aab125d73b22785952d92884a844fbe094839411168198419072063583f06f"
+    },
+    "docs/phase-2/2026-10-24-broad-method-improvement-plan.md": {
+      "bytes": 12836,
+      "sha256": "0663537a6b1acfd003e8431d999fd7a78f27fe5a018abd2becd2946cf8a907d6"
+    },
+    "docs/phase-2/2026-10-26-evidence-and-draft-plan.md": {
+      "bytes": 4422,
+      "sha256": "de3327a9a10d28690eff92c6127d508a3c52a2d9389bc237698b4d04bceca9a4"
+    },
+    "docs/phase-2/2026-10-26-live-method-plan.md": {
+      "bytes": 3904,
+      "sha256": "30ce5a0cc25cba220471806dc408a694f5c32872b181d55d78249bdafff1a7e3"
+    },
+    "docs/phase-2/2026-10-26-method-convergence-plan.md": {
+      "bytes": 22042,
+      "sha256": "0fa98767dac9bd6fc696a1533ac70c219e68bbf9c7c681f4cc794fafedfd5c35"
+    },
+    "docs/phase-2/2026-10-26-narrative-local-execution-plan.md": {
+      "bytes": 6567,
+      "sha256": "038d77d287d0714c5e94844b63a30894f335eecc27b9a0f61f13bed5998c0186"
+    },
+    "docs/phase-2/2026-10-26-narrative-local-reflection-design.md": {
+      "bytes": 14726,
+      "sha256": "16bed5f0597e6c41057f9d405a10f8d1e0b7636043c78fa471e68affa5a08dad"
+    },
+    "docs/phase-2/2026-10-27-add-search-contract-and-convergence-plan.md": {
+      "bytes": 26869,
+      "sha256": "023452fad5fa4d03c275e127d15c121aae175c90972c8ac5a664496a3db5c1e2"
+    },
+    "docs/phase-2/2026-10-27-convergence-execution.md": {
+      "bytes": 5325,
+      "sha256": "2e8ed2ae147219757467abab94d2b9ea313846a197b4906f340879587a089c4d"
+    },
+    "docs/phase-2/2026-10-28-embedding-v4-migration-plan.md": {
+      "bytes": 5117,
+      "sha256": "ede04c7ead0881aaa35674655810b3d42fca4b6a0c533c6e4b55d69f7e5156e9"
+    },
+    "docs/phase-2/2026-10-28-grounded-increment-plan.md": {
+      "bytes": 7764,
+      "sha256": "603878bdd9bba9d425855e80a2506c5da53dda825f1c54ef8b90bb0ed90cb5c1"
+    },
+    "docs/phase-2/2026-10-28-memory-integrity-review-plan.md": {
+      "bytes": 5327,
+      "sha256": "c23e15dc653d0cabda57e66324dedd6e744702178554e63a1ac2b0af5a66b1da"
+    },
+    "docs/phase-2/2026-10-28-tool-contract-and-reflection-repair-plan.md": {
+      "bytes": 34496,
+      "sha256": "b365841ead4c505e3108241d410b4f20ede8f9078228da3a268f5ad16e28d80e"
+    },
+    "docs/phase-2/2026-10-29-hundred-question-readiness-plan.md": {
+      "bytes": 10102,
+      "sha256": "1ac4b368a4cfc11557b9793565471fab9483af865c75fc008ee07e84b632034d"
+    },
+    "docs/phase-2/2026-10-29-visible-increment-execution-plan.md": {
+      "bytes": 7063,
+      "sha256": "2d44c28121ad491e08fb98511a6f123b233e26a929080b5ad6e17558a2428762"
+    },
+    "docs/phase-2/evidence-loop-execution-plan.md": {
+      "bytes": 44366,
+      "sha256": "31738e0f3873085400008b55cd85d6231604f3c2979500aa0d255b85c7e406be"
+    },
+    "docs/phase-2/integration-research.md": {
+      "bytes": 12948,
+      "sha256": "ba8ad114fdf8beed9181c020b259caf7c1b7fc821e5f6ebf95a2a4734a60afb6"
+    },
+    "docs/phase-2/memory-design-workbench.md": {
+      "bytes": 5060,
+      "sha256": "2628ead1b778c8b30ff27a7a135c285a4c872b6aaa0f08287bbf4909d58f8706"
+    },
+    "docs/phase-2/method-improvement-plan.md": {
+      "bytes": 52121,
+      "sha256": "89e2ba5803190212b0bae4fdacdb07d9394f34bafbab71d093ff8b5237f84a32"
+    },
+    "docs/phase-2/reflection-convergence-plan.md": {
+      "bytes": 14670,
+      "sha256": "81e7a7adb02de588980a72f5637c4888d8324977188780b321da760f1ee8dbf5"
+    }
+  }
+}

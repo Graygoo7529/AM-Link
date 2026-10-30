@@ -1,105 +1,26 @@
 # 项目记忆
 
-- 2026-10-29最新先读`docs/doing/2026-10-29-hundred-question-readiness-implementation.md`、同前缀`run-ledger.md`和`docs/phase-2/2026-10-29-hundred-question-readiness-plan.md`。起点6714ab6及原未提交改动保留；100题本地诊断准备done，质量/正式参赛未验收。默认6000 UTF-8字节多片段索引（DB4）、合法关系菜单/独立新节点检查点、同版本已读端点携入审查、贡献合并Select绑定原文、失败组依赖变化唤醒。最终r11遗忘：完整指令作为检索主题，候选定位后逐条原文独立核对（不给选择器解释），阳性短quote严格验证；同批时序、全量限定和未遗忘原文新episode投影双索引原子提交。批量quote抄写和统一核对真实不稳定，已撤回；Select短贡献试验5/6仍失败，不采用，无隐藏分支。356回归+3子测试；可视化二次方重复计算修复后17项+3子测试。r6完整六类：Lo28/28 Add10/10 Search、6/22组、前5来源9/21；LME63/63与1/1、49/130组、前5来源2/2；Per7/7与4/4、1/5组、来源4/4；BEAM38/38与3/6、25/105组，三次Select协议/截断失败；CL3/3与1/1、2/2组；Persona13/13与6/6却误屏蔽7无关来源且62未屏蔽原文缺入口。最终r11新库Persona13/13 Add6/6 Search、26/75组、188原文/12屏蔽/176原文全有活动episode、17episode(4隐藏旧版)+27fact/1错误contradicts，686尝试686响应、输入4,409,444tokens；存在同义复述漏删，不宣布图或遗忘质量通过。r8两次Add失败、r9中断均保留，不算完整历史。最终全量/限定两控制4/4及2/2正确。全轮44档案9848已落盘尝试/9836响应（v4 1946/GPT7902，包含15次Answer），输入75,835,012/输出1,543,962tokens，缓存6,994,304；12网络失败含最初10次沙箱阻断，277 schema/17工具输出/5截断错误，9中断档案各最多1次未落盘在途未知。不是44份独立完整历史，只有6份不同公开完整历史的迭代预检。最终清单`benchmark/data/plans/ready29-100-r11/suite.json`冻结50源文件、6类26完整记录100题780 Add，同版仅6题已完成、94题/767 Add未运行；不得混入r6。默认DB3确认空后hash备份另存、重建DB4空库，health200。网页载入LoCoMo/LME/最终Persona有限投影，完整轨迹评注可重载。无重试、依赖/私有配置改动、旧实验库恢复删除、部署或提交。
+## 当前状态（2026-10-30）
 
-- 2026-10-29最新只读复核见`docs/doing/2026-10-29-broad-test-readiness-audit.md`。HEAD仍6714ab6、此前未提交修改保留；重新310回归+3子测试通过。确认坏关系阻塞合法节点、变化/归属混淆仍在；长episode整体嵌入且无v4单条token切分。12准备包离线预检脚本/JSON在忽略的`amlink/data/diagnostics/broad29_inventory.*`：无请求超过64000字符，但不能由字符数证明8192tokens合规。现有数据可设计6类/26完整记录/100题；7份LongMemEval历史单独需468 Add。ScriptMem无历史、CL-bench smoke仅1/3有可分离任务，不计可用全量。提交依赖调整/写入意图/长索引为建议未实施；仍有明确问题故未启动大批量真实调用。官网赛事页确认Add/Search及v4/mini限制，API文档本轮抓取失败，未重证旧并发参数。无配置/方法/数据库变更、模型调用、部署或自动提交。
+- 当前方法是第三版 `amlink/ 0.3.0-clean`，数据库版本300。先读根README、`docs/README.md`、根`DESIGN.md`、`docs/phase-3/2026-10-29-clean-rebuild-plan.md`和`docs/doing/2026-10-29-clean-rebuild-implementation.md`。赛事背景另读`docs/phase-2/integration-research.md`，注意其核验日期。
+- 用户因二期r11只有26/75个Reflection组完成，明确要求归档、清理实验数据并从头重构。旧源码、测试、设计及台账在`archive/phase-2/20261029-clean-rebuild/`。当前Git基线60438c3；归档包含此前未提交改动。旧项目长记忆见归档AGENTS-r11.md，中途AGENTS-transition.md不是当前事实。
+- 第三版：不可变Source及保真episode；必要BM25词项/v4向量索引后原子接收；跨Add积累，最多两小批单次Reflection生成note导航；只新增来源链接，不修改旧事实、不生成语义关系边、不运行审查修订loop。失败批unorganized，不内部重试，原文仍可检索。
+- Search每次独立，只读已索引记忆；BM25+向量→来源披露/反链/邻接→LLM Select→最多两条具体缺口Query→必要时单字段最终Select；返回原文卡，保持选择顺序，不输出生成摘要作为事实。不读WorkingMemory、不做Reflection/Answer。
+- 向量与Select必用，没有失败时纯词法降级、默认关闭的图或隐藏备用分支。模型固定gpt-4o-mini、text-embedding-v4/1024维、embedding每批最多10。切段保守控制UTF-8字节，不把字符数宣称为真实token测量。
+- 最新实测/成本/工程验收以实施报告为准。r1/r2协议版本不能拼接成同版成绩；100题清单只是准备，未运行题目不能算通过。早期无provider的clean-smoke-native-r3已退出活动登记，不作为当前方法验证。
+- 旧benchmark原始实验数据库/轨迹/计划/研究环境和旧本地可视化数据已按授权清理，不能承诺恢复；原始数据集、prepared包、案例文档与历史报告保留。少量旧pytest ACL拒绝访问缓存仍在归档，不是活动实验。新实验只用新库。默认库已新建为空、health200，仅说明本机初始化成功。
+- 主题遗忘采用直接指令入口、候选逐条独立核对、整消息屏蔽，存在误删/漏删和成本风险；note存在同义重复/错误归属风险；有限候选和两轮检索不保证长链完整。不要把整理协议完成、API成功当作语义质量通过，更不能声称已可正式参赛。
 
-- 2026-10-29最新先读`docs/doing/2026-10-29-visible-increment-implementation.md`、同日前缀`visible-increment-run-ledger.md`及`docs/phase-2/2026-10-29-visible-increment-execution-plan.md`。起点6714ab6加未提交ground28修改，保留原改动。本轮默认实施旧事件字段实际披露/具体改写反馈/同草案材料才判无进展；按差异审查新增支持、来源范围隔离及合理撤销；短身份叙事；图方向自然语言、属性充分性停止、模型已见邻居正文及范围装箱、Select否定前提证据。310回归+3子测试。7新库+9组件档案共803尝试/791响应（v4 354/GPT449），输入1,364,833/输出43,861tokens、缓存340,352；12受限网络失败及2schema违规保留，另研究脚本12条embedding批量被本地拦住后修为10分批。81/81 Add、40/40 Search不代表准确率；2公开切片+7人工历史/16个不同端到端问题，不是完整公开历史。最终controlled-r3仅7/15组，仍将Nia赋给虚构角色、错误关系拖住节点；最后heldout-r2 Add8/8 Search4/4、4/6组、零边，Selin/Arun短身份和朋友事件分开，虚构原文+Ghent均交付；重复Cedar旧fact及无替代边仍在。人工图r4三题地点齐（3/2/1 GPT步），只证明隔离检索；Select r5六组件必要证据齐但边缘材料增多。LM04来源2/4而三金额齐，不能将重复原文遗漏等同于必要事实遗漏。整体整理/自动图未过，不扩大PV4/12份36问。网页载入LM04与最后heldout，脚本/快照/轨迹/库均忽略保存。未改配置/依赖/库版本、无旧库恢复删除、部署或自动提交。下方为此前阶段记录。
+- 本轮最终113回归+3子测试。18观测档案748调用/748响应（mini305/v4 443），输入1,157,219/输出38,319tokens；开发成本盘点135/139 Add、46/50 Search，不是同版成绩。最终r3 PersonaMem 13/13 Add、6/6 Search、14/14批，135调用/199,571输入tokens；177活动来源全有episode，5屏蔽、6指令。已知两类误删修正，但同义漏删与整消息连带屏蔽未验收。r1 LoCoMo 31/31批、来源7/21；PerLTQA5/5批、4/4来源；r2 BEAM46/46批。版本不能混成同版通过。最终100题清单clean30-100-r3只完成6题/13 Add，94题/767 Add未运行。
 
-- 2026-10-29最新离线复核见`docs/doing/2026-10-29-next-improvements-audit.md`。HEAD仍6714ab6，上一轮未提交代码保留；本轮仅文档/只读分析，无模型调用或方法配置变更。确认旧节点time字段未进入material/context_text，却要求完整原样复用；无模型对照不同时间渲染相同。最终7个无进展组为3不可变改写、3非法边、1中文时间翻译后不符合原句而审查未收束。配额补来源审查实际理由仅核对旧正文未变，漏审新增Boreal来源是否支持Aurora。建议具体字段反馈/完整旧值可见、按新增支持审查、稳定person/entity指代与fact/event分工，再分开验证Select和必要多跳；均未实施，不把签名误判风险当全部真实失败原因。
+## 项目与工作规则
 
-- 2026-10-28最新先读`docs/doing/2026-10-28-grounded-increment-implementation.md`、同日前缀`grounded-increment-run-ledger.md`和`docs/phase-2/2026-10-28-grounded-increment-plan.md`。起点用户已提交6714ab6。已默认实施contains共同来源三处约束、固定link结构替代端点组合anyOf、同批次同会话请求背景、归属叙事、已读旧陈述复用提示及实际提交增量网页投影。独立reuse数组/两种简写实测退步，已全部撤回，只有完整节点条目，无默认关闭分支。299回归+3子测试通过。12新库+4组件档案共852尝试/852响应（v4 342/GPT510），输入1,473,208/输出50,535tokens，缓存357,888，19份schema失败均保留，无网络失败。最终controlled-r5 Add20/20/Search10/10，10/15组，0协议失败但5组无进展；LM04 r5 Add4/4/Search1/1，来源4/4但1/3组且Select0，不证明Select修复。最终两个档案11/18组，人物和虚构角色混同、朋友报告混进本人节点、另一项目来源错加旧配额仍在；只有一条方向合理supersedes，不能宣布图/补支持质量通过。全轮3个公开锚点切片+5个人工控制历史/13个不同Search问题，10组件（最后8/10有用），不是12份完整公开历史。PV4关系工具102份同候选离线投影中位缩减81.58%，非真实token节省；V3完整PV4/6份12问/12份36问因短例门槛不过未运行。原文/脚本/库/快照均忽略保存；无依赖、私有配置、库版本、归档删除、部署或自动提交。以下为此前阶段记录。
-
-- 2026-10-28最新先读`docs/doing/2026-10-28-tool-repair-implementation.md`、`docs/doing/2026-10-28-tool-repair-run-ledger.md`及`docs/phase-2/2026-10-28-tool-contract-and-reflection-repair-plan.md`。起点5b806c8（方法b000d96），用户确认后已实施唯一tool通道、当次schema校验/分层错误/max_completion_tokens、审查evidence_positions、局部逐项检查点及依赖失效/三轮修订/整组提交、分页失败待办保存和网页细节。命名单工具stop+完整tool_calls合法，首轮14份误拒已修正留档；没有JSON修补/内部重试。286回归+3子测试通过。18份真实档案共1343尝试/1343响应（v4 381/GPT962），输入4,874,075/输出167,422tokens，缓存605,696；无网络失败，84份schema违规，另14份首轮误拒；低额度探测1次length。11新库共79/104 Add、8/11 Search，含失败开发轮，不是准确率。最终LM04 R3整理3/3、来源3/4，25/40/120齐但第四条车灯复述被Select排除；L1/P2整理均1/1来源齐，B1/B2未触发整理。PV4两次完整输入清单同一persona737，分别25/41和32/41 Add，均耗尽10M输入字符而Search未执行；R3组40/49，3边含错误contains（两端来源不交）与润色材料误归属，不能宣称图质量通过。14组件最终有效12/14；16场景工具往返两臂均12/16且新增错误supersedes，决定不采用，生产无备用分支。P0/P1/O工程done，V1质量未过，V3六份12问/十二份36问不扩大。最终检查点/诊断小补丁只有回归验证，早启动真实运行各留源码快照。网页11数据集/26案例，当前展示LM04/PV4两运行，每题80span有界投影、全部六案例有评注；完整轨迹忽略保存。未改私有配置/库版本，未恢复或删除旧库、归档源码、部署或自动提交。以下计划未实施为此前阶段。
-
-- 2026-10-28最新先读`docs/phase-2/2026-10-28-tool-contract-and-reflection-repair-plan.md`及其接口审计。用户要求进一步设计并写完整执行计划，本轮仅设计，方法基线b000d96未改、无新模型调用。已将干净且被忽略的TinySoul参考仓库从4a9a58aa快进到ad7ce637（10月28日11:30）；最新LLM实现已移至llm/adapter，参考任务失败分层、完整工具配对与实际额度，不能照搬模型链/64K输出。新计划P0当次schema统一校验/错误分层/唯一工具通道；P1审查依据evidence_positions与持久支持区分、去revised_endpoints改程序依赖失效、合法草案暂存/整组原子提交、初审加两轮有内容修订；P2有界工具往返必须先解决临时编号不重用/实际证据账本/遗忘及预算，16场景对照后只留一种最终方法。验证14组件、6诊断切片、6份12问→总12份36问完整历史；安全/语义/完成/成本分开，预设门槛。全部实施项todo，计划设计核对done；无配置/数据库变更、归档删除/部署/自动提交。前轮审计文档仍未提交，继续保留。
-
-- 2026-10-28最新接口/整理审计见`docs/doing/2026-10-28-reflection-api-audit.md`。基线已提交b000d96，开始工作树干净；本轮无方法/配置修改。按当次工具schema重验前轮145份GPT输出：138符合、6份完整输出缺/多字段或空理由、1份BFS JSON损坏且重复数字至5000tokens；最终组件7/7 schema合法而2份因drop与来源联动被应用拒绝。当前发送strict=true，但6次合成真实探测中两种不合官方strict要求的schema也获200，不能视为代理严格保证已兑现；工具结果续接与max_completion_tokens可调用；reasoning_effort=high虽200但reasoning_tokens=0，不证明mini有推理强度能力。新探测6次/6响应，输入494输出108tokens，无重试。前轮145GPT中79报告缓存、16命中17920tokens、66未知。整理错误在十几秒至二十几秒出现，并非1740秒耗尽；review异常仍可绕过remaining_work修订出口、错误边拖住整个草案。建议统一协议校验、区分审查依据/持久支持、逐项语义反馈、有界工具回放；均尚未实施。诊断在忽略路径，无数据库增删/部署/自动提交。
-
-- 2026-10-28最新先读`docs/doing/2026-10-28-memory-integrity-implementation.md`及`docs/phase-2/2026-10-28-memory-integrity-review-plan.md`。基线ff706cb；已默认实施旧episode/fact/event正文时间保护、Reflection不新增摘要episode、变化导航节点仅当前支持来源、浅层uN最终正文协议（节点无分类动作）、语气/原句时间/年份校验、具体patch反馈。258回归+3子测试；12个新库诊断档案34/34 Add、12/12 Search，只有3个不同案例切片，不是完整历史；35次组件对照。总236尝试/236响应（v4 91、GPT145），输入413437/输出26297tokens，无网络失败，一次BFS输出length截断。最终R6三库8/8 Add、3/3 Search；LM04来源4/4金额齐但仅1/3整理组完成（错误supersedes被替代原句门槛挡住），P02/L01各1/1已计划组完成；三库0边。L01 Search局部停止后来源2/2，62.31秒，不能当多跳成功。最终组件5/7解码、4/7全部检查；冻结LM04补年份被挡，关系/全撤销有字段错误；语气和时间八个正反例有修订收益，不能称整体可靠。工程done，审查/图/完整历史质量未验收。无内部重试、默认关闭分支、配置改动、旧库恢复删除、部署或自动提交；新数据与快照仅忽略目录。下方尚未实施是此前审读阶段。
-
-- 2026-10-28最新离线审读见`docs/doing/2026-10-28-practical-improvement-audit.md`。迁移已提交ff706cb，起始工作树干净。本轮无方法/配置/数据库变更、无新增模型调用。LM04失败review实际u1嵌于u0，只有2对象/2190输入202输出tokens，非预算或输出截断；离线decode复现incomplete。更重要：同一派生episode从链条25+车灯40改为头盔120，原文/最低episode未丢；审查只留头盔来源，prepare_mutation又并回旧修车来源。原文might被改成plans；time_expression补入原文未明示年份。建议P0冻结episode语义/当前支持与历史溯源分离、简化review协议并保留严格校验；语气/日期精度并入审查。长节点多片段索引后续设计；最新2样本无Select，不能据此调阈值；关系方向已由_relation_pairs约束，不把已有功能当新计划。均为建议，尚未实施。
-
-- 2026-10-28迁移最新先读`docs/doing/2026-10-28-embedding-v4-migration.md`及`docs/phase-2/2026-10-28-embedding-v4-migration-plan.md`。用户确认后默认已改智增增text-embedding-v4/1024维/批量10，配置拒绝旧模型及超限批量；LLM仍gpt-4o-mini。忽略的docs/private/amlink.env显式保存二期双组件智增增Key，使用load_env_file或--env-file；不要复用旧runner的ZHIPU绑定。1651个旧库/owner/WAL/pytest缓存/Qdrant残留共80,340,124字节已备份校验删除；历史轨迹/数据集/代码归档保留，默认库新建为空。231回归+3子测试、7项定向复验通过；两新库6/6 Add、2/2 Search，来源LM04为4/4、P02为1/1；LM04仍1组review_incomplete，两个图均0边，Select未触发，不代表方法整体通过。本轮39真实调用（v4 19/GPT20），输入91,150/输出2,526tokens；最长历史11198字符v4实测6675tokens，代理9001tokens也接受但不能改变官方8192上限。长文本分段索引只有设计尚未实施。网页11数据集/26案例/2新运行。未部署、未自动提交；以下未迁移结论为前轮阶段。
-
-- 2026-10-28先读`docs/doing/2026-10-28-embedding-v4-verification.md`。当前提交9a91259；官网已明确开源榜embedding必须text-embedding-v4、LLM组件gpt-4o-mini，reranker不限，取代9月embedding不限的结论。现有智增增Key经当前Providers.embed真实探测2次成功：2条512维和10条1024维，合计130输入tokens；模型列表未列出v4但实际可调。当前默认仍embedding-3，未改方法代码/运行配置/数据库；迁移建议智增增v4/1024维/批量10、新库，另须核查8192 tokens单条上限，不能混用旧向量。已修正规则文档；无部署或自动提交。
-
-- 2026-10-27当前先读`docs/doing/2026-10-27-delivery-contract-implementation.md`和`docs/phase-2/2026-10-27-add-search-contract-and-convergence-plan.md`及根DESIGN。基线ee6fe76；用户确认后已实施Add原子接收/成功凭据与整理分离、必要遗忘、逐组草案恢复/进度、局部审查续做、Search临时语境原子合入及最终来源核验、预算Select范围传播/重复卡去重和网页交付状态。数据库3/冻结计划v3，旧库不迁移。224项回归+3子测试通过。6个新库档案41/41 Add、21/21 Search；另6次组件调用，总618次模型尝试/618响应（embedding188、GPT430），2份输出工具解析失败，无网络失败；tokens输入3,146,834/输出70,700。只有2份不同完整历史，不能把六诊断切片当完整历史。人物R5较R3从25组/202GPT到5组/50GPT，6问来源6/6但仍1组无进展。最终LM04 R6来源2/4，三个金额原句齐，另两车灯复述被Select排除；2/3组完成，尚有review_incomplete。真实Reflection有4次Backlink、Search有1次；图语义未通过，完整棋局仍有错误关系，冻结审查修复仅组件证据。P0/P1工程及有限验证done，整体质量和6份12问/12份36问门槛未验收；无内部重试/默认关闭分支，无配置变更/归档删除/部署/自动提交。源码和完整轨迹在忽略运行目录留快照；旧库不恢复。以下“尚未实施”为此前设计阶段。
-
-- 2026-10-27下一轮先读`docs/phase-2/2026-10-27-add-search-contract-and-convergence-plan.md`。用户建议Add失败撤销本轮写入、成功允许缓冲/不完备Reflection，并要求合并Search语义与整体改进建立执行计划。已完成设计/官网核验，未改代码/配置、未调用模型、未部署。目标：Add原文/Working/episode/双索引/成功凭据短事务原子接收，整理进度独立；必要接收未提交才可称已撤销，提交后响应丢失靠同ID重放。Search基础Query/所需Select失败仍报错，后续局部扩展失败可返回最后完成步骤的合法证据，子错误必须可观测。P0配套事务/恢复测试；P1局部审查续做、去交叉组号、逐组进度避免旧组堵住全局、陈述关系语义与Select集合；P2新库6份12问再12份36问。上述均todo，不把原有回归/HTTP成功算新方案验收；根DESIGN保留当前实现并标注待实施计划。
-
-- 2026-10-27最新问题复核见`docs/doing/2026-10-27-add-failure-review.md`。用户已提交`ee6fe76`；本轮只读源码/已有轨迹/数据库并记录文档，无方法/配置/模型调用变更。最终R9三次Add失败均为同一冻结计划组1反复阻塞；review收到needs_revision先抛错，未校验/应用其修改，也未接回局部patch；重进未完成组清草案。离线检查三份返回：两份重复审查位置非法，一份结构合法但语义仍需核查，不能把needs_revision直接当commit。R7共同兴趣错误supersedes各自兴趣，R9两条补充说明亦错误supersedes；旧节点确被标superseded但未删除。改进讨论优先局部修订收束、带来源条件的陈述与替代依据、简化交叉编号、再校准Select集合；均尚未实施。本轮仅新增复核记录/索引/项目记忆，未提交。
-
-- 2026-10-27最新先读`docs/doing/2026-10-27-convergence-implementation.md`及`docs/phase-2/2026-10-27-convergence-execution.md`。起点a0aacc3（方法65bc34a）；用户确认后实施保真原文段/逐段主归属、冻结计划v2、移除模型commit/validate、无合法端点时程序跳过关系、小组联合审查与来源/身份/旧正文实际可见、有理由episode_only、Select覆盖传播、精确向量复用。198项回归+3子测试通过。11个新库完整档案共578次落盘模型尝试/563返回（embedding198、GPT380；15本地网络限制失败），0纯控制模型调用；记录tokens输入1,684,918/输出66,247。R7六切片Add11/14 Search6/6，来源8/14；R8中文人物2/2和1/1；最终R9完整C2 Add1/4 Search1/1，3次review_unresolved，图仍有错误supersedes/about。工程清理done，整体稳定/图语义/6份12问及12份36问验收未通过；不得用较早R6的3/4替代最终结果。查询/节点向量复用仅回归验证，本轮真实未触发。旧库不恢复，新运行/轨迹在忽略路径；本轮无配置变更、归档删除、部署或自动提交。以下为此前阶段记录。
-
-
-- 2026-10-26最新先读`docs/doing/2026-10-26-convergence-audit-and-reset.md`及`docs/phase-2/2026-10-26-method-convergence-plan.md`。用户已提交`65bc34a`；本轮仅清理与离线设计，无方法代码/配置/模型调用变更。43个数据库及关联文件16,207,664字节、另18个owner标记已逐项备份校验删除，12条活动登记清零；网页11数据集/26案例/0运行。备份和成本归因在忽略的`benchmark/data/research/archives/20261026-convergence-reset/`；历史轨迹/评注/数据集保留，新实验不得恢复旧库起步。R8 Add84次GPT，其中17次纯commit/validate，占调用20.2%、输入token21.6%；R5人物8有50组、Add399次GPT，暴露过细分组/重复材料成本。新计划提出原文段分组、程序推进、三次有内容的局部写入/联合审查、有依据的episode-only收束、Select覆盖与探索增量、成本质量联合验收；这些是待确认/实施设计，未改变65bc34a默认方法。未部署、未自动提交；以下“未提交”是此前阶段记录。
-
-- 2026-10-26最新先读`docs/doing/2026-10-26-local-narrative-implementation.md`、`docs/phase-2/2026-10-26-narrative-local-execution-plan.md`和根DESIGN。用户确认后已实施默认自然叙事、冻结相关组/原子完成凭据、前组记忆可供后组探索、旧fact/event追加支持、按80000字符大小分页Select、双端点关系审查。185项回归+3子测试通过。13个新库档案（12完成、1中断），另4次冻结Select对照；5类数据、18个完成Search问题；2189次落盘尝试/2186返回（embedding521、gpt1668），3次网络失败，另最多1次中断在途未知。最终R8六诊断切片Add13/14 Search6/6，金额三项齐但来源3/4；10次关系审查双端点齐，仍有错误about，Reflection 0次Backlink。R9两份完整活动历史Add2/6，2次草案超限+2网络失败。旧R5人物8完整历史Add7/14，Search8/8来源6/8，不能算端到端通过；旧版牌局连续预算失败中断。修复畸形items TypeError、审查旧正文容器遗漏和网页task_ids=null索引。P1/P2/P3工程done，长历史/关系语义及36题扩展未验收；无默认关闭分支，无部署，当前未提交。数据/轨迹只在忽略目录，用户根AM-Link-add.png未动。
-
-- 2026-10-26此前清理阶段：用户已提交`256fced`。该轮只清理数据与设计审读，无方法代码/模型调用变更；先读`docs/doing/2026-10-26-observation-reset-and-design-audit.md`及`docs/phase-2/2026-10-26-narrative-local-reflection-design.md`。用户明确确认清空全部实验库及本地默认库：599个数据库/关联文件共246,466,200字节已删除，251条活动运行登记清空，网页11数据集/26案例/0运行。可恢复zip与逐文件hash清单位于忽略的`benchmark/data/research/archives/20261026-reset/`；原数据集、案例、历史模型轨迹/报告/评注保留。不要把旧库或恢复备份作为新实验起点；以后新库完整Add后再测Search，失败写入单列。51次历史模型输入离线审读显示Reflection菜单/流程状态占比大；Select已共用80,000字符上限。自然叙事、局部相关组提交/进度凭据、去重和按输入大小组织Select均为待讨论设计，尚未实施。以下记录为已提交方法的历史实测。
-
-- 2026-10-26本轮最新先读`docs/doing/2026-10-26-live-method-implementation.md`、`docs/phase-2/2026-10-26-live-method-plan.md`和根DESIGN；完整台账`docs/doing/2026-10-26-live-run-ledger.md`。基线用户已提交`2490307`。174项回归；34个档案（28完整报告、5独立Select、1中断），5类数据、16个已完成Search问题；929次已落盘模型尝试/928返回（embedding246、gpt682），1次超时，中断可能另有1次在途未记录。已删除staged开关与旧整包提交，分步Reflection/局部patch/来源审查直接进入主方法；Select>5候选触发、24张原文卡分页，所选范围持续到Context和装箱。LM4三项金额原文齐，但来源仍2/4；L1同库一次Backlink从1/2补到2/2，非多跳总体证明。最终conv41 Add2/2、5fact/0边，审查撤销错误supersedes；C2 Add3/4，剩protected_workspace_budget且关系语义仍错。完整人物29仅5/14 Add，其副本新增6题来源6/6不能当端到端通过；人物3旧版中断。节点审查后更新关系端点，时间字段可局部校正；冲突来源待办与提交门槛统一。整体方法未验收，无部署。本轮文档/代码未自动提交；以下同日记录是此前阶段，默认关闭结论已被本轮取代。
-
-- 2026-10-26最新先读`docs/doing/2026-10-26-evidence-and-draft-implementation.md`、`docs/phase-2/2026-10-26-evidence-and-draft-plan.md`和根DESIGN。基线用户已提交`6e34e1f`，本轮未提交。162项回归；9个问题、4类数据，418次已知模型尝试/417次返回；其中416次有标准span（embedding109/gpt307），独立Select一返回一超时缺span及tokens，见运行台账。默认修复窗口区分度/长度归一化、多来源预览、无依据数值扩展剔除和可见来源折叠后回载。LM4三种价格已进Select仍被排除，最终默认Search仍2/4来源。首次节点—关系—原子提交协议已实现，`AML2_REFLECTION_STAGED`默认false；L1新库2/2 Add、3边，P2 2/2、0边；完整PerLTQA character-24为5/14 Add、13边（早于末轮来源/中文修复），最终C2仍1/4、无进展。不能切默认或宣称图/整体质量通过。新增3段LoCoMo历史及1个完整人物记录；4条评注已保存，网页载入LM4与L1。旧pytest4个owner及4个链接按此前授权已删除，忽略数据库保留；无部署/归档代码删除。
-
-- 2026-10-24最新先读`docs/doing/2026-10-24-broad-method-implementation.md`、`docs/phase-2/2026-10-24-broad-method-improvement-plan.md`和根DESIGN。148项回归；81个运行档案中65个有真实模型返回，23个不同问题，1385次调用（embedding394、gpt991），另45次沙箱网络阻断。已实施修复待办约束、关系局部拆分、写入可行性/身份预检、BFS局部协议失败可观测终止保留已有证据（网络/超时仍失败，无重试）。R5 C1/C2/LM4 Add为4/5、3/4、4/4；但LM4 top5覆盖降至2/4。冻结库提前Select对照仍2/4且top1退化，阈值试验已撤回。关键金额没有进入Reference片段，图主体/重复/边支持仍不稳定；完整首次节点—关系分步未实施。四段新LoCoMo人物历史来源覆盖10/10但只是辅助窗口、0边，不代表图增益或总体准确率。当前未提交、未部署。
-
-- 2026-10-23最新先读`docs/doing/2026-10-23-reflection-convergence-implementation.md`和根DESIGN：用户确认后已实施闭环计划，140项回归通过；统一模型实际范围/读取凭据，隐藏页重读，短正文与必要材料保留，Workspace v2，空旧范围数据库凭据，非法关系整批阻断与动态反馈，广义update不硬触发。新增220次真实调用：9个新库切片、历史图两题Search、1次装箱对照；Select 8次、查询扩展1次已真实执行。L04一轮5条类型合法边但来源/导航质量不足，其它构图不稳定，Add仍失败；历史图Search一题因输出截断失败。LLM装箱合法但覆盖6/7、确定性7/7，默认不变。最后可选旧页折叠只做回归及真实工作区副本无模型重放，未做新库模型复验。整体方法未验收、未扩大20/100题、未部署。以下同日记录是此前阶段。
-
-- 2026-10-23提交后最新复核见`docs/doing/2026-10-23-reflection-convergence-audit.md`，后续方案见`docs/phase-2/reflection-convergence-plan.md`：当前提交`0e6f035`，126项回归复核通过；但隐藏页不能重读、实际输入与覆盖账本分裂、旧正文被逐出、关系类型过滤及update缓存误触发仍需修复，P0-B/P1-B/P1-C重新打开。先前265次调用中Select/查询扩展均为0，真实图仍0边。本轮6次冻结输入调用2次返回、4次60秒超时，未验证改进收益；未改生产方法/配置、未扩大20/100题、未部署。方案中的空旧范围凭据、非法关系阻止提交为建议确认的行为调整，尚未实施。
-
-- 2026-10-23最新状态见`docs/doing/2026-10-23-evidence-loop-implementation.md`：已按P0/P1计划接入可见引用位置、同源多范围/Inspect续页与回放保护、路径证据组、逐项Reflection依据及跨Add稳定前缀，126项本地回归通过。8次LoCoMo/BEAM/PerLTQA真实调试运行共265次模型调用；网络权限复核后现有embedding/gpt-4o-mini可用。真实Reflection仍有参数不合协议、相关旧目标/来源未补齐、轮数耗尽，所有真实图仍0边，整体方法未验收；未扩大20/100题、未部署。受限LLM装箱两次诊断均无效选择，默认仍确定性装箱。后续先读此报告和根DESIGN；下列10月11日经验为历史。
-
-- AM-Link 是 Graygoo7529 参加 Agent Memory Leaderboard 的原创记忆系统。我们只提供 Add/Search，主办方负责 Answer/Eval。TinySoul-Agent 也是同一作者的个人原创项目，是设计灵感来源。
-- 截至 2026-09-23：一期 Smoke 通过、Full completed，在 [AM-Link 排行榜开源榜文本赛道](https://agentmemories.ai/leaderboard/academic/textual)排名第 21 名；一期公网 API、部署代码、数据库数据和专用证书均已清理。服务器现保留与项目无关的通用 Nginx、Certbot renewal 基础和 `/hello` 示例。二期初版已归档到 `archive/phase-2/amlink-0.1.0/`；当前 `amlink/` 是 0.2.1，2026-10-11已实施核心工程修复并完成有限真实诊断；方法质量和完整协调器仍待验收，尚未部署或参加官方 Smoke。具体收尾状态见 `docs/phase-1/closeout.md`。
-- 一期代码在 `archive/phase-1/`，版本 0.3.0；代码基线 `1881abe`，归档前 HEAD `447608a`。保持归档作为历史参考，二期代码应另建目录。
-- 每次开始先读根 README、`docs/README.md`、`docs/phase-2/integration-research.md`；只按任务需要读历史长文，不把旧文档的当前状态当成今天的事实。
-- 统一研究展示入口是 `visualization/README.md`，覆盖数据构成、样本标注、理论链路与运行观测；`casestudies/` 留在根目录保存案例文档与唯一案例 catalog，两个视图共用它。网页 `index.html` 与会话片段 `view.html` 同源生成，原文/轨迹只进入忽略的 `visualization/data/`。用户不需要保存页面选择状态。
-- 根目录 `DESIGN.md` 是 AM-Link Add/Search 当前设计总览；修改二期链路、边界或案例结论时及时更新，并明确区分已实现、实测与待验证。实现细节仍以 `amlink/` 源码和 README 为准。
-- `docs/phase-2/method-improvement-plan.md` 是 2026-10-11 的二期重构设计与执行计划，当前状态为“0.2.1 工程修复已实施，方法质量继续验证”；以下为目标语义（不代表全部已实现）：向量/select 默认开启、select 同时筛选排序、`episode` 承担高保真情景日志、Reflection Workspace 跨 Add 延续，Reflection 按积累阈值/硬信号/会话边界触发（不是每次 Add），模型决定额外 Mutation 或真正 no-op。每个成功 Add 先生成一个保留角色、顺序、会话和原文语境的最小 `episode`，完成 BM25 与向量索引后才返回 200；这保证立即可检索，同时不要求每个 Add 都调用 Reflection。标准 Search 每次新建独立语境，只检索结构化 MemoryItem（包括最小 episode），不直接读取 WorkingMemory，也不与 Reflection 共用 loop；首个 Search 不需要排空或处理 WorkingMemory 尾部。API tool calling 优先、过程可观测、模型按 References 选择 Inspect/Backlink 参数、不设固定 kind 准入闸门、答案辅助明确延后；不引入 `seed_refs` 主语义。模型可见语境有明确的字符预算投影，Select 另有候选预算，完整观测保留截断原因。后续继续区分实现、实测和待验证。
-- 2026-10-11 核心审计见 `docs/doing/2026-10-11-amlink-core-audit.md`：已触发Reflection同步完成后才返回，但并发协调器/持续Workspace/Reflection多跳未按计划落实；当前输入预算仍可复现超限。100题主实验Add41/145、Search92/100，148个episode、4个event、0边；29个最低episode被摘要覆盖且未更新向量；Select顺序被装箱重排，来源日期未输出。39项测试仅含4项当前方法测试。此前“全部done”“预算已解决”已撤回；待按修订计划修复后重新实测。
-- 2026-10-11后续修复见 `docs/doing/2026-10-11-amlink-core-repairs.md`：52项回归通过；旧1445条积压在副本中用替身模型分48批消费，整包最大74596字符。Add期限1740秒含排队，稳定分批并逐请求确认完成；保护最低episode、全部改变节点重嵌入、Workspace跨批保留、Reflection接入Inspect/Backlink、Select只用question+候选叙事并分页后统一精炼、保留顺序、传递来源日期、去重证据。4个真实窗口切片12 Add/4 Search成功，但L04只有6/7标注覆盖且派生节点存在主体/来源错误；Reflection真实尚未调用图工具。旧图Search局部诊断仍有预览漏证据及集合召回退步。不能宣称图质量或整体效果已修好；无内部重试、无部署、未实现完整并发追加协调器。
-- AM-Link 二期埋点遵循 `benchmark/OBSERVABILITY.md`；`observability.py` 提供标准事件校验与 recorder。未采集是未知，理论方案与实测分开；已接入 `amlink.native:factory` 并记录真实模型切片；HTTP 服务默认不采集内部轨迹。
-- 2026-10-08 靶场增加 `python -m benchmark answer`：只读取真实 Search 问题与返回内容，运行 `gpt-5.6-luna` 诊断回答，并将 Answer、模型调用和后验人工 eval span 持久接入可视化。它不是 AM-Link API；正式比赛仍由主办方执行 Answer/Eval。案例与限制见 `docs/doing/2026-10-08-amlink-answer-research.md`。
-- 2026-10-07 研究已扩至 26 个案例、四视角（设计检查并入理论）。`benchmark/STUDIES.md` 是案例/数据切片运行、native 埋点、自动展示与持久评注入口；案例数据绑定仅存于 catalog，运行档案在忽略的 `benchmark/data/research/workspace.json`，重载用 `visualization.build --local --workspace --web`。实施见 `docs/doing/2026-10-07-research-infrastructure.md`。
-- 全量结构、BM25 与 Mem0 六条件实测见 `docs/doing/2026-10-07-dataset-research.md`。`casestudies/mem0-microstudy.md` 记录真实短例结果与局限；已有轨迹可以直接加载，不必重跑模型，不把短例结果当成全量准确率。2026-10-08 又完成 6 个跨数据集切片和 1 个 BEAM 冲突重跑，归纳见 `docs/doing/2026-10-08-memory-research-survey.md`。
-- 2026-10-08 二期本地实现与验证见 `amlink/README.md` 和 `docs/doing/2026-10-08-amlink-implementation.md`。此前 91 项二期方法测试通过；本轮靶场/方法/可视化联合测试 71 项通过。新增 7 个真实 AM-Link 切片、8 个 `gpt-5.6-luna` 回答及后验核对见 `docs/doing/2026-10-08-amlink-answer-research.md`：金额、比例、拒答案例正确；时间计量、复合答案完整性和冲突表达仍有缺口。L01/LM01/P02/PV04 在 reflection schema/关系校验阶段阻断 Add/Search，不能评价其 Answer 或遗忘效果。B02 已检索到互相冲突的来源，但回答仍先肯定再保留。靶场适配器 v2 会把真实 speaker 加入消息正文，旧运行不自动改变。
-- reference\TinySoul-Agent 是我进行的另一个项目，可以探索和参考它使用的记忆设计理念和 Inspect、Search 原型方法
-
-## 环境
-
-- 工作区 `B:\WorkSpace\AM-Link`，Windows PowerShell，时区 Asia/Shanghai。
-- 根 `.venv\Scripts\python.exe` 是 Python 3.13.14，源自 `C:\Anaconda3\envs\common`；一期要求 Python 3.10+。归档后 editable 安装已指向 `archive/phase-1/src`。
-- 安装：根目录执行 `.\.venv\Scripts\python.exe -m pip install -e "./archive/phase-1[dev]"`。
-- 测试：在 `archive/phase-1` 执行 `..\..\.venv\Scripts\python.exe -m pytest -q --basetemp B:\tmp\aml-phase1-pytest`。此临时目录专供 pytest，勿存放其他文件。
-- 当前二期测试：在根目录执行 `.\.venv\Scripts\python.exe -m pytest -q`。根 `pytest.ini` / `conftest.py` 将临时库放在已忽略的 `amlink/data/pytest-tmp/run-<唯一编号>/`，缓存放在 `amlink/data/pytest-cache/`；独立运行不共享临时库，不能在其中存研究数据。显式 `--basetemp` 仍优先，须先建父目录并注意 pytest 会清空指定目录；不要再创建根目录 `.tmp-phase2-*`。已被 Git 跟踪的历史测试产物需单独取消跟踪，ignore 不会自动移除它们。
-- 本地禁止安装和使用 Docker；确需构建时使用 GitHub Actions 或服务器。旧 workflow 已随一期归档，根目录目前没有自动 CI。
-- 当前环境若 Git 提示 dubious ownership，使用单次参数 `git -c safe.directory=B:/WorkSpace/AM-Link ...`；不要为此改全局信任设置。
-
-## 简要规约
-
-- 文档以中文为主，简短、可读；记录已验证事实、判断和待验证问题，不把计划写成已完成。维护文档索引和收尾状态，完成事项标记 `done`。
-- 原文和来源可追溯、按 user_id 隔离、Add 幂等且成功后立即可检索；Search 输出证据，不能代答。
-- 二期默认采用请求内有界工作和显式错误，交给官方做约定内的重试。不要继承一期后台补偿队列、自动整用户重建或多层模型重试。任何例外要有实测收益和明确成本边界。
-- 模型故障不能伪装成“成功但没记忆”；无结果与依赖失败必须区分。成功幂等重放不再调用模型；失败重放应能完成尚未完成的必要工作。
-- 公开小样本检验后再扩大规模，分别报告召回质量、完整证据链、延迟、实际模型调用与费用。不要根据 HTTP 200 推断所有增强成功。
-- `data/`、数据库、`references/`、私有凭据不可提交。服务器账号和模型 Key 在被忽略的 `docs/private/`，按任务需要读取，避免输出秘密。此前已授权 SSH 维护；一期已下线，后续任务未要求部署时不要自行恢复服务。
-- 二期模型限制存在官网文案差异，见调研文档；不得假定一期 Key、模型约束、超时或配额自动适用于二期。
-- 不改用户无关内容；不主动派生子 agent，除非用户明确要求。
-
-## 每轮结束检查
-
-- 每轮完成工作后必须运行 `git -c safe.directory=B:/WorkSpace/AM-Link status --short`、`git diff --check`，并检查是否有未预期的临时文件、凭据或数据库进入工作树。
-- 最终回复必须说明未提交内容的范围，区分代码、文档、归档删除和配置变更；如果存在未提交内容，给出可直接使用的建议提交标题和简短提交说明。不要在用户未要求时自动提交或推送。
-- 若本轮包含服务器操作，最终回复同时核对服务状态、监听端口、公开 endpoint、systemd 自启动和是否仍有一期路径；远程临时脚本、askpass 文件和测试数据必须清理。
-
-## 一期环境速查
-
-- 服务器：阿里云 ECS `121.43.49.84`，SSH `root` 账号和密码只在被 Git 忽略的 `docs/private/server-access.md`；一期已经停服并删除数据、程序、专用证书和续期配置，后续任务不要自动恢复。
-- 一期链路：公网 `HTTPS:443` → Nginx → `127.0.0.1:8080` Uvicorn → SQLite/WAL 与模型提供方。应用曾以 `aml` 用户、单 worker、systemd `aml-memory.service` 运行；历史配置快照在 `docs/private/`。
-- LLM：智增增 OpenAI 兼容接口 `https://api.zhizengzeng.com/v1`，模型 `gpt-4o-mini`；embedding：智谱 `https://open.bigmodel.cn/api/paas/v4`，模型 `embedding-3`、512 维。Key 只在 `docs/private/phase1-server.env`，不要复制到公开文档或日志；完整接入说明见 `docs/operations/models.md`。
-- 一期接口：`POST /v1/memory/add`（`request_id/messages/user_id/session_id`）和 `POST /v1/memory/search`（`query/options?/user_id/top_k`），Bearer Memory System Key；`GET /health` 无鉴权。Add 只有持久化且可立即 Search 才返回 200；Search 只返回证据。完整字段和错误边界见 `docs/phase-1/lessons.md`。
-- 官方重试：按 [API Guide](https://agentmemories.ai/api-guide)，Add 对网络错误、408/409/425/429/500/502/503/504/524 有界重试，Search 对网络错误、408/425/429/500/502/503/504 有界重试；Add 最多 32 次请求尝试，429 遵循 `Retry-After` 最多 60 秒。400/401/403/404/422 等契约或权限错误不重试，200 但响应格式错误也算失败。二期不要再叠加后台补偿队列。
-- Key 和 HTTPS：Memory System Key 是我们生成并配置在服务端的 API 访问密钥，官方只用它调用 Add/Search；Eval/Leaderboard Key 由官方签发，仅用于评测平台。生产 URL 使用 HTTPS，证书在 Nginx 终止；一期 IP 证书由 Certbot 续期，部署结束后停止 timer 并删除专用证书。二期重新部署必须重新签发证书、验证 SAN/到期/续期，再提交公网 URL。
-- 通用服务器现状：Nginx 已启用，监听 `80/443`；`https://121.43.49.84/hello` 和 `/health` 是与 AM-Link 无关的示例，HTTP 仍可用。Certbot 5.7.0 已签发 Let’s Encrypt 生产 IP 证书，lineage 为 `public-ip`，使用 `--ip-address`、`--required-profile shortlived` 和 webroot `/var/www/certbot`；证书约 160 小时有效。`public-certbot-renew.timer` 每 6 小时检查，续期成功后先 `nginx -t` 再 reload；续期服务限时 5 分钟，并检查证书至少剩余 48 小时（失败写 systemd/journal，尚无外部告警）。2026-09-23 已验证公网 TLS、SAN/信任链、续期 dry-run 和 deploy hook；实际到期以服务器当前证书为准，不能沿用文档日期。维护见 `docs/operations/server.md` 与服务器 `/opt/public-web/README.md`。
+- AM-Link是Graygoo7529的原创Agent Memory Leaderboard记忆系统，只提供Add/Search；官方负责Answer/Eval。TinySoul-Agent是同作者原创参考，位于忽略的reference目录。
+- 一期0.3.0代码在archive/phase-1，Smoke/Full历史已完成；一期部署、专用数据库和证书已清理。当前没有新部署或官方Smoke/Full。保留一期历史，不在其中写新方法。
+- `DESIGN.md`记录当前方法；修改方法同步更新计划/报告，区分已实现、真实验证与未验证。历史phase-2/doing文件保留引用，不将其“当前状态”视作今日事实。
+- `casestudies/`留在根，catalog为唯一案例来源。统一展示入口`visualization/README.md`；网页与会话片段同源，无需保存选择状态。原文与轨迹仅进入忽略的data路径。
+- 私有配置在忽略的docs/private/amlink.env，用户允许读取Key用于已授权的公开数据实验；不得打印或写入报告/源码。通过load_env_file或--env-file显式加载，受支持AML2字段映射AML3；不要依赖旧ZHIPU环境绑定。不自行修改凭据或安装依赖。
+- 无内部错误重试。必要接收未提交时失败；已提交后的整理不完备不能撤销成功；同请求重送返回持久凭据。标准Search所需模型失败明确报错，不伪装空结果。
+- 运行和缓存只写忽略路径；Windows移动/删除前核验绝对路径属于工作区，使用原生文件操作。不要从旧库/备份起跑新实验。
+- 未明确要求时不自动Git提交、部署、推送或发消息。保留用户改动；结束说明未提交范围，可给commit建议。
+- Windows开发；Python使用`.venv/Scripts/python.exe -X utf8`。必要时Git以`-c safe.directory=B:/WorkSpace/AM-Link`调用，不改全局Git配置。测试默认写独立忽略目录，避免ACL旧缓存。

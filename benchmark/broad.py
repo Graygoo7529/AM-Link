@@ -97,7 +97,7 @@ def prepare(output, seed=20261029):
     plan = dict(version=1, seed=seed, source_sha256=source_hashes(), records=records,
         questions=total, adds=sum(r['adds'] for r in records),
         adapter=dict(chunk_size=20, top_k=100, max_add_words=2000),
-        budget_per_record=dict(max_provider_calls=4000, max_provider_input_chars=100000000),
+        budget_per_record=dict(max_provider_calls=1000, max_provider_input_chars=5000000),
         semantics='All selected history is added before Search; annotations are evaluation-only; no internal retry.')
     write_json(output / 'suite.json', plan)
     return plan
@@ -112,11 +112,14 @@ def run(plan_path, indices, prefix, env_file):
     if plan['source_sha256'] != source_hashes():
         raise ValueError('source changed since suite freeze; prepare a new version, do not mix results')
     load_env_file(env_file)
-    for key, value in plan['budget_per_record'].items():
-        os.environ['AML2_' + key.upper()] = str(value)
+    # Apply explicit run budgets to the one production method.
+    for key, value in plan.get('budget_per_record', {}).items():
+        if hasattr(Config(), key):
+            os.environ['AML3_' + key.upper()] = str(value)
     config = Config.from_env()
-    if config.mode != 'graph' or not config.embedding_enabled or not config.search_model:
-        raise ValueError('suite requires the complete default method')
+    if (config.llm_model != 'gpt-4o-mini' or config.embedding_model != 'text-embedding-v4'
+            or config.embedding_dimensions != 1024):
+        raise ValueError('suite requires gpt-4o-mini + text-embedding-v4/1024')
     # Freeze all non-secret options too: separate workers must use one configuration.
     config_path = plan_path.parent / 'run-config.json'
     public = config.public()
@@ -140,7 +143,7 @@ def run(plan_path, indices, prefix, env_file):
             raise ValueError('run already exists; choose a new prefix, never overwrite or resume a study')
         try:
             study(['--dataset-pack', str(pack_path), '--target', 'native', '--factory', 'amlink.native:factory',
-                   '--run-id', run_id, '--system-name', 'AM-Link full-history readiness', '--system-version', '0.2.1-ready29',
+                   '--run-id', run_id, '--system-name', 'AM-Link clean rebuild', '--system-version', '0.3.0-clean',
                    '--chunk-size', '20', '--top-k', '100', '--no-view'])
         finally:
             if directory.exists():

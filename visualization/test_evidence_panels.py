@@ -1,6 +1,14 @@
 from visualization.spans import evidence_panel
 
 
+def test_clean_notes_and_final_pack_preserve_distinction():
+    panel=evidence_panel({'status':'completed','notes':[{'ref':'memory:note/x','text':'Navigation','support_refs':['episode:a']}]})
+    assert '导航' in panel['title'] and panel['rows'][0]['指向的原文']==['episode:a']
+    assert evidence_panel({'status':'failed','notes':[]}) is None
+    panel=evidence_panel({'returned':[{'id':'a','content':'exact text'}],'budget_omitted':['b']})
+    assert panel['rows'][0]['完整正文字符数']==10 and panel['rows'][1]['装箱未交付的引用']==['b']
+
+
 def test_select_merge_summary_does_not_claim_full_original_visibility():
     panel = evidence_panel({'view':'contribution_summary','model_input':{'candidates':[
         {'position':0,'narrative':'A partial navigation summary.'}]},'member_fragment_map':{'0':[{},{}]}})

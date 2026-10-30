@@ -1,0 +1,44 @@
+# AM-Link
+
+2026-10-29当前：[100题准备实施](./docs/doing/2026-10-29-hundred-question-readiness-implementation.md)、[执行计划](./docs/phase-2/2026-10-29-hundred-question-readiness-plan.md)、[真实台账](./docs/doing/2026-10-29-hundred-question-readiness-run-ledger.md)。默认多片段索引、独立节点检查点、贡献合并Select与逐条遗忘核对；356回归＋3子测试。六类分版本完整预检已完成；最终r11 PersonaMem13/13 Add、6/6 Search。已可启动100题本地诊断，剩94题未运行；图语义/同义遗忘仍有缺口，未部署。下方为历史阶段。
+
+面向 Agent Memory Leaderboard 的智能体记忆研究项目：实现 Add 写入和 Search 证据检索，由主办方统一回答与评分。
+
+**当前阶段：一期归档，二期本地实现与小样本验证。** 一期 `0.3.0` 已通过官方 Smoke 并完成 Full，在 [AM-Link 排行榜开源榜文本赛道](https://agentmemories.ai/leaderboard/academic/textual)排名第 21 名。2026-09-23 已关闭一期公网 API，并删除服务器上的一期程序、数据库数据和专用证书。
+
+AM-Link 和设计灵感来源 **TinySoul-Agent** 都是 Graygoo7529 的个人原创项目。一期借鉴自己的记忆设计思想，独立实现比赛接口，未直接移植 TinySoul-Agent 代码。
+
+2026-10-29最新：[可见增量与检索实施](./docs/doing/2026-10-29-visible-increment-implementation.md)、[真实台账](./docs/doing/2026-10-29-visible-increment-run-ledger.md)、[执行计划](./docs/phase-2/2026-10-29-visible-increment-execution-plan.md)。旧字段实际披露、新增支持审查、短身份叙事及已见图证据装箱进入默认方法；310项回归＋3子测试。最后新库8/8 Add、4/4 Search、4/6整理组，整体图质量未验收，未部署。
+
+2026-10-28：[v4 / 1024 迁移实施](./docs/doing/2026-10-28-embedding-v4-migration.md)。默认已使用智增增 `text-embedding-v4`、1024 维、批量 10，符合新的模型要求；旧向量库与缓存已备份清理，231 项回归＋3 子测试、两个新库切片 6/6 Add 和 2/2 Search。迁移接通不代表 Reflection 和图质量已通过；长文本分段索引仍为设计，无部署。
+
+2026-10-27最新：[方法收敛实施与核对](./docs/doing/2026-10-27-convergence-implementation.md)、[执行计划](./docs/phase-2/2026-10-27-convergence-execution.md)。已实施原文范围分组、程序推进、联合审查和检索说明传播；198项回归通过，真实六切片Add11/14、Search6/6，最终完整讨论Add1/4。工程清理已交付，长历史与图语义尚未验收，无部署。
+
+| 入口 | 内容 |
+| --- | --- |
+| [AGENTS.md](./AGENTS.md) | 给后续 agent 的项目背景、环境和简要规约 |
+| [docs/README.md](./docs/README.md) | 精简经验、收尾记录和二期接入调研 |
+| [docs/doing](./docs/doing/README.md) | 数据集调研、目录建设和 Add/Search 靶场的执行记录 |
+| [dataset](./dataset/README.md) | 独立公开数据层：来源、获取、分析、预处理、切分与中立 pack |
+| [benchmark](./benchmark/README.md) | 数据环境构建、Add/Search 对象适配、Mem0 接入与可观测报告 |
+| [AM-Link 设计总览](./DESIGN.md) | 当前 Add/Search 对象、链路、案例证据与待验证边界；随实现持续更新 |
+| [amlink](./amlink/README.md) | 二期 AM-Link 实现、启动方式、协议与实施记录 |
+| [研究可视化](./visualization/README.md) | [统一网页](./visualization/index.html)：数据构成、样本标注、理论与设计检查、运行与评注；[案例实验入口](./benchmark/STUDIES.md)、[埋点约定](./benchmark/OBSERVABILITY.md) |
+| [样本与案例分析](./casestudies/README.md) | [持续更新的网页](./casestudies/index.html)、会话内复用、真实案例与[手动下载清单](./casestudies/downloads.md) |
+| [archive/phase-1](./archive/phase-1/) | 一期代码、原始设计、历史文档及测试，作为冻结参考 |
+
+一期运行代码基线为 `1881abe`，归档前仓库 HEAD 为 `447608a`。旧文档中的“当前部署”“待 Smoke”等描述是当时记录；当前状态以根目录文档为准。二期当前为 `amlink/` 0.2.1，0.1.0 已归档；[核心工程修复](./docs/doing/2026-10-11-amlink-core-repairs.md)已完成本地回归及有限真实诊断，缓冲触发、证据披露和语义图质量继续研究，尚未部署或参加官方 Smoke；`dataset/` 和 `benchmark/` 是公开数据研究与本地诊断工具。
+
+## 本地复核一期
+
+Windows / PowerShell，已有根目录 `.venv` 使用 Python 3.13.14。新环境先执行 `python -m venv .venv`，然后在仓库根目录运行：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e "./archive/phase-1[dev]"
+Set-Location archive/phase-1
+..\..\.venv\Scripts\python.exe -m pytest -q --basetemp B:\tmp\aml-phase1-pytest
+```
+
+归档后已复核 61 项测试及依赖检查。[启动与部署经验](./docs/operations/server.md)包含本地启动和 Docker 命令；本地不安装、不运行 Docker。
+
+所有 `data/`、本地参考项目、环境和 `docs/private/` 均由 Git 忽略。私有目录保存经用户授权的服务器凭据与模型配置，仅本机可见。公开仓库：[Graygoo7529/AM-Link](https://github.com/Graygoo7529/AM-Link)。

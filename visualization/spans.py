@@ -109,7 +109,7 @@ def attach_spans(run: dict, path: Path, request_scope: dict) -> None:
                 verified.add(ref["id"])
             if not native and event["operation"] not in {"store", "retrieve"}:
                 continue
-            selected_refs = event["outputs"][:8]
+            selected_refs = event["outputs"] if len(event["outputs"]) <= 8 else event["outputs"][:6] + event["outputs"][-2:]
             projected = []
             for ref in selected_refs:
                 value = json.loads((path / ref["artifact"]).read_text(encoding="utf-8"))
@@ -141,7 +141,9 @@ def attach_spans(run: dict, path: Path, request_scope: dict) -> None:
                         preview['evidence_panel'] = {'title': '接口交付与内部完成状态', 'rows': [delivery[event['request_id']]],
                                                      'shown': 1, 'total': 1}
                     if isinstance(detail, dict) and (detail.get("format_version") in (1, 2) or
-                            event['name'] == 'reviewed independent node checkpoint'):
+                            event['name'] == 'reviewed independent node checkpoint' or
+                            'notes' in detail or 'budget_omitted' in detail or
+                            ('queries' in detail and 'selected' in detail)):
                         panel = evidence_panel(detail)
                         if panel:
                             preview["evidence_panel"] = panel
@@ -167,6 +169,17 @@ def attach_spans(run: dict, path: Path, request_scope: dict) -> None:
 
 def evidence_panel(value):
     """Versioned bounded display, only after artifact path/hash/shape validation."""
+    if value.get('status') == 'completed' and isinstance(value.get('notes'), list):
+        rows=[{'引用':n['ref'], '导航笔记（非原文事实）':excerpt(n['text'],400)['text'],
+               '指向的原文':n.get('support_refs',[])} for n in value['notes'][:6]]
+        return {'title':'第三版：已保存的导航与原文链接', 'rows':rows,'shown':len(rows),'total':len(value['notes'])}
+    if 'budget_omitted' in value and isinstance(value.get('returned'),list):
+        rows=[{'顺序':i,'已交付引用':r['id'],'完整正文字符数':len(r['content'])} for i,r in enumerate(value['returned'][:24],1)]
+        rows.append({'装箱未交付的引用':value['budget_omitted']})
+        return {'title':'第三版：Select顺序与原文装箱', 'rows':rows,'shown':len(rows),'total':len(value['returned'])+1}
+    if 'queries' in value and isinstance(value.get('selected'),list):
+        rows=[{'选中原文（按顺序）':value['selected'],'具体缺口查询':value['queries']}]
+        return {'title':'第三版：证据选择和补查决定','rows':rows,'shown':1,'total':1}
     if value.get('view') == 'contribution_summary' and 'member_fragment_map' in value:
         candidates = value.get('model_input', {}).get('candidates', [])
         rows = [{'位置': c['position'], '模型实际看到的贡献摘要': excerpt(c['narrative'], 500)['text'],
