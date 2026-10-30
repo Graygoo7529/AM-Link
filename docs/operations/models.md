@@ -4,7 +4,7 @@
 
 开源方法榜现要求 embedding 使用 `text-embedding-v4`、LLM 相关组件使用 `gpt-4o-mini`，reranker 不限制。当前默认已切换为智增增 v4 / 1024 维 / 每批 10 条；下方一期配置只作历史参考。
 
-前轮已完成 2 次接口探测、130 输入 tokens；`/v1/models` 未列出 v4，但直接调用可用。本轮已建立忽略的 `docs/private/amlink.env`，显式为 LLM 与 embedding 提供智增增 Key，使用新库；旧模型或超限批量配置拒绝启动。启动参数为 `--env-file docs/private/amlink.env`，不自动读一期 Key。两个真实切片 6/6 Add、2/2 Search，另完成 4 次长度探测，详见[迁移核对](../doing/2026-10-28-embedding-v4-migration.md)。长文本分段索引仍为设计，代理接受超出 8192 tokens 的输入不代表官方限制改变。
+前轮已完成 2 次接口探测、130 输入 tokens；`/v1/models` 未列出 v4，但直接调用可用。本轮已建立忽略的 `docs/private/amlink.env`，显式为 LLM 与 embedding 提供智增增 Key，使用新库；旧模型或超限批量配置拒绝启动。启动参数为 `--env-file docs/private/amlink.env`，不自动读一期 Key。两个真实切片 6/6 Add、2/2 Search，另完成 4 次长度探测，详见[迁移核对](../../archive/research/20261030-consolidation/docs/doing/2026-10-28-embedding-v4-migration.md)。长文本分段索引仍为设计，代理接受超出 8192 tokens 的输入不代表官方限制改变。
 
 ## 一期配置与历史验证
 
@@ -38,7 +38,7 @@
 
 ## 一期调用方式（历史）
 
-2026-10-23补充核验：当前调用器在受限进程中仍为`provider_network`；使用已授权的网络权限复核后，embedding-3返回512维（约0.65秒），gpt-4o-mini成功工具调用`check(ok=true)`（约1.12秒）。随后公开LoCoMo、BEAM、PerLTQA切片已取得真实调用轨迹，说明模型和现有Key在本次检查时可用；不能推断持续配额。见[实施核对](../doing/2026-10-23-evidence-loop-implementation.md)。真实模型仍可能返回不符合工具定义的参数，方法保持显式校验失败、无内部重试。
+2026-10-23补充核验：当前调用器在受限进程中仍为`provider_network`；使用已授权的网络权限复核后，embedding-3返回512维（约0.65秒），gpt-4o-mini成功工具调用`check(ok=true)`（约1.12秒）。随后公开LoCoMo、BEAM、PerLTQA切片已取得真实调用轨迹，说明模型和现有Key在本次检查时可用；不能推断持续配额。见[实施核对](../../archive/research/20261030-consolidation/docs/doing/2026-10-23-evidence-loop-implementation.md)。真实模型仍可能返回不符合工具定义的参数，方法保持显式校验失败、无内部重试。
 
 一期使用 HTTPX 直接发送兼容请求，不使用 pi SDK，也不要求安装 OpenAI SDK。两种模型分别启用：`AML_LLM_ENABLED=true`、`AML_EMBEDDING_ENABLED=true`；`AML_ENRICHMENT_MODE=sync`。配置模板在 [归档 .env.example](../../archive/phase-1/.env.example)，模板和旧默认值不是二期推荐值。
 

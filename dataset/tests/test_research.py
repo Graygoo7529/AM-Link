@@ -6,7 +6,7 @@ from pathlib import Path
 from dataset.prepare import _parse_timestamp
 from dataset.research_cases import visible_events
 from dataset.survey import context_tasks, distribution
-from benchmark.lexical_study import rank
+from research.benchmark.lexical_study import rank
 
 
 class ResearchTests(unittest.TestCase):

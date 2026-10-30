@@ -2,7 +2,7 @@
 
 冻结方法：`4191890` 的第三版。测试侧 Answer/Eval/批量运行代码在本轮冻结后全程不变；37 个源码哈希、26 个测试包和原准备包哈希均复核一致。默认库 requests/sources/items/working/batches 均为 0。
 
-全部记录新库完整 Add 后 Search，无失败历史被剔除，无重试。原始轨迹在忽略的 `benchmark/data/runs/hundred30-*`，冻结清单在 `benchmark/data/plans/clean30-hundred-answer/`。
+全部记录新库完整 Add 后 Search，无失败历史被剔除，无重试。原始轨迹在忽略的 `research/benchmark/data/runs/hundred30-*`，冻结清单在 `research/benchmark/data/plans/clean30-hundred-answer/`。
 
 | 运行 | Add | Search/Answer | mini正确 | Codex正确/不确定 | Reflection完成/总批 | 真实调用 | 输入tokens | 输出tokens |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|

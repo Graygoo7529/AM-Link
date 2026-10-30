@@ -3,7 +3,7 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import replace
 
-from benchmark.targets import TargetResponse
+from research.benchmark.targets import TargetResponse
 from pydantic import ValidationError
 
 from .config import Config

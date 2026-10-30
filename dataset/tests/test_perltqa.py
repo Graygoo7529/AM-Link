@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from benchmark.datasets import build_retrieval_manifest
+from research.benchmark.datasets import build_retrieval_manifest
 from dataset.perltqa import build_perltqa
 
 

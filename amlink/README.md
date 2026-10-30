@@ -30,8 +30,8 @@ engine.py 编排；store.py 只负责原子存储；providers.py 单次模型调
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe -m benchmark.broad prepare --output benchmark/data/plans/my-suite
-.\.venv\Scripts\python.exe -m benchmark.broad run --plan benchmark/data/plans/my-suite/suite.json --indices 0 --prefix my-run --env-file docs/private/amlink.env
+.\.venv\Scripts\python.exe -m research.benchmark.broad prepare --output research/benchmark/data/plans/my-suite
+.\.venv\Scripts\python.exe -m research.benchmark.broad run --plan research/benchmark/data/plans/my-suite/suite.json --indices 0 --prefix my-run --env-file docs/private/amlink.env
 ```
 
 prepare只冻结数据/源码，不调用模型。run会真实收费调用，每次新库，禁止源文件改变后拼接结果。所有运行、原文、模型输入输出与数据库只保存在忽略的data目录。归档代码不应作为测试发现路径。

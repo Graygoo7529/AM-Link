@@ -1,0 +1,239 @@
+"""Join explicit internal observations to the API trace, preserving unknowns."""
+from __future__ import annotations
+
+import json
+from datetime import datetime
+from pathlib import Path
+
+from research.benchmark.observability import VERSION, validate_event
+from research.web.sources import excerpt, file_digest
+
+
+def read_memory_snapshot(directory: Path, ref: dict) -> dict:
+    """Explicit Mem0 study snapshot projection; never expose arbitrary response fields."""
+    path = (directory / ref["artifact"]).resolve()
+    if not path.is_relative_to(directory.resolve()) or not path.is_file():
+        raise ValueError("memory snapshot must exist inside run directory")
+    if path.stat().st_size > 1_000_000 or file_digest(path) != ref["sha256"]:
+        raise ValueError("memory snapshot size/hash mismatch")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    memories = data["memories"]["results"]
+    changes = data["response"]["results"]
+    return {"artifact": ref["artifact"], "sha256": ref["sha256"],
+        "count": len(memories), "memories": [{"id": m["id"], "content": excerpt(m["memory"], 2000)} for m in memories[:20]],
+        "changes": [{k: c[k] for k in ("id", "event") if k in c} for c in changes[:20]]}
+
+
+def attach_spans(run: dict, path: Path, request_scope: dict) -> None:
+    source = path / "observability.jsonl"
+    run["observability"] = {"status": "missing", "span_count": None, "orphan_ids": [],
+        "model_calls": None, "cost_usd": None, "capture_declared_complete": False}
+    for query in run["queries"]:
+        query["spans"] = []
+    if not source.exists():
+        return
+    events = [json.loads(line) for line in source.read_text(encoding="utf-8").splitlines() if line.strip()]
+    by_id, refs = {}, {}
+    for event in events:
+        validate_event(event)
+        if event["run_id"] != run["run_id"] or event["dataset_pack_sha256"] != run["dataset_pack_sha256"]:
+            raise ValueError("internal observation run/pack mismatch")
+        if event["span_id"] in by_id:
+            raise ValueError("duplicate internal span ID")
+        scope = request_scope.get(event["request_id"])
+        if scope is None or scope[:2] != (event["record_id"], event["task_id"]):
+            raise ValueError("internal observation request/record/task mismatch")
+        if event["parent_span_id"] is None and event["operation"] not in scope[2]:
+            raise ValueError("internal root operation mismatches API request")
+        by_id[event["span_id"]] = event
+        for ref in event["inputs"] + event["outputs"]:
+            if ref["id"] in refs and refs[ref["id"]] != ref:
+                raise ValueError("same artifact ID has inconsistent references")
+            refs[ref["id"]] = ref
+    orphans, roots = [], set()
+    for event in events:
+        parent_id = event["parent_span_id"]
+        if parent_id is None:
+            roots.add((event["request_id"], event["operation"]))
+            continue
+        if parent_id not in by_id:
+            orphans.append(event["span_id"])
+            continue
+        parent = by_id[parent_id]
+        if any(event[k] != parent[k] for k in ("trace_id", "record_id", "task_id", "request_id")):
+            raise ValueError("internal parent identity mismatch")
+        if datetime.fromisoformat(event["started_at"]) < datetime.fromisoformat(parent["started_at"]) or datetime.fromisoformat(event["ended_at"]) > datetime.fromisoformat(parent["ended_at"]):
+            raise ValueError("internal child outside parent time bounds")
+        ancestors = {event["span_id"]}
+        while parent_id in by_id:
+            if parent_id in ancestors:
+                raise ValueError("cycle in internal span graph")
+            if event["operation"] == "model" and by_id[parent_id]["replay"] == "cached":
+                raise ValueError("cached replay cannot contain model invocations")
+            ancestors.add(parent_id)
+            parent_id = by_id[parent_id]["parent_span_id"]
+    # Presence of a well-formed file never proves that all calls were captured.
+    # A separate explicit collection declaration is required before reporting zero.
+    complete = False
+    meta_path = path / "observability.meta.json"
+    if meta_path.exists():
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        if set(meta) != {"schema_version", "run_id", "dataset_pack_sha256", "model_capture_complete", "producer"} or meta["schema_version"] != VERSION or meta["run_id"] != run["run_id"] or meta["dataset_pack_sha256"] != run["dataset_pack_sha256"] or type(meta["model_capture_complete"]) is not bool or not isinstance(meta["producer"], str) or not meta["producer"].strip():
+            raise ValueError("invalid internal collection declaration")
+        complete = meta["model_capture_complete"]
+        if complete and (orphans or any((request, "add" if scope[1] is None else "search") not in roots for request, scope in request_scope.items())):
+            raise ValueError("complete collection declaration lacks API root spans")
+        run["artifacts"][meta_path.name] = file_digest(meta_path)
+    models = [e for e in events if e["operation"] == "model"]
+    costs = [e["model"]["cost_usd"] if e["model"] else None for e in models]
+    run["observability"] = {"status": "incomplete" if orphans else "linked", "span_count": len(events),
+        "orphan_ids": orphans, "observed_model_calls": len(models),
+        "model_calls": len(models) if complete else None,
+        "cost_usd": sum(costs) if complete and all(c is not None for c in costs) else None,
+        "capture_declared_complete": complete}
+    run["artifacts"][source.name] = file_digest(source)
+    ordered = sorted(events, key=lambda e: (datetime.fromisoformat(e["started_at"]), e["span_id"]))
+    # Only the explicit local method artifact format is projected as text. Other
+    # producers retain references; a response is not an invitation to read files.
+    previews, delivery = {}, {}
+    native = run["system"].get("target") == "native"
+    if run["system"].get("target") == "lexical" or native:
+        verified = set()
+        for event in ordered:
+            for ref in event["inputs"] + event["outputs"]:
+                if ref["id"] in verified:
+                    continue
+                artifact = (path / ref["artifact"]).resolve()
+                if not artifact.is_relative_to(path.resolve()) or not artifact.is_file() or artifact.stat().st_size > 5_000_000 or file_digest(artifact) != ref["sha256"]:
+                    raise ValueError("local method artifact path/size/hash mismatch")
+                verified.add(ref["id"])
+            if not native and event["operation"] not in {"store", "retrieve"}:
+                continue
+            selected_refs = event["outputs"] if len(event["outputs"]) <= 8 else event["outputs"][:6] + event["outputs"][-2:]
+            projected = []
+            for ref in selected_refs:
+                value = json.loads((path / ref["artifact"]).read_text(encoding="utf-8"))
+                if native:
+                    if not isinstance(value, dict) or value.get("schema_version") != "amlink.artifact.v1":
+                        continue
+                    if set(value) != {"schema_version", "title", "text"} or not isinstance(value["title"], str) or not isinstance(value["text"], str):
+                        raise ValueError("invalid native display artifact")
+                    summary, content = value["title"], value["text"]
+                elif event["operation"] == "store":
+                    items = value["items"]
+                    summary = f"本批保存 {len(items)} 条；该用户累计 {value['user_total']} 条。正文展示该批首尾消息的有限摘录。"
+                    shown = items[:1] + (items[-1:] if len(items)>1 else [])
+                    content = "\n\n".join(f"{item['role']} · 时间 {item.get('timestamp')}\n{item['content']}" for item in shown)
+                else:
+                    summary = f"候选第 {value['rank']} 名；分数 {value['score']:.4f}；{'返回' if value['selected'] else '未返回'}；{value['corpus_size']} 条存储消息中 {value['positive_candidates']} 条正分。"
+                    content = value["content"]
+                preview = {"id": ref["id"], "summary": summary, "content": excerpt(content, 350),
+                           "artifact": ref["artifact"], "preview_only": len(content) > 350}
+                if native:
+                    try:
+                        detail = json.loads(content)
+                    except (ValueError, TypeError):
+                        detail = None
+                    if isinstance(detail, dict) and event['name'] in {
+                            'add delivery outcome', 'add receipt replay', 'search final pack'}:
+                        delivery[event['request_id']] = {k: detail[k] for k in (
+                            'intake', 'reflection', 'maintenance_error', 'progress', 'replay', 'completion', 'stop_reason') if k in detail}
+                        preview['evidence_panel'] = {'title': '接口交付与内部完成状态', 'rows': [delivery[event['request_id']]],
+                                                     'shown': 1, 'total': 1}
+                    if isinstance(detail, dict) and (detail.get("format_version") in (1, 2) or
+                            event['name'] == 'reviewed independent node checkpoint' or
+                            'notes' in detail or 'budget_omitted' in detail or
+                            ('queries' in detail and 'selected' in detail)):
+                        panel = evidence_panel(detail)
+                        if panel:
+                            preview["evidence_panel"] = panel
+                projected.append(preview)
+            previews[event["span_id"]] = projected
+    for query in run["queries"]:
+        requests = {query["search_id"]} | {a["id"] for a in query["adds"]}
+        query["spans"] = [e for e in ordered if e["request_id"] in requests]
+        visible_span_ids = {s["span_id"] for s in query["spans"]}
+        query["span_previews"] = {key: value for key, value in previews.items() if key in visible_span_ids}
+        query['delivery'] = delivery.get(query['search_id'])
+        query['internal_errors'] = sum(e['status'] == 'error' for e in query['spans'])
+        for add in query['adds']:
+            add['delivery'] = delivery.get(add['id'])
+            add['internal_errors'] = sum(e['status'] == 'error' and e['request_id'] == add['id'] for e in query['spans'])
+        if run["system"].get("target") == "mem0-research":
+            for add in query["adds"]:
+                outputs = [ref for e in query["spans"] if e["operation"] == "add" and e["request_id"] == add["id"]
+                    for ref in e["outputs"] if ref["kind"] == "memory"]
+                if len(outputs) == 1:
+                    add["memory_snapshot"] = read_memory_snapshot(path, outputs[0])
+
+
+def evidence_panel(value):
+    """Versioned bounded display, only after artifact path/hash/shape validation."""
+    if value.get('status') == 'completed' and isinstance(value.get('notes'), list):
+        rows=[{'引用':n['ref'], '导航笔记（非原文事实）':excerpt(n['text'],400)['text'],
+               '指向的原文':n.get('support_refs',[])} for n in value['notes'][:6]]
+        return {'title':'第三版：已保存的导航与原文链接', 'rows':rows,'shown':len(rows),'total':len(value['notes'])}
+    if 'budget_omitted' in value and isinstance(value.get('returned'),list):
+        rows=[{'顺序':i,'已交付引用':r['id'],'完整正文字符数':len(r['content'])} for i,r in enumerate(value['returned'][:24],1)]
+        rows.append({'装箱未交付的引用':value['budget_omitted']})
+        return {'title':'第三版：Select顺序与原文装箱', 'rows':rows,'shown':len(rows),'total':len(value['returned'])+1}
+    if 'queries' in value and isinstance(value.get('selected'),list):
+        rows=[{'选中原文（按顺序）':value['selected'],'具体缺口查询':value['queries']}]
+        return {'title':'第三版：证据选择和补查决定','rows':rows,'shown':1,'total':1}
+    if value.get('view') == 'contribution_summary' and 'member_fragment_map' in value:
+        candidates = value.get('model_input', {}).get('candidates', [])
+        rows = [{'位置': c['position'], '模型实际看到的贡献摘要': excerpt(c['narrative'], 500)['text'],
+                 '绑定的完整原文卡数': len(value['member_fragment_map'].get(str(c['position']), [])),
+                 '说明': '摘要用于比较，不是新证据；选中后携带绑定原文范围。'} for c in candidates[:16]]
+        return {'title': 'Select 全局比较：摘要与完整原文的对应', 'rows': rows,
+                'shown': len(rows), 'total': len(candidates)}
+    if value.get('group_complete') is False and 'committed_node_refs' in value and 'mutation' in value:
+        rows = [{'引用': n['ref'], '类型': n['kind'], '已保存正文': excerpt(n['text'],350)['text'],
+                 '支持来源': n.get('source_refs', [])} for n in value['mutation'].get('items', [])[:12]]
+        return {'title': '独立节点已保存；关系与整组整理尚未完成', 'rows': rows,
+                'shown': len(rows), 'total': len(value['mutation'].get('items', []))}
+    if value.get('committed') is True and 'increment' in value:
+        names = {'created': '新增节点', 'support_added': '旧陈述补充来源', 'navigation_updated': '导航正文更新'}
+        rows = [{'变化': label, '数量': len(value['increment'].get(key, [])),
+                 '节点与新增来源': value['increment'].get(key, [])[:12]}
+                for key, label in names.items()]
+        rows.append({'无节点变化': value.get('no_item_change'), '本组': value.get('completed_group')})
+        return {'title': '已提交的实际记忆增量（非草案）', 'rows': rows, 'shown': len(rows), 'total': len(rows)}
+    if value.get('layer') in {'protocol', 'incomplete', 'business', 'integrity', 'dependency'}:
+        labels = {'protocol': '工具协议', 'incomplete': '输出未完成', 'business': '内容待修订',
+                  'integrity': '来源完整性', 'dependency': '外部依赖'}
+        return {'title': '失败层次：' + labels[value['layer']], 'rows': [value], 'shown': 1, 'total': 1}
+    if value.get('format_version') == 2 and 'committed' in value and 'decisions' in value:
+        rows = [{'对象': (d.get('before') or {}).get('ref') or (d.get('before') or {}).get('from_ref'),
+                 '审查任务': {'support_addition': '新增原文是否支持同一旧陈述', 'navigation_create': '新建主体路标',
+                            'navigation_update': '更新同一主体路标', 'new_assertion': '新陈述与原文对应'}.get(d.get('review_task'), d.get('review_task')),
+                 '结果': '撤销草案' if d.get('after') is None else '需按最终端点重审' if d.get('recheck_required') else '草案通过',
+                 '原因': d.get('detail'), '审查依据位置': d.get('evidence_positions'),
+                 '写入支持': (d.get('after') or {}).get('source_refs', []),
+                 '修订前': (d.get('before') or {}).get('text'), '修订后': (d.get('after') or {}).get('text')}
+                for d in value['decisions'][:20]]
+        rows.extend({'待办': issue} for issue in value.get('issues', value.get('tasks', []))[:8])
+        return {'title': '本组局部审查（尚未提交）' if not value['committed'] else '本组审查已提交',
+                'rows': rows, 'shown': len(rows), 'total': len(value['decisions']) + len(value.get('issues', value.get('tasks', [])))}
+    if 'schema_fingerprint' in value and 'max_completion_tokens' in value:
+        return {'title': '实际模型调用协议与额度', 'rows': [value], 'shown': 1, 'total': 1}
+    if "disclosures" in value:
+        return {"title": "模型实际可见范围", "status": value.get("status", "unknown"),
+                "rows": [{"type": "引用清单", "position": row.get("position"), "ref": row.get("ref"),
+                          "actions": row.get("allowed_actions"), "narrative": row.get("narrative", "")[:180]}
+                         for row in value.get("choices", [])[:20]] +
+                        [{"type": "原文范围", "ref": row.get("origin_ref"), "range": row.get("shown_range"),
+                          "version": row.get("content_digest"), "text": row.get("text", "")[:350]}
+                         for row in value["disclosures"][:20]],
+                "shown": min(20, len(value["disclosures"])), "total": len(value["disclosures"])}
+    if value.get("packing_unit") == "evidence_group" and "decisions" in value:
+        return {"title": "路径证据组装箱", "rows": [{key: row.get(key, "unknown") for key in
+                ("ref", "members", "included", "reason", "closure", "path_closed", "answer_evidence_complete")}
+                for row in value["decisions"][:20]], "shown": min(20,len(value["decisions"])), "total": len(value["decisions"])}
+    if "target" in value and "trigger" in value:
+        return {"title": "缓冲与稳定处理前缀", "rows": [value], "shown": 1, "total": 1}
+    if "old_scope" in value and "orientation_only" in value:
+        return {"title": "旧记忆范围核验", "rows": [value], "shown": 1, "total": 1}
+    if "accepted" in value and ("required" in value or "actual_inspections" in value or "invalid_links" in value):
+        return {"title": "Reflection变更依据", "rows": [value], "shown": 1, "total": 1}
+    return None

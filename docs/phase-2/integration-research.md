@@ -1,6 +1,6 @@
 # 二期接入调研
 
-初次核验日期：**2026-09-23**。**2026-10-28 已重新核验并修正下文模型约束**，见[最新规则与智增增实测](../doing/2026-10-28-embedding-v4-verification.md)。其余章节保留 9 月的规则/计划快照，不表示已在 10 月重新核验；当前实施以根 DESIGN 和最新实施报告为准。正式绑定前仍以主办方冻结的 contract 和申请页为准。
+初次核验日期：**2026-09-23**。**2026-10-28 已重新核验并修正下文模型约束**，见[最新规则与智增增实测](../../archive/research/20261030-consolidation/docs/doing/2026-10-28-embedding-v4-verification.md)。其余章节保留 9 月的规则/计划快照，不表示已在 10 月重新核验；当前实施以根 DESIGN 和最新实施报告为准。正式绑定前仍以主办方冻结的 contract 和申请页为准。
 
 ## 已确认的变化
 
@@ -26,7 +26,7 @@
 | 数据库、索引和内部架构 | 不限制 | 保留 BM25、向量与引用图设计；更换向量模型须使用新向量库 |
 | 商业产品榜 | 不受上述模型限制 | 不适用于我们的开源方法榜 |
 
-当前默认组合已是 `gpt-4o-mini` + 智增增 `text-embedding-v4` / 1024 维，批量最多 10 条；新库切片已验证接入，见[迁移核对](../doing/2026-10-28-embedding-v4-migration.md)。10月29日默认接入分段索引：每段最多6000 UTF-8字节，保守控制单条8192 tokens边界，原文及命中范围保留；数据库版本4，新库运行。官方统一执行 Answer/Eval，我们仍只提供 Add/Search 证据。来源：[官方用户文档](https://agentmemoryleaderboard.ai/zh-cn/docs#doc-modes)、[官方赛事问答第 5 项](https://agentmemoryleaderboard.ai/competition/)。
+当前默认组合已是 `gpt-4o-mini` + 智增增 `text-embedding-v4` / 1024 维，批量最多 10 条；新库切片已验证接入，见[迁移核对](../../archive/research/20261030-consolidation/docs/doing/2026-10-28-embedding-v4-migration.md)。10月29日默认接入分段索引：每段最多6000 UTF-8字节，保守控制单条8192 tokens边界，原文及命中范围保留；数据库版本4，新库运行。官方统一执行 Answer/Eval，我们仍只提供 Add/Search 证据。来源：[官方用户文档](https://agentmemoryleaderboard.ai/zh-cn/docs#doc-modes)、[官方赛事问答第 5 项](https://agentmemoryleaderboard.ai/competition/)。
 
 ## Add/Search 边界
 

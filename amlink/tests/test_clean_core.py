@@ -264,8 +264,8 @@ def test_provider_batches_ten_and_no_retry():
     assert p.calls==1; p.close()
 
 def test_native_observation_and_model_usage(tmp_path):
-    from benchmark.instrumented import Artifacts,ObservedTarget
-    from benchmark.observability import ObservationRecorder,validate_event
+    from research.benchmark.instrumented import Artifacts,ObservedTarget
+    from research.benchmark.observability import ObservationRecorder,validate_event
     from amlink.native import NativeTarget
     run=tmp_path/'run'; run.mkdir()
     with ObservationRecorder(run/'observability.jsonl',run_id='test',dataset_pack_sha256='a'*64) as recorder:
@@ -312,8 +312,8 @@ def test_empty_selection_is_valid_abstention(build):
     assert search(e,'unknown')==[]
 
 def test_model_observation_records_usage_and_redacts_key(tmp_path):
-    from benchmark.instrumented import Artifacts
-    from benchmark.observability import ObservationRecorder,validate_event
+    from research.benchmark.instrumented import Artifacts
+    from research.benchmark.observability import ObservationRecorder,validate_event
     from amlink.observation import Observer
     with ObservationRecorder(tmp_path/'events.jsonl',run_id='test',dataset_pack_sha256='a'*64) as recorder:
         observer=Observer(recorder,Artifacts(tmp_path))

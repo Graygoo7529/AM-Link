@@ -1,8 +1,8 @@
 # 数据集：来源、读取与准备
 
-`dataset/` 是独立数据层，负责原始数据获取、结构分析、预处理、选择与切分。数据集无需与比赛或待测系统绑定，产物是中立的 dataset pack；Add/Search、分块、角色映射和评分属于 [`benchmark/`](../benchmark/README.md)。依赖方向为 `benchmark → dataset`。
+`dataset/` 是独立数据层，负责原始数据获取、结构分析、预处理、选择与切分。数据集无需与比赛或待测系统绑定，产物是中立的 dataset pack；Add/Search、分块、角色映射和评分属于 [`research/benchmark/`](../research/benchmark/README.md)。依赖方向为 `benchmark → dataset`。
 
-`selection.py` 提供记录/任务/原文片段/相邻窗口与严格时间选择；保留来源顺序和基础包指纹，遗漏证据默认拒绝。通过 [案例实验入口](../benchmark/STUDIES.md) 可直接加载某案例的完整记录或诊断片段。PersonaMem-v2 的字符串消息容器会解包为真正问题，原始写法保留在 `input.source_text`；该额外字段不会进入 Search。
+`selection.py` 提供记录/任务/原文片段/相邻窗口与严格时间选择；保留来源顺序和基础包指纹，遗漏证据默认拒绝。通过 [案例实验入口](../research/benchmark/STUDIES.md) 可直接加载某案例的完整记录或诊断片段。PersonaMem-v2 的字符串消息容器会解包为真正问题，原始写法保留在 `input.source_text`；该额外字段不会进入 Search。
 
 ## 已取得的数据（2026-10-07）
 
@@ -21,15 +21,15 @@ CL-bench 两版均为作者的 [evaluation-only 许可](https://huggingface.co/d
 
 [LongMemEval S/M/Oracle](https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned) 已取得固定 revision `98d7416` 的完整文件，并实现共同读取器；S/Oracle 有 smoke pack，三档均已流式结构扫描。`_abs` 拒答题与可回答题分开统计。BEAM 常规三档、[BEAM-10M](https://huggingface.co/datasets/Mohammadta/BEAM-10M) 也已下载并逐批解码。MemoryAgentBench 四类已取得，仅一条冲突类研究样本转 pack，尚无全量通用适配。PersonaMem-v2 的 benchmark 与 400 份历史已取得，两人完整 32K 历史用于研究；PersonaMem-v3 只取得 samples 三表，已做两个时间切片。没有找到可独立获取并核验来源的 LongMemEval-Refined 发布，故没有虚构文件或读取器。
 
-[`catalog.json`](./catalog.json) 统一登记来源；`pack_adapter` 表示代码能力，`local_verification` 表示真实数据验证状态，`local_acquisition` 记录本机取得范围。来源可用、读取器支持和本机取得范围是不同事实。[最新获取记录](../docs/doing/2026-10-07-huggingface-retry.md)与[样本案例库](../casestudies/README.md)列出核验结果和限制。
+[`catalog.json`](./catalog.json) 统一登记来源；`pack_adapter` 表示代码能力，`local_verification` 表示真实数据验证状态，`local_acquisition` 记录本机取得范围。来源可用、读取器支持和本机取得范围是不同事实。[最新获取记录](../archive/research/20261030-consolidation/docs/doing/2026-10-07-huggingface-retry.md)与[样本案例库](../research/cases/README.md)列出核验结果和限制。
 
 ## 全量研究与案例包
 
-`python -m dataset.survey --include-m` 扫描新下载的完整来源，输出 `data/research/survey.json` 并校验 receipt；含 Parquet 的研究使用 `benchmark/requirements-research.txt` 的隔离环境依赖。CL-bench 全量有 621 题可按现有规则拆分，1,278 题边界未认证；Life 405 题均可拆分。它们尚未进行完整方法评分。
+`python -m dataset.survey --include-m` 扫描新下载的完整来源，输出 `data/research/survey.json` 并校验 receipt；含 Parquet 的研究使用 `research/benchmark/requirements-research.txt` 的隔离环境依赖。CL-bench 全量有 621 题可按现有规则拆分，1,278 题边界未认证；Life 405 题均可拆分。它们尚未进行完整方法评分。
 
 `python -m dataset.research_cases` 重建六个研究包：LongMemEval 七题完整 S 历史、PersonaMem-v2 两人完整 32K 历史、MemoryAgentBench 一题完整 455 事实、PersonaMem-v3 两题严格时间切片、六条件短片段实验，以及跨数据集 Mem0 诊断切片。MAB/v3 当前是限定研究切片，未实现通用全量评测适配。
 
-LongMemEval 的 `YYYY/MM/DD (Weekday) HH:MM` 日期原先未被解析，本轮已修复，保留 source_date 和无时区的归一化假设。旧 pack 需要重建。PersonaMem-v3 按同 persona 且早于提问时刻筛选；去掉顶层和嵌套生成标签，保留独立 user_message 中的记忆限制。详细范围见[研究记录](../docs/doing/2026-10-07-dataset-research.md)。
+LongMemEval 的 `YYYY/MM/DD (Weekday) HH:MM` 日期原先未被解析，本轮已修复，保留 source_date 和无时区的归一化假设。旧 pack 需要重建。PersonaMem-v3 按同 persona 且早于提问时刻筛选；去掉顶层和嵌套生成标签，保留独立 user_message 中的记忆限制。详细范围见[研究记录](../archive/research/20261030-consolidation/docs/doing/2026-10-07-dataset-research.md)。
 
 ## 新取得数据的小样本
 

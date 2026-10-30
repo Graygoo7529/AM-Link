@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "campaigns": [
+    {
+      "id": "hundred30",
+      "label": "第三版 · 六类26历史100题",
+      "plan": "research/benchmark/data/plans/clean30-hundred-answer",
+      "description": "方法基线4191890；780 Add、100 Search、100 Answer。公开研究集的本地诊断，非官方成绩。"
+    }
+  ]
+}

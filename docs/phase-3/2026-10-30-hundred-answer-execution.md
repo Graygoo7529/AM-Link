@@ -36,7 +36,7 @@
 
 ## 验收清单
 
-- [x] 预检与隔离回归通过，清单冻结。117 项测试及 3 个子测试通过；`benchmark/data/plans/clean30-hundred-answer/suite.json`，运行前缀 `hundred30`。
+- [x] 预检与隔离回归通过，清单冻结。117 项测试及 3 个子测试通过；`research/benchmark/data/plans/clean30-hundred-answer/suite.json`，运行前缀 `hundred30`。
 - [x] 全部 26 份历史完成一次尝试，780/780 Add、100/100 Search，状态齐全。
 - [x] Answer 100 次、Eval 100 次真实调用可追溯；评分 95 份有效、5 份协议失败，不重试。
 - [x] 汇总 3607 次真实调用、稳定性、答案和证据表现；Codex 审读全部回答/标注，22 题进一步核对实际原文。

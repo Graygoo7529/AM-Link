@@ -1,0 +1,2441 @@
+{
+  "datasets": {
+    "perltqa": {
+      "name": "PerLTQA 中文 · 新增完整数据",
+      "status": "已取得：141 人物档案；其中 32 人物有 8,593 题",
+      "raw": "人物资料＋关系＋事件＋对话；作者生成的结构化记忆",
+      "prepared": "32 人物 → 2,211 来源文档＋8,593 任务；答案与 anchors 分离",
+      "cases": [
+        "p1",
+        "p2",
+        "r13"
+      ],
+      "links": [
+        {
+          "label": "作者中文发布",
+          "url": "https://github.com/Elvin-Yiming-Du/PerLTQA/tree/8d9e19868e239740ef701e603ec205cd581f221b/Dataset/zh"
+        }
+      ],
+      "downloadNote": "中文双文件已齐；英文版尚未下载。"
+    },
+    "beam": {
+      "name": "BEAM · 长历史更新与冲突",
+      "status": "已取得：100K/500K/1M 三档 90 条记录，另有 10M 两个分片；Parquet 已校验",
+      "raw": "长 chat＋代码＋生成背景＋十类能力探针",
+      "prepared": "只 chat 进入历史；已有 100K 案例 pack；全量 Parquet 已解码核对，尚未构建全量 pack",
+      "cases": [
+        "b1",
+        "b2",
+        "b3",
+        "r06",
+        "r07",
+        "r14"
+      ],
+      "links": [
+        {
+          "label": "全部三档文件",
+          "url": "https://huggingface.co/datasets/Mohammadta/BEAM/tree/main/data"
+        },
+        {
+          "label": "10M 分片",
+          "url": "https://huggingface.co/datasets/Mohammadta/BEAM-10M/tree/main/data"
+        }
+      ],
+      "downloadNote": "常规三档约 105.6 MB，10M 两片约 343.8 MB；已取得，需按规模选择处理。"
+    },
+    "life": {
+      "name": "CL-bench Life · 带材料完成工作",
+      "status": "完整文件已取得：405 条，29.3 MB；原有案例小样本保留",
+      "raw": "比赛日志、社区讨论与信息碎片；附任务和评分要求",
+      "prepared": "历史 / 任务 / rubric 分离；已有 7 条历史消息＋2 任务小样本，完整文件尚未构建全量 pack",
+      "cases": [
+        "c1",
+        "c2",
+        "r09"
+      ],
+      "links": [
+        {
+          "label": "完整文件 · 29.3 MB",
+          "url": "https://huggingface.co/datasets/tencent/CL-bench-Life/resolve/cd2589f/CL-bench%20Life.jsonl?download=true"
+        }
+      ],
+      "downloadNote": "完整 JSONL 已保存并校验；使用评测用途许可，不写入 Git。"
+    },
+    "locomo": {
+      "name": "LoCoMo · 跨会话记忆",
+      "status": "已取得：10 对话、272 会话、5,882 发言、1,986 题",
+      "raw": "双人多次聊天；说话者、会话日期、图像 caption、问题与证据 ID",
+      "prepared": "完整保留历史；1,984 任务可用；排除 2 个不存在的来源引用",
+      "cases": [
+        "l1",
+        "l2",
+        "l3",
+        "l4",
+        "r01",
+        "r04",
+        "r05"
+      ],
+      "links": [
+        {
+          "label": "作者发布",
+          "url": "https://github.com/snap-research/locomo"
+        }
+      ],
+      "downloadNote": "文本 JSON 已齐；本机没有图片本体。"
+    },
+    "refined": {
+      "name": "LoCoMo-Refined · 修改问答版",
+      "status": "已取得：10 对话、1,382 题；与原版历史相同",
+      "raw": "社区修改问题与答案；去掉类别 5 的对抗题",
+      "prepared": "已有 6 题 smoke 包；完整原始文件可用；不可与原版视为独立历史",
+      "cases": [],
+      "empty": "能力重点：答案精度与完整性。与原版共享历史，不能作为无泄漏的独立测试集。",
+      "links": [
+        {
+          "label": "社区发布",
+          "url": "https://github.com/mem-eval-suite/LoCoMo_refined"
+        }
+      ],
+      "downloadNote": "当前社区版本已齐；不是 AML 私有冻结包。"
+    },
+    "cl": {
+      "name": "CL-bench · 学习新规则与流程",
+      "status": "完整文件已取得：1,899 条，90.1 MB；原有 3 条小样本 pack 保留",
+      "raw": "新知识、流程或规则＋messages＋rubrics",
+      "prepared": "全量结构扫描：621 条可按现有边界拆分，1,278 条保持原输入；500 个共享 context",
+      "cases": [],
+      "empty": "能力重点：记住约束并应用规则。先确认材料 / 任务边界，再做 Add → Search → Answer；不能把 rubric 当作历史。",
+      "links": [
+        {
+          "label": "完整文件 · 90.1 MB",
+          "url": "https://huggingface.co/datasets/tencent/CL-bench/resolve/66122c88771ac4f09f163415902828b933e78899/CL-bench.jsonl?download=true"
+        }
+      ],
+      "downloadNote": "完整 JSONL 已保存并校验；rubric 仍只属于评估侧。"
+    },
+    "script": {
+      "name": "ScriptMem · 当前缺少剧本",
+      "status": "已取得 457 题；对应真实剧本未取得",
+      "raw": "多人物关系与事件；单选、多选、排序问题",
+      "prepared": "可检查题型；任务包标记缺历史，不能实际回放",
+      "cases": [],
+      "empty": "缺口：原始剧本。题目、答案与合成格式示例均不能充当历史。",
+      "links": [
+        {
+          "label": "作者说明",
+          "url": "https://github.com/memorax-ai/ScriptMem"
+        }
+      ],
+      "downloadNote": "公开题目已齐；作者未发布原始剧本。"
+    },
+    "persona": {
+      "name": "PersonaMem-v2 · 题目与历史已配套",
+      "status": "已取得 5,000 题、200 persona、400 份 32K/128K 历史；Persona 521 smoke 已构建",
+      "raw": "当前问题、偏好标签、评估答案、长历史路径",
+      "prepared": "persona 521/737 完整 32K 历史研究包；他人信息、遗忘案例；gold 与生成画像分离",
+      "cases": [
+        "pv1",
+        "pv2",
+        "pv3",
+        "pv4",
+        "r08",
+        "r12"
+      ],
+      "links": [
+        {
+          "label": "文本题目 CSV",
+          "url": "https://huggingface.co/datasets/bowen-upenn/PersonaMem-v2/tree/main/benchmark/text"
+        },
+        {
+          "label": "32K 历史",
+          "url": "https://huggingface.co/datasets/bowen-upenn/PersonaMem-v2/tree/main/data/chat_history_32k"
+        },
+        {
+          "label": "128K 历史",
+          "url": "https://huggingface.co/datasets/bowen-upenn/PersonaMem-v2/tree/main/data/chat_history_128k"
+        }
+      ],
+      "downloadNote": "文本 benchmark 与引用的两套历史已取得并逐文件校验；多模态目录未下载。"
+    },
+    "longmem": {
+      "name": "LongMemEval · S / M / Oracle 已取得",
+      "status": "S 277.4 MB、M 2.74 GB、Oracle 15.4 MB 均已取得；S/Oracle 500 题",
+      "raw": "长会话＋日期＋问题＋可回答性标注；S / M / Oracle",
+      "prepared": "7 题保留完整 S 历史（324 会话、3,340 发言）；覆盖更新、日期、拒答、去重、比例、偏好迁移与标注疑点；独立短片段实验包仍保留",
+      "cases": [
+        "lm1",
+        "lm2",
+        "lm3",
+        "lm4",
+        "lm5",
+        "lm6",
+        "lm7"
+      ],
+      "links": [
+        {
+          "label": "S · 277 MB",
+          "url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416/longmemeval_s_cleaned.json?download=true"
+        },
+        {
+          "label": "Oracle · 15.4 MB",
+          "url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416/longmemeval_oracle.json?download=true"
+        },
+        {
+          "label": "M · 2.74 GB",
+          "url": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416/longmemeval_m_cleaned.json?download=true"
+        }
+      ],
+      "downloadNote": "三份固定 revision=98d7416 文件均已保存并校验；M 仅建议按需切片处理。"
+    },
+    "mab": {
+      "name": "MemoryAgentBench · 多跳与学习",
+      "status": "四类 146 context / 3,671 questions；已全量扫描",
+      "raw": "共享 context → 多个 questions / answers；检索、学习、长程理解、冲突",
+      "prepared": "冲突类第 0 行：455 条完整事实 / 1 题；三跳案例与 BM25 对照；其余子类尚未适配评分",
+      "cases": [
+        "m1"
+      ],
+      "links": [
+        {
+          "label": "四类数据文件",
+          "url": "https://huggingface.co/datasets/ai-hyz/MemoryAgentBench/tree/main/data"
+        }
+      ],
+      "downloadNote": "四类文件及 entity2id.json 已保存；需要专用 Parquet 读取器和来源许可核对。"
+    },
+    "pv3": {
+      "name": "PersonaMem-v3 · 反馈与记忆寿命",
+      "status": "预览表已取得：100 profiles、221,817 events、15,791 queries；backend 原始目录未下载",
+      "raw": "跨平台活动、反馈、用户意图与遗忘请求",
+      "prepared": "persona 36/68 的两题时间切片：600 / 2,228 条可见事件；排除同刻/未来及嵌套生成标签",
+      "cases": [
+        "v31",
+        "v32",
+        "v33"
+      ],
+      "links": [
+        {
+          "label": "作者完整文件页",
+          "url": "https://huggingface.co/datasets/bowen-upenn/PersonaMem-v3/tree/main"
+        }
+      ],
+      "downloadNote": "仅取得公开 samples 预览表和 README；backend 约 1.49 GB，后续按 persona 选择下载。"
+    }
+  },
+  "cases": {
+    "p1": {
+      "name": "P01 关系方向与主体",
+      "q": "张小红的兄弟是谁？",
+      "source": "来源：social_relationship:4_0 · 中文原文含义",
+      "leftId": "资料主体",
+      "left": "张小红",
+      "link": "弟弟",
+      "rightId": "关系对象",
+      "right": "张小明",
+      "add": "张小红 — 弟弟 → 张小明；保留关系方向、主体和来源 4_0。",
+      "search": "定位张小红的关系资料；返回“张小明是张小红的弟弟”的原文。",
+      "answer": "张小明，是她的弟弟。",
+      "trap": "容易错：跨档案合并同名“小明”，或把关系方向反转。",
+      "document": "perltqa-structured-memory.md",
+      "mark": "→",
+      "data": {
+        "dataset": "perltqa",
+        "record": "character-3",
+        "task": "social_relationship:4_0:0",
+        "turns": [
+          "social_relationship:4_0"
+        ],
+        "pack": "dataset/data/prepared/perltqa-zh-full.json"
+      },
+      "checks": {
+        "add": "核对主体、时间、原文来源；答案和评估标签不得写入记忆。",
+        "search": "检查所需证据是否共同返回；命中一段不代表证据链完整。",
+        "answer": "逐项核对证据支持与不确定性；本阶段由回答侧负责，Search 只交付证据。"
+      },
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "关系的主体、客体与方向",
+          "use": "必要证据",
+          "sources": [
+            "social_relationship:4_0"
+          ]
+        }
+      ]
+    },
+    "p2": {
+      "name": "P02 原文与答案冲突",
+      "q": "王小明和姐姐已经到达目的地了吗？",
+      "source": "来源：events:1_0_0 与 dialogues:1_0_0#0 · 原文信息摘要",
+      "leftId": "事件＋当天对话",
+      "left": "2022-05-12 出发／今天出发",
+      "link": "时间冲突",
+      "rightId": "同一段 05-12 08:00 对话",
+      "right": "昨天抵达；作者答案却写 05-12 抵达",
+      "add": "保留事件、对话时间和原句；保留相互关联；标注时间冲突。",
+      "search": "返回冲突两端与原始日期；不从 gold 答案补造历史。",
+      "answer": "对话称已抵达；出发与抵达时间前后矛盾，不能确定具体日期。",
+      "trap": "容易错：用标准答案“修复”记忆，或把合理质疑算成记忆失效。",
+      "document": "perltqa-structured-memory.md",
+      "mark": "≠",
+      "data": {
+        "dataset": "perltqa",
+        "record": "character-0",
+        "task": "dialogues:1_0_0#0:2",
+        "turns": [
+          "events:1_0_0",
+          "dialogues:1_0_0#0"
+        ],
+        "pack": "dataset/data/prepared/perltqa-zh-full.json"
+      },
+      "checks": {
+        "add": "核对主体、时间、原文来源；答案和评估标签不得写入记忆。",
+        "search": "检查所需证据是否共同返回；命中一段不代表证据链完整。",
+        "answer": "逐项核对证据支持与不确定性；本阶段由回答侧负责，Search 只交付证据。"
+      },
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "事件记录中的出发日期",
+          "use": "对照材料",
+          "sources": [
+            "events:1_0_0"
+          ]
+        },
+        {
+          "fact": "同一对话中出发与抵达的不同说法",
+          "use": "冲突材料",
+          "sources": [
+            "dialogues:1_0_0#0"
+          ]
+        }
+      ]
+    },
+    "b1": {
+      "name": "B01 配额明确更新",
+      "q": "这个项目当前每日 API 调用配额是多少？",
+      "source": "来源：conversation_id=2 · 历史中文转述，不是现实产品规格",
+      "leftId": "0:32 · 先前要求",
+      "left": "1,000 次 / 天；另有 60 次 / 分钟",
+      "link": "明确更新",
+      "rightId": "0:66 · 后续要求",
+      "right": "新的每日配额：1,200 次",
+      "add": "同一项目、同一属性：1,000 → 1,200；保留旧值、顺序与来源。",
+      "search": "问“当前”返回 0:66；问“最初”返回 0:32；按需附更新链。",
+      "answer": "当前每天 1,200 次。",
+      "trap": "容易错：召回旧配额、混淆每天 / 每分钟、把重复代码当作多次独立确认。",
+      "document": "beam-update-and-conflict.md",
+      "mark": "→",
+      "data": {
+        "dataset": "beam",
+        "record": "2",
+        "task": "knowledge_update:0",
+        "turns": [
+          "0:32",
+          "0:66"
+        ],
+        "pack": "dataset/data/prepared/beam-update-cases.json"
+      },
+      "checks": {
+        "add": "核对主体、时间、原文来源；答案和评估标签不得写入记忆。",
+        "search": "检查所需证据是否共同返回；命中一段不代表证据链完整。",
+        "answer": "逐项核对证据支持与不确定性；本阶段由回答侧负责，Search 只交付证据。"
+      },
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "每日配额旧值 1,000",
+          "use": "历史值",
+          "sources": [
+            "0:32"
+          ]
+        },
+        {
+          "fact": "每日配额新值 1,200",
+          "use": "明确替代",
+          "sources": [
+            "0:66"
+          ]
+        }
+      ],
+      "studies": [
+        {
+          "run_id": "hundred30-20-beam",
+          "dataset_pack_sha256": "ad46cbea66ceb9572ac36474994e11208944defb360a8ff40feb1f2f58c188ab",
+          "title": "配额更新：每日与每分钟不能混成同一属性",
+          "theory": {
+            "evidence": "原先每日1000次、每分钟60次；后续明确每日改成1200次。",
+            "add": "保留同项目同属性的更新及来源；每日和每分钟是两个维度。",
+            "search": "找到明确更新，保留必要旧值用于解释变化，不混用不同限额。",
+            "answer": "当前每日1200次。"
+          },
+          "observed": "实际回答1200，独立复核通过；这是明确更新的正控制。",
+          "limits": "历史中的API规格是样本叙事，不是现实产品当前配额。",
+          "next_experiment": "后续时间线改动必须保持这道简单更新题正确，并能区分Flask-Login矛盾案例。",
+          "span_ids": [
+            "1100e5dac4f64bf19894cf7199314fa0",
+            "5e12763c048b48e1beac74fb82635e50",
+            "b6028a5909604c08a4444b348621a769",
+            "a7466106e38d4bfab0d58e0f09718420",
+            "5f26ebeebffc4c879b6178da330b4b95",
+            "dd4b54fb200f4adfaccfaefac87e4714",
+            "b557557090e4470ebd27cd993fd8d4fb",
+            "598d5dee8a6541eabe47ca092d499c06"
+          ],
+          "basis": "已保存原文、模型可见材料、Search交付、Answer与独立复核；非新实验"
+        }
+      ]
+    },
+    "b2": {
+      "name": "B02 互相矛盾的经历",
+      "q": "用户是否已经取得这个项目的 API Key？",
+      "source": "来源：conversation_id=2 · 历史中文转述",
+      "leftId": "0:32 · 先前陈述",
+      "left": "2024-03-10 已取得 Key",
+      "link": "经历矛盾 ≠ 更新",
+      "rightId": "0:70 · 后续陈述",
+      "right": "从未真正取得这个项目的 Key",
+      "add": "保留两条相反陈述及来源；标记待澄清，不自动覆盖。",
+      "search": "同时返回“已取得”与“从未取得”的证据。",
+      "answer": "前后说法不一致，需要澄清。",
+      "trap": "容易错：自行编造“Key 已失效”或“换了项目”来消除矛盾。",
+      "document": "beam-update-and-conflict.md",
+      "mark": "≠",
+      "data": {
+        "dataset": "beam",
+        "record": "2",
+        "task": "contradiction_resolution:0",
+        "turns": [
+          "0:32",
+          "0:70"
+        ],
+        "pack": "dataset/data/prepared/beam-update-cases.json"
+      },
+      "checks": {
+        "add": "核对主体、时间、原文来源；答案和评估标签不得写入记忆。",
+        "search": "检查所需证据是否共同返回；命中一段不代表证据链完整。",
+        "answer": "逐项核对证据支持与不确定性；本阶段由回答侧负责，Search 只交付证据。"
+      },
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "已取得 Key",
+          "use": "陈述之一",
+          "sources": [
+            "0:32"
+          ]
+        },
+        {
+          "fact": "从未取得 Key",
+          "use": "相冲突的陈述",
+          "sources": [
+            "0:70"
+          ]
+        }
+      ]
+    },
+    "c1": {
+      "name": "C01 多观点覆盖与引用",
+      "q": "仅根据评论比较 iPhone / Android，并满足所有引用要求",
+      "source": "来源：Life offset 100 · task a760132c… · 任务约束摘要",
+      "leftId": "三个主要观点",
+      "left": "3 个观点 × 3 句引文 = 9 处",
+      "link": "全部互不重复",
+      "rightId": "五类立场表格",
+      "right": "5 类立场 × 3 句引文 = 15 处",
+      "add": "保存评论作者、回复关系、原帖 / 评论边界、原文与立场上下文。",
+      "search": "覆盖子需求；排除原帖；为 24 处不同引文保留出处。",
+      "answer": "按评论证据总结倾向并组织表格；不把局部检索分布当全体比例。",
+      "trap": "容易错：最相似的几段挤满上下文，却缺立场、重复引用或混入原帖。",
+      "document": "clbench-life-evidence-diversity.md",
+      "mark": "＋",
+      "data": {
+        "dataset": "life",
+        "record": "a760132c-d3bc-2931-f3e5-db24be64d0b8",
+        "task": "a760132c-d3bc-2931-f3e5-db24be64d0b8",
+        "turns": [],
+        "pack": "dataset/data/prepared/clbench-life-extra.json"
+      },
+      "checks": {
+        "add": "核对主体、时间、原文来源；答案和评估标签不得写入记忆。",
+        "search": "检查所需证据是否共同返回；命中一段不代表证据链完整。",
+        "answer": "逐项核对证据支持与不确定性；本阶段由回答侧负责，Search 只交付证据。"
+      },
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "社区参与者的多种立场及支持引文",
+          "use": "覆盖与去重；评分条目只用于核对",
+          "sources": []
+        }
+      ],
+      "studies": [
+        {
+          "run_id": "hundred30-25-clbench-life",
+          "dataset_pack_sha256": "e5d264337ffa7c816fa978bce6e3765321bf5449759872396f0cd31f8db1e197",
+          "title": "评论研究：选够24条，不等于能交付24条",
+          "theory": {
+            "evidence": "任务要求多组观点和不复用的引文，还要求排除原帖、正确标识iPhone/Android评价对象。",
+            "add": "保留评论身份、原帖边界、评价对象与可引用的原文范围。",
+            "search": "按输出需求建立证据集合，并在选取时考虑真实输出字数；支持非重叠的原文短范围。",
+            "answer": "每个位置有独立且对象正确的引文，不用同一句反复填格。"
+          },
+          "observed": "Select选24条，最终24k字符装箱只返回11条、丢13条。这是百题唯一记录到最终装箱丢条的题。Answer复用引文且把iPhone抱怨错放Android负面；mini仍判8/8，人工复核否定。",
+          "limits": "需要多少证据由任务决定；不能把所有题都升级为大规模引文计划，也不能只改评分遮掩输出错误。",
+          "next_experiment": "受限原文范围装箱与整卡装箱对照：有效引文覆盖、互不复用、对象归属、字数与调用成本一起验收。",
+          "span_ids": [
+            "6bb28887083f45e5bb0aaf3e643b0941",
+            "b4be256c0acd4b2baac96dec80497183",
+            "95eec8eddcd54acba03225f9471ff8d9",
+            "3531fde9a43c41a2a2cadb84b8f83512",
+            "851b93c71fcf48dcaed9d44f9ac30e38",
+            "d8c7656dc3a145fdbb3a5c8d999496e4"
+          ],
+          "basis": "已保存原文、模型可见材料、Search交付、Answer与独立复核；非新实验"
+        }
+      ]
+    },
+    "l1": {
+      "name": "L01 跨会话语义关联",
+      "q": "Caroline 四年前从哪里搬来？",
+      "source": "来源：conv-26 / qa[11] · 历史中文转述",
+      "leftId": "D3:13 · 2023-06-09",
+      "left": "四年前离开自己的祖国",
+      "link": "同一人的祖国",
+      "rightId": "D4:3 · 2023-06-27",
+      "right": "祖国瑞典的奶奶，在她小时候送了项链",
+      "add": "保留 Caroline 的迁居事件；将“祖国”关联到瑞典；两段原文仍可追溯。",
+      "search": "同时返回 D3:13 与 D4:3，形成完整两跳证据链。",
+      "answer": "瑞典。",
+      "trap": "容易错：只搜“搬家”漏掉项链片段；只搜到“瑞典”缺少迁居关系。",
+      "document": "locomo-cross-session.md",
+      "mark": "↔",
+      "data": {
+        "dataset": "locomo",
+        "record": "conv-26",
+        "task": "qa-11",
+        "turns": [
+          "D3:13",
+          "D4:3"
+        ],
+        "pack": "dataset/data/prepared/locomo-full.json"
+      },
+      "checks": {
+        "add": "核对主体、时间、原文来源；答案和评估标签不得写入记忆。",
+        "search": "检查所需证据是否共同返回；命中一段不代表证据链完整。",
+        "answer": "逐项核对证据支持与不确定性；本阶段由回答侧负责，Search 只交付证据。"
+      },
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "离开祖国的年份锚点",
+          "use": "必要证据",
+          "sources": [
+            "D3:13"
+          ]
+        },
+        {
+          "fact": "祖国指向瑞典，来自项链叙述",
+          "use": "必要证据",
+          "sources": [
+            "D4:3"
+          ]
+        }
+      ]
+    },
+    "l2": {
+      "name": "L02 相对时间定位",
+      "q": "Caroline 何时参加了 LGBTQ 支持小组？",
+      "source": "来源：conv-26 / qa[0] · 原文时间关系",
+      "leftId": "会话时间",
+      "left": "2023-05-08 13:56",
+      "link": "昨天 → 前一天",
+      "rightId": "D1:3 · 相对时间",
+      "right": "昨天参加了支持小组",
+      "add": "同时保留原句、会话日期和事件日期 2023-05-07；来源未声明时区。",
+      "search": "返回 D1:3＋日期锚点＋归一化的事件日期。",
+      "answer": "2023 年 5 月 7 日。",
+      "trap": "容易错：用 Add 的接收时间或今天的日期解释“昨天”。",
+      "document": "locomo-time-anchor.md",
+      "mark": "→",
+      "data": {
+        "dataset": "locomo",
+        "record": "conv-26",
+        "task": "qa-0",
+        "turns": [
+          "D1:3"
+        ],
+        "pack": "dataset/data/prepared/locomo-full.json"
+      },
+      "checks": {
+        "add": "核对主体、时间、原文来源；答案和评估标签不得写入记忆。",
+        "search": "检查所需证据是否共同返回；命中一段不代表证据链完整。",
+        "answer": "逐项核对证据支持与不确定性；本阶段由回答侧负责，Search 只交付证据。"
+      },
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "昨天参加支持小组；结合会话日期",
+          "use": "必要证据，日期在元数据",
+          "sources": [
+            "D1:3"
+          ]
+        }
+      ]
+    },
+    "l3": {
+      "name": "L03 人物混淆与错误前提",
+      "q": "Melanie 今年夏天有哪些收养计划？",
+      "source": "来源：conv-26 / qa[153] · 对抗题；D2:8 为关键辨析片段",
+      "leftId": "问题中的人物",
+      "left": "Melanie 的收养计划？",
+      "link": "人物不一致",
+      "rightId": "D2:8 · 实际说话者",
+      "right": "Caroline 正在研究收养机构",
+      "add": "把计划归到 Caroline；保留说话者、会话和原句。",
+      "search": "返回可辨析归属的证据；不能把 Caroline 的计划改记给 Melanie。",
+      "answer": "现有证据不足以支持 Melanie 的收养计划。",
+      "trap": "容易错：将 adversarial_answer 诱导答案当正确答案；命中 evidence 不等于回答正确。",
+      "document": "locomo-speaker-confusion.md",
+      "mark": "≠",
+      "data": {
+        "dataset": "locomo",
+        "record": "conv-26",
+        "task": "qa-153",
+        "turns": [
+          "D2:8"
+        ],
+        "pack": "dataset/data/prepared/locomo-full.json"
+      },
+      "checks": {
+        "add": "核对主体、时间、原文来源；答案和评估标签不得写入记忆。",
+        "search": "检查所需证据是否共同返回；命中一段不代表证据链完整。",
+        "answer": "逐项核对证据支持与不确定性；本阶段由回答侧负责，Search 只交付证据。"
+      },
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "说话者 Caroline 的收养计划",
+          "use": "纠正问题中的人物前提",
+          "sources": [
+            "D2:8"
+          ]
+        }
+      ]
+    },
+    "lm1": {
+      "name": "LM01 隐含的新纪录",
+      "q": "慈善 5K 的个人最好成绩是多少？",
+      "source": "6a1eabeb · LongMemEval S · 中文转述",
+      "leftId": "05-23 · answer_a25d4a91_1:4",
+      "left": "个人最好成绩 27:12",
+      "rightId": "05-30 · answer_a25d4a91_2:0",
+      "right": "希望打破我 25:50 的个人最好成绩",
+      "link": "状态更新",
+      "mark": "→",
+      "add": "保存两个来源版本；识别后一句预设中的新纪录，而不是仅记录未来愿望。",
+      "search": "检索同一用户、同一 5K 项目的当前最好成绩；返回新值及其日期与来源。",
+      "answer": "25 分 50 秒。",
+      "trap": "检查：旧值与新值都存了，但最终上下文是不是只留下旧值？",
+      "document": "longmemeval-evidence-chain.md",
+      "data": {
+        "dataset": "longmem",
+        "record": "6a1eabeb",
+        "task": "question",
+        "turns": [
+          "answer_a25d4a91_1:4",
+          "answer_a25d4a91_2:0"
+        ],
+        "pack": "dataset/data/prepared/longmemeval-research.json"
+      },
+      "checks": {
+        "add": "核对主体、时间、原文来源；答案和评估标签不得写入记忆。",
+        "search": "检查所需证据是否共同返回；命中一段不代表证据链完整。",
+        "answer": "逐项核对证据支持与不确定性；本阶段由回答侧负责，Search 只交付证据。"
+      },
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "最好成绩旧值 27:12",
+          "use": "历史值",
+          "sources": [
+            "answer_a25d4a91_1:4"
+          ]
+        },
+        {
+          "fact": "隐含的新最好成绩 25:50",
+          "use": "现时值",
+          "sources": [
+            "answer_a25d4a91_2:0"
+          ]
+        }
+      ]
+    },
+    "lm2": {
+      "name": "LM02 日期丢失的七天",
+      "q": "两次参观博物馆相隔几天？",
+      "source": "gpt4_59149c77 · LongMemEval S · 作者接受 7 天或含尾日 8 天",
+      "leftId": "2023-01-08 · d00ba6d0_1:0",
+      "left": "刚从 MoMA 导览回来",
+      "rightId": "2023-01-15 · d00ba6d0_2:6",
+      "right": "今天参观了古代文明展",
+      "link": "两个日期锚点",
+      "mark": "→",
+      "add": "原句＋会话日期一起保存；保留相对表达及日期归一化依据。",
+      "search": "补齐两次参观及对应日期；只召回两句没有日期的摘要仍不够。",
+      "answer": "通常相差 7 天；含结束日计数可为 8 天。",
+      "trap": "已修复 reader 漏解析原始日期的问题；日期是否进入模型正文仍需单独观测。",
+      "document": "longmemeval-evidence-chain.md",
+      "data": {
+        "dataset": "longmem",
+        "record": "gpt4_59149c77",
+        "task": "question",
+        "turns": [
+          "answer_d00ba6d0_1:0",
+          "answer_d00ba6d0_2:6"
+        ],
+        "pack": "dataset/data/prepared/longmemeval-research.json"
+      },
+      "checks": {
+        "add": "核对主体、时间、原文来源；答案和评估标签不得写入记忆。",
+        "search": "检查所需证据是否共同返回；命中一段不代表证据链完整。",
+        "answer": "逐项核对证据支持与不确定性；本阶段由回答侧负责，Search 只交付证据。"
+      },
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "刚从 MoMA 回来及 1 月 8 日会话日期",
+          "use": "起点",
+          "sources": [
+            "answer_d00ba6d0_1:0"
+          ]
+        },
+        {
+          "fact": "今天参观展览及 1 月 15 日会话日期",
+          "use": "终点",
+          "sources": [
+            "answer_d00ba6d0_2:6"
+          ]
+        }
+      ],
+      "studies": [
+        {
+          "run_id": "hundred30-09-longmemeval",
+          "dataset_pack_sha256": "09c7737a303b6fd171e9799056bf2bd86143a137b53e601df220cc9728512b43",
+          "title": "日期差：只有明确日期才能可靠计算",
+          "theory": {
+            "evidence": "MoMA参观为1月8日，Met展览为1月15日。",
+            "add": "分别保存事件、日期和来源，不把两次参观合成一次。",
+            "search": "分别命中两个指定事件，核实日期同一时间范围。",
+            "answer": "相差7天。"
+          },
+          "observed": "两个日期都交付，实际回答7天，复核通过。",
+          "limits": "不能把此题的成功泛化为相对日期或无年份场景已经解决。",
+          "next_experiment": "与“正在读书”的时间精度反例一起验收：有日期会算，没起点不补。",
+          "span_ids": [
+            "161b2a553684469ba0337e2c5c924318",
+            "b6cdf3e137174141985d5c50cc3b0b59",
+            "0018bc36a4d0419d9118caa9a6c29c0c",
+            "87b613951e614374baad2cd8bf6621d5",
+            "210708736f2c4622b3884eb83d2c117a",
+            "116ec4215f5b4aac8e24f08ee054bc49",
+            "37b795b80af84266a789d27712e1376f",
+            "c00e1afdf5ba4e108ee39a51529bfb26",
+            "0f405c3b80dc465a8f8229f25130e919"
+          ],
+          "basis": "已保存原文、模型可见材料、Search交付、Answer与独立复核；非新实验"
+        }
+      ]
+    },
+    "lm3": {
+      "name": "LM03 猫与仓鼠",
+      "q": "我的仓鼠叫什么名字？",
+      "source": "0862e8bf_abs · LongMemEval S · 拒答标注",
+      "leftId": "answer_c6fd8ebd_abs:10",
+      "left": "我的猫叫 Luna",
+      "rightId": "当前问题",
+      "right": "询问的是仓鼠",
+      "link": "实体不一致",
+      "mark": "≠",
+      "add": "把猫这一实体类型与 Luna 绑定；不要压缩成泛化的宠物姓名。",
+      "search": "可返回猫的相关原文，但必须保留物种与主体；缺仓鼠证据不等于检索调用失败。",
+      "answer": "没有提到仓鼠的名字；Luna 是猫的名字。",
+      "trap": "有相似证据不等于问题可回答；拒答题不按普通证据召回分母计算。",
+      "document": "longmemeval-evidence-chain.md",
+      "data": {
+        "dataset": "longmem",
+        "record": "0862e8bf_abs",
+        "task": "question",
+        "turns": [
+          "answer_c6fd8ebd_abs:10"
+        ],
+        "pack": "dataset/data/prepared/longmemeval-research.json"
+      },
+      "checks": {
+        "add": "核对主体、时间、原文来源；答案和评估标签不得写入记忆。",
+        "search": "检查所需证据是否共同返回；命中一段不代表证据链完整。",
+        "answer": "逐项核对证据支持与不确定性；本阶段由回答侧负责，Search 只交付证据。"
+      },
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "猫叫 Luna，不是仓鼠",
+          "use": "相关事实但不足以回答",
+          "sources": [
+            "answer_c6fd8ebd_abs:10"
+          ]
+        }
+      ]
+    },
+    "pv1": {
+      "name": "PV01 他人的绿植",
+      "q": "怎样让自己的居住空间更清新？",
+      "source": "PersonaMem-v2 · persona 521 / row-7 · who=others 仅用于复核",
+      "leftId": "history 107/108 · 待润色简介",
+      "left": "Mark Ellison 的办公室有一批绿植",
+      "rightId": "任务主体",
+      "right": "当前用户的生活空间",
+      "link": "不能转移归属",
+      "mark": "≠",
+      "add": "保存简介/引文的性质与人物 Mark；不能自动抽取为用户本人的偏好。",
+      "search": "检索时保留主体与引用语境，筛掉错误归属的画像证据。",
+      "answer": "可以一般性建议添置绿植；不能声称用户已有收藏绿植的爱好。",
+      "trap": "评分不能仅看答案是否提到植物，要看是否错误个性化。",
+      "document": "personamem-ownership-forgetting.md",
+      "data": {
+        "dataset": "persona",
+        "record": "persona-521",
+        "task": "row-7",
+        "turns": [
+          "107",
+          "108"
+        ],
+        "pack": "dataset/data/prepared/personamem-v2-research.json"
+      },
+      "checks": {
+        "add": "核对主体、时间、原文来源；答案和评估标签不得写入记忆。",
+        "search": "检查所需证据是否共同返回；命中一段不代表证据链完整。",
+        "answer": "逐项核对证据支持与不确定性；本阶段由回答侧负责，Search 只交付证据。"
+      },
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "用户要求润色另一人的简介",
+          "use": "归属上下文",
+          "sources": [
+            "107"
+          ]
+        },
+        {
+          "fact": "助手整理 Mark 的绿植简介",
+          "use": "他人信息，不是用户偏好",
+          "sources": [
+            "108"
+          ]
+        }
+      ]
+    },
+    "pv2": {
+      "name": "PV02 遗忘后的后院",
+      "q": "怎样在后院组织朋友聚会？",
+      "source": "PersonaMem-v2 · persona 737 / row-32 · 原历史 49–52",
+      "leftId": "先前话题",
+      "left": "助手建议在后院园艺",
+      "rightId": "用户的明确限制",
+      "right": "请忘记我喜欢后院园艺",
+      "link": "撤回可用偏好",
+      "mark": "→",
+      "add": "识别遗忘指令；阻止被撤回的偏好继续出现在活动记忆、摘要和检索结果中。",
+      "search": "后院聚会不应自动召回“用户喜欢园艺”；可以检索其余仍有效约束。",
+      "answer": "给出后院晚餐、灯光等一般建议，不用被遗忘偏好个性化。",
+      "trap": "不要把“忘记喜欢”改写成“讨厌”；也不能只把禁用说明和旧偏好一起交给回答模型就认为已删除。",
+      "document": "personamem-ownership-forgetting.md",
+      "data": {
+        "dataset": "persona",
+        "record": "persona-737",
+        "task": "row-32",
+        "turns": [
+          "49",
+          "50",
+          "51",
+          "52"
+        ],
+        "pack": "dataset/data/prepared/personamem-v2-research.json"
+      },
+      "checks": {
+        "add": "核对主体、时间、原文来源；答案和评估标签不得写入记忆。",
+        "search": "检查所需证据是否共同返回；命中一段不代表证据链完整。",
+        "answer": "逐项核对证据支持与不确定性；本阶段由回答侧负责，Search 只交付证据。"
+      },
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "园艺建议前的对话",
+          "use": "撤回前状态",
+          "sources": [
+            "49"
+          ]
+        },
+        {
+          "fact": "助手提出园艺建议",
+          "use": "助手建议",
+          "sources": [
+            "50"
+          ]
+        },
+        {
+          "fact": "明确忘记园艺偏好的请求",
+          "use": "记忆许可更新",
+          "sources": [
+            "51"
+          ]
+        },
+        {
+          "fact": "助手回应遗忘请求",
+          "use": "回应，不等于真实删除证明",
+          "sources": [
+            "52"
+          ]
+        }
+      ]
+    },
+    "m1": {
+      "name": "M01 最新关系的三跳",
+      "q": "Our Mutual Friend 作者的配偶，其国籍是什么？",
+      "source": "MemoryAgentBench · Conflict Resolution 第 0 行 / 问题 0 · 材料内虚构更新",
+      "leftId": "旧作者事实 107",
+      "left": "Charles Dickens",
+      "rightId": "新作者事实 146",
+      "right": "Charles Darwin",
+      "link": "按材料顺序更新",
+      "mark": "→",
+      "path": [
+        "作品 → Charles Darwin（146）",
+        "配偶 → Amala Paul（335）",
+        "国籍 → Belgium（322）"
+      ],
+      "add": "保存主体、关系、对象和编号版本；相同关系后续更新不能覆盖其他属性。",
+      "search": "先找最新作者，再扩展查配偶、国籍；每一步返回来源编号。",
+      "answer": "Belgium（比利时）；这是题内材料的答案，不是现实世界事实。",
+      "trap": "单次按问题相似度排序，可能只找到第一跳；依赖常识会把故意改写的数据纠正错。",
+      "document": "memoryagentbench-latest-path.md",
+      "data": {
+        "dataset": "mab",
+        "record": "cr-0",
+        "task": "q0",
+        "turns": [
+          "fact-107",
+          "fact-146",
+          "fact-164",
+          "fact-335",
+          "fact-294",
+          "fact-322"
+        ],
+        "pack": "dataset/data/prepared/memoryagentbench-cr-research.json"
+      },
+      "checks": {
+        "add": "核对主体、时间、原文来源；答案和评估标签不得写入记忆。",
+        "search": "检查所需证据是否共同返回；命中一段不代表证据链完整。",
+        "answer": "逐项核对证据支持与不确定性；本阶段由回答侧负责，Search 只交付证据。"
+      },
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "旧作者 Dickens",
+          "use": "已过时边",
+          "sources": [
+            "fact-107"
+          ]
+        },
+        {
+          "fact": "新作者 Darwin",
+          "use": "当前第一跳",
+          "sources": [
+            "fact-146"
+          ]
+        },
+        {
+          "fact": "旧配偶关系",
+          "use": "已过时边",
+          "sources": [
+            "fact-164"
+          ]
+        },
+        {
+          "fact": "新配偶 Amala",
+          "use": "当前第二跳",
+          "sources": [
+            "fact-335"
+          ]
+        },
+        {
+          "fact": "旧国籍关系",
+          "use": "已过时边",
+          "sources": [
+            "fact-294"
+          ]
+        },
+        {
+          "fact": "新国籍 Belgium",
+          "use": "当前第三跳",
+          "sources": [
+            "fact-322"
+          ]
+        }
+      ]
+    },
+    "v31": {
+      "name": "V301 未来反馈不能回填",
+      "q": "这次该把哪个候选内容排在第一？",
+      "source": "PersonaMem-v3 · persona 36 / recsys_2026-04-05_a2",
+      "leftId": "提问前 · 可见历史",
+      "left": "600 条事件；包含近期看过的相似内容",
+      "rightId": "同刻或提问之后 · 不可见历史",
+      "right": "1,632 条；含一小时后的 held-out 正反馈",
+      "link": "时间切面",
+      "mark": "│",
+      "add": "仅取事件 timestamp < 问题 timestamp；独立保存动作与内容身份，排除未来与生成标签。",
+      "search": "同时查相关偏好与近期接触/排除信息；看过不自动等于本次应再推荐。",
+      "answer": "作者首选候选 15；其未来正反馈只用于评估，不能作为回答时的证据。",
+      "trap": "这是推荐标签，不能假定历史唯一决定完整排序；hard negative 也不都代表讨厌。",
+      "document": "personamem-v3-time-feedback.md",
+      "data": {
+        "dataset": "pv3",
+        "record": "36:0017:recsys_2026-04-05_a2",
+        "task": "36:0017:recsys_2026-04-05_a2",
+        "turns": [
+          "event-325716",
+          "event-684397"
+        ],
+        "pack": "dataset/data/prepared/personamem-v3-research.json"
+      },
+      "checks": {
+        "add": "核对主体、时间、原文来源；答案和评估标签不得写入记忆。",
+        "search": "检查所需证据是否共同返回；命中一段不代表证据链完整。",
+        "answer": "逐项核对证据支持与不确定性；本阶段由回答侧负责，Search 只交付证据。"
+      },
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "查询前的内容消费事件",
+          "use": "可见反馈线索",
+          "sources": [
+            "event-325716"
+          ]
+        },
+        {
+          "fact": "另一条查询前的相关事件",
+          "use": "可见反馈线索",
+          "sources": [
+            "event-684397"
+          ]
+        }
+      ]
+    },
+    "v32": {
+      "name": "V302 帮忙计划但不要记住",
+      "q": "考虑日本旅行或本地旅行时，该权衡什么？",
+      "source": "PersonaMem-v3 · persona 68 / pshift_68_005_chatbot · event-987393",
+      "leftId": "conversation_json",
+      "left": "帮忙制定东京/京都七日行程",
+      "rightId": "user_message（对话内也有）",
+      "right": "不要记住日本旅行部分，但继续帮我计划",
+      "link": "当前帮助与长期记忆",
+      "mark": "≠",
+      "add": "同时读取会话与独立用户指令；当前任务信息不能无条件升级为长期偏好。",
+      "search": "尊重记忆限制，不能以过期旅行兴趣强推日本；当前明确提问仍可以得到帮助。",
+      "answer": "比较休假、费用、时差与休息需求；不自动沿用旧旅行偏好。",
+      "trap": "本条限制在对话和独立字段中都有；容易把继续帮助误当成允许长期记忆。精确失效时间标签不能送入 Add。",
+      "document": "personamem-v3-time-feedback.md",
+      "data": {
+        "dataset": "pv3",
+        "record": "68:0142:pshift_68_005_chatbot",
+        "task": "68:0142:pshift_68_005_chatbot",
+        "turns": [
+          "event-987393"
+        ],
+        "pack": "dataset/data/prepared/personamem-v3-research.json"
+      },
+      "checks": {
+        "add": "核对主体、时间、原文来源；答案和评估标签不得写入记忆。",
+        "search": "检查所需证据是否共同返回；命中一段不代表证据链完整。",
+        "answer": "逐项核对证据支持与不确定性；本阶段由回答侧负责，Search 只交付证据。"
+      },
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "旅行规划需求与不要记住的许可限制",
+          "use": "短期使用与长期记忆分开",
+          "sources": [
+            "event-987393"
+          ]
+        }
+      ]
+    },
+    "lm4": {
+      "name": "LM04 重复提及与支出去重",
+      "q": "今年自行车相关支出总共是多少？",
+      "source": "LongMemEval-S · question_id=gpt4_d84a3211 · 中文研究转述；完整原文保留在本地研究包",
+      "leftId": "4 条标记消息",
+      "left": "链条 $25、车灯 $40、头盔 $120；车灯被多次提及",
+      "rightId": "3 项独立支出",
+      "right": "$25 + $40 + $120 = $185",
+      "link": "提及 → 事件去重",
+      "mark": "→",
+      "add": "分开保存消费事件与事件提及；金额、物品、主体、时间和原文均可追溯。",
+      "search": "召回维修、零件、装备等类别；检索四段来源并核查车灯是否同一次购买。",
+      "answer": "去重后合计 $185，并给出去重依据。",
+      "trap": "四条 has_answer 不是四次消费；重复金额也不自动意味着同一事件。",
+      "path": [
+        "4 段来源",
+        "链条 25 / 车灯 40 / 头盔 120",
+        "合并车灯的重复提及",
+        "合计 185"
+      ],
+      "document": "longmemeval-aggregation-preference-audit.md",
+      "data": {
+        "dataset": "longmem",
+        "pack": "dataset/data/prepared/longmemeval-research.json",
+        "record": "gpt4_d84a3211",
+        "task": "question",
+        "turns": [
+          "answer_2880eb6c_2:2",
+          "answer_2880eb6c_4:6",
+          "answer_2880eb6c_1:6",
+          "answer_2880eb6c_3:8"
+        ]
+      },
+      "checks": {
+        "add": "四条 has_answer 不是四次消费；重复金额也不自动意味着同一事件。",
+        "search": "将每项必要事实与来源对应；逐个标出已返回、遗漏和来源不确定。",
+        "answer": "检验证据集合是否足以支持结论；保留原始标注与独立复核的区别。"
+      },
+      "watch": {
+        "add": "观察事实与重复事件的保存结果；当前 BM25 仅原样保存，不实现上述理论。",
+        "search": "比较完整历史和案例片段的候选排序；区分筛选范围的收益与方法能力。",
+        "answer": "展示实际上下文和答案；尚未运行回答侧时不能推断答对。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "链条 $25、车灯 $40",
+          "use": "两笔支出",
+          "sources": [
+            "answer_2880eb6c_2:2"
+          ]
+        },
+        {
+          "fact": "再次提到车灯 $40",
+          "use": "疑似同一事件的提及",
+          "sources": [
+            "answer_2880eb6c_4:6"
+          ]
+        },
+        {
+          "fact": "头盔 $120",
+          "use": "另一笔支出",
+          "sources": [
+            "answer_2880eb6c_1:6"
+          ]
+        },
+        {
+          "fact": "再次提到车灯 $40",
+          "use": "疑似同一事件的提及",
+          "sources": [
+            "answer_2880eb6c_3:8"
+          ]
+        }
+      ],
+      "studies": [
+        {
+          "run_id": "hundred30-06-longmemeval",
+          "dataset_pack_sha256": "b40d0aed37feae15fa6f6cb66d5d15a0cc031027afa02d54b8e28c3bcecbd474",
+          "title": "自行车支出：25 + 40 + 120，为什么只算出65？",
+          "theory": {
+            "evidence": "链条25美元、车灯40美元、头盔120美元；车灯多次提及但不能重复计费。",
+            "add": "原文永久作为真源；派生笔记区分购买事件与重复提及，不预先只保留维修类别。",
+            "search": "每项独立支出都有一条可见原文；补查应围绕缺失类别，不能反复搜索总支出或已找到的车灯。",
+            "answer": "核对同一车灯的重复提及后相加为185美元，不能把没有检索到的头盔当作没有购买。"
+          },
+          "observed": "四段标注来源都存在于完整融合排序；头盔120没有进入Select可见候选。补查total bike-related expenses与bike lights cost未补齐它；实际回答65美元。",
+          "limits": "未进入可见候选不等于Select主动拒绝；不能用提高Select提示词准确率来解决上游不可见。",
+          "next_experiment": "冻结原库比较候选分配与补查计划；分别记录排序中、披露中、Select中、最终交付中的三笔支出。",
+          "span_ids": [
+            "11389ce0e207472695ddb804199196d5",
+            "300388394d4246a79c22e0164e957c71",
+            "39c15f8378cc46308ef515adf658adec",
+            "f11fe8fb311c4aa2a3c21b84bc14c86e",
+            "6f474e54feda424bae64446ecb41aa07",
+            "a3dc9af042734ecfb0b32c621c516b91",
+            "5167334b7bc44895a0f99f086d3853b6",
+            "e98eb4f57f8447be83e4489110627d4a",
+            "38463fb7c27e451ebd6adb5621a7d360"
+          ],
+          "basis": "已保存原文、模型可见材料、Search交付、Answer与独立复核；非新实验"
+        }
+      ]
+    },
+    "lm5": {
+      "name": "LM05 同口径分子与分母",
+      "q": "公司领导岗位中女性占百分之多少？",
+      "source": "LongMemEval-S · question_id=099778bb · 中文研究转述；完整原文保留在本地研究包",
+      "leftId": "answer_80d6d664_2:2",
+      "left": "5 月 21 日：女性占 20 个领导岗位",
+      "rightId": "answer_80d6d664_1:0",
+      "right": "5 月 30 日：共 100 个领导岗位",
+      "link": "同一公司、同一统计口径",
+      "mark": "→",
+      "add": "记录女性岗位数与岗位总数、公司主体、日期、来源；20 是人数/岗位数而非百分比。",
+      "search": "分别找齐分子与分母，核对主体、统计对象和时间有效性。",
+      "answer": "20 ÷ 100 × 100% = 20%。",
+      "trap": "只检索领导多样性的句子会缺分母；全体员工数不能替代领导岗位数。",
+      "path": [
+        "女性领导岗位 20",
+        "领导岗位总数 100",
+        "核对口径与时间",
+        "20%"
+      ],
+      "document": "longmemeval-aggregation-preference-audit.md",
+      "data": {
+        "dataset": "longmem",
+        "pack": "dataset/data/prepared/longmemeval-research.json",
+        "record": "099778bb",
+        "task": "question",
+        "turns": [
+          "answer_80d6d664_2:2",
+          "answer_80d6d664_1:0"
+        ]
+      },
+      "checks": {
+        "add": "只检索领导多样性的句子会缺分母；全体员工数不能替代领导岗位数。",
+        "search": "将每项必要事实与来源对应；逐个标出已返回、遗漏和来源不确定。",
+        "answer": "检验证据集合是否足以支持结论；保留原始标注与独立复核的区别。"
+      },
+      "watch": {
+        "add": "观察事实与重复事件的保存结果；当前 BM25 仅原样保存，不实现上述理论。",
+        "search": "比较完整历史和案例片段的候选排序；区分筛选范围的收益与方法能力。",
+        "answer": "展示实际上下文和答案；尚未运行回答侧时不能推断答对。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "女性领导岗位 20 个",
+          "use": "分子",
+          "sources": [
+            "answer_80d6d664_2:2"
+          ]
+        },
+        {
+          "fact": "公司领导岗位共 100 个",
+          "use": "分母",
+          "sources": [
+            "answer_80d6d664_1:0"
+          ]
+        }
+      ],
+      "studies": [
+        {
+          "run_id": "hundred30-04-longmemeval",
+          "dataset_pack_sha256": "8f83368004028a6172693f49b39e6f19eaa47e2b50f4c58114a128b179912302",
+          "title": "女性领导比例：两个分散数字可正确组合",
+          "theory": {
+            "evidence": "同一公司女性领导20人、全部领导100人，来自不同会话。",
+            "add": "保持人数、主体、统计口径与时间，不把女性员工总数混成女性领导数。",
+            "search": "围绕分子与分母分别寻找，检验二者是否属于同一公司与统计范围。",
+            "answer": "20 ÷ 100 = 20%；证据缺一个就不能计算。"
+          },
+          "observed": "这次返回了必要的两个数字，实际回答20%，独立复核通过。",
+          "limits": "证明这一题能组合证据，不证明语义图已建好或所有多跳题已解决。",
+          "next_experiment": "作为正控制；候选或装箱改动不能丢掉任一个统计口径。",
+          "span_ids": [
+            "21012997eee24f669984226b792c1fed",
+            "dd0b61a7b8484a4cb6dedeabe1636939",
+            "fd0d5f07854e421398e2bd3b5e8e86f4",
+            "4542456b57374d5c89385157092a9515",
+            "8818cf1290a34271bf3b522018deecf9",
+            "6a455e28fb604ebfbd8206f8c1f39186",
+            "0db53370cee147b2bc05836973a11d56",
+            "7e7212dd65724c8a95f798d87ee3ca29",
+            "13f53dc811444a1b9980f97fc1c49ad8"
+          ],
+          "basis": "已保存原文、模型可见材料、Search交付、Answer与独立复核；非新实验"
+        }
+      ]
+    },
+    "lm6": {
+      "name": "LM06 偏好迁移与目的地分离",
+      "q": "推荐迈阿密的酒店时，应使用哪些已知偏好？",
+      "source": "LongMemEval-S · question_id=0edc2aef · 中文研究转述；完整原文保留在本地研究包",
+      "leftId": "answer_d586e9cd:0 / :2",
+      "left": "旧旅行去 Seattle；用户喜欢好景观、屋顶泳池或阳台热水浴缸",
+      "rightId": "当前任务",
+      "right": "目的地是 Miami；旧偏好仍有关联",
+      "link": "迁移偏好、更新场景",
+      "mark": "→",
+      "add": "将用户稳定偏好与一次旅行地点分开；助手声称的酒店设施保留角色，不升级为现实事实。",
+      "search": "从住宿选择标准召回旧地名会话里的景观/设施偏好，避免仅按 Miami 匹配。",
+      "answer": "按景观、特色设施约束筛选；当前酒店事实需另行验证，不能复制旧酒店促销。",
+      "trap": "原始答案是推荐约束，不是一个唯一酒店名；字面召回和建议质量是不同指标。",
+      "path": [
+        "Seattle 会话",
+        "用户景观 / 特色设施偏好",
+        "当前 Miami 场景",
+        "受偏好约束的建议"
+      ],
+      "document": "longmemeval-aggregation-preference-audit.md",
+      "data": {
+        "dataset": "longmem",
+        "pack": "dataset/data/prepared/longmemeval-research.json",
+        "record": "0edc2aef",
+        "task": "question",
+        "turns": [
+          "answer_d586e9cd:0",
+          "answer_d586e9cd:2"
+        ]
+      },
+      "checks": {
+        "add": "原始答案是推荐约束，不是一个唯一酒店名；字面召回和建议质量是不同指标。",
+        "search": "将每项必要事实与来源对应；逐个标出已返回、遗漏和来源不确定。",
+        "answer": "检验证据集合是否足以支持结论；保留原始标注与独立复核的区别。"
+      },
+      "watch": {
+        "add": "观察事实与重复事件的保存结果；当前 BM25 仅原样保存，不实现上述理论。",
+        "search": "比较完整历史和案例片段的候选排序；区分筛选范围的收益与方法能力。",
+        "answer": "展示实际上下文和答案；尚未运行回答侧时不能推断答对。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "Seattle 旅行与好景观要求",
+          "use": "场景与偏好分开",
+          "sources": [
+            "answer_d586e9cd:0"
+          ]
+        },
+        {
+          "fact": "喜欢屋顶泳池、阳台热水浴缸",
+          "use": "核心偏好，作者标记",
+          "sources": [
+            "answer_d586e9cd:2"
+          ]
+        }
+      ]
+    },
+    "lm7": {
+      "name": "LM07 金标准疑点与事件复核",
+      "q": "需要从商店领取或退回多少件衣物？",
+      "source": "LongMemEval-S · question_id=0a995998 · 中文研究转述；完整原文保留在本地研究包",
+      "leftId": "作者参考答案",
+      "left": "3；来自三个标记来源单元",
+      "rightId": "当前证据复核",
+      "right": "一件外套、一笔重复叙述的换靴事件；靴子状态措辞有歧义",
+      "link": "保留源答案与复核分歧",
+      "mark": "→",
+      "add": "保存衣物身份、Zara / 2 月 5 日、退货/换货/待取状态和来源，标记两段靴子可能同一事件。",
+      "search": "返回外套与两段靴子，并继续寻找第三项或澄清，保留相反措辞。",
+      "answer": "源答案为 3；目前标记证据只清楚支持两类物品，先呈现歧义，不强行定分。",
+      "trap": "已复核标记会话；尚未排查完整历史的全部未标记事实。不能宣布金标准已被推翻。",
+      "path": [
+        "3 个标记单元",
+        "两段靴子同店同日",
+        "去重 / 状态歧义",
+        "暂缓唯一答案判定"
+      ],
+      "document": "longmemeval-aggregation-preference-audit.md",
+      "data": {
+        "dataset": "longmem",
+        "pack": "dataset/data/prepared/longmemeval-research.json",
+        "record": "0a995998",
+        "task": "question",
+        "turns": [
+          "answer_afa9873b_2:10",
+          "answer_afa9873b_3:6",
+          "answer_afa9873b_1:4"
+        ]
+      },
+      "checks": {
+        "add": "已复核标记会话；尚未排查完整历史的全部未标记事实。不能宣布金标准已被推翻。",
+        "search": "将每项必要事实与来源对应；逐个标出已返回、遗漏和来源不确定。",
+        "answer": "检验证据集合是否足以支持结论；保留原始标注与独立复核的区别。"
+      },
+      "watch": {
+        "add": "观察事实与重复事件的保存结果；当前 BM25 仅原样保存，不实现上述理论。",
+        "search": "比较完整历史和案例片段的候选排序；区分筛选范围的收益与方法能力。",
+        "answer": "展示实际上下文和答案；尚未运行回答侧时不能推断答对。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "待取的干洗外套",
+          "use": "独立待办",
+          "sources": [
+            "answer_afa9873b_2:10"
+          ]
+        },
+        {
+          "fact": "Zara 靴子已换货但待取，措辞含需退回",
+          "use": "事件状态歧义",
+          "sources": [
+            "answer_afa9873b_3:6"
+          ]
+        },
+        {
+          "fact": "同店同日换靴子，新靴待取",
+          "use": "可能重复事件",
+          "sources": [
+            "answer_afa9873b_1:4"
+          ]
+        }
+      ]
+    },
+    "l4": {
+      "name": "L04 共享兴趣的多证据覆盖",
+      "q": "Joanna 和 Nate 共享哪些兴趣？",
+      "source": "来源：LoCoMo conv-42 / qa-1 · 多会话标注",
+      "leftId": "7 个作者证据段",
+      "left": "D1:10、D1:11、D1:12、D3:4、D4:9、D10:9、D20:2",
+      "link": "跨会话合并",
+      "rightId": "回答输出",
+      "right": "只合并两人的共同兴趣，不把单人的兴趣当共同项",
+      "add": "按人物、兴趣和来源保存多次提及；不要把作者证据列表写进记忆。",
+      "search": "先分别召回 Joanna 与 Nate 的兴趣，再求交集并保留每个结论的至少一条支持来源。",
+      "answer": "列出共同兴趣，并说明证据来自哪些会话；未出现的共同项不要补造。",
+      "trap": "只命中一个人的兴趣，或把同一人多次提及计成多个共同兴趣。",
+      "document": "locomo-shared-interest.md",
+      "mark": "∩",
+      "data": {
+        "dataset": "locomo",
+        "record": "conv-42",
+        "task": "qa-1",
+        "turns": [
+          "D1:10",
+          "D1:11",
+          "D1:12",
+          "D3:4",
+          "D4:9",
+          "D10:9",
+          "D20:2"
+        ],
+        "pack": "dataset/data/prepared/locomo-full.json"
+      },
+      "checks": {
+        "add": "保留人物、兴趣、会话日期与来源；合并是回答阶段的关系运算。",
+        "search": "检查两位人物的证据是否都返回，完整链路不能只看单条命中。",
+        "answer": "先按人物归属分组，再计算交集；引用不足时明确不确定。"
+      },
+      "watch": {
+        "add": "观察同一兴趣的多次写入和人物归属。",
+        "search": "观察候选覆盖、去重和交集输入；区分未命中与未采集。",
+        "answer": "记录实际采用的两人证据和交集结果。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "Joanna 的兴趣证据",
+          "use": "交集左侧",
+          "sources": [
+            "D1:10",
+            "D1:11",
+            "D1:12",
+            "D3:4",
+            "D4:9",
+            "D10:9",
+            "D20:2"
+          ]
+        },
+        {
+          "fact": "Nate 的兴趣证据",
+          "use": "交集右侧",
+          "sources": [
+            "D1:10",
+            "D1:11",
+            "D1:12",
+            "D3:4",
+            "D4:9",
+            "D10:9",
+            "D20:2"
+          ]
+        }
+      ]
+    },
+    "b3": {
+      "name": "B03 事件顺序与五项约束",
+      "q": "城市自动补全功能的五个实现关注点按什么顺序出现？",
+      "source": "来源：BEAM conversation_id=2 · event_ordering:0",
+      "leftId": "五个阶段",
+      "left": "防抖、慢响应、快速输入、下拉与错误、监听器清理",
+      "link": "出现顺序",
+      "rightId": "输出约束",
+      "right": "只能给五项且保持原顺序",
+      "add": "保留每次讨论的主题、发生顺序、会话来源；不要把参考答案或 rubric 写入历史。",
+      "search": "召回五个不同时间点的实现讨论，按 source/session 顺序重排。",
+      "answer": "严格输出五项；缺一项或改变顺序都算工作失败。",
+      "trap": "语义相似的错误处理段落会被合并，或返回超过五项。",
+      "document": "beam-ordering-and-constraints.md",
+      "mark": "⇢",
+      "data": {
+        "dataset": "beam",
+        "record": "2",
+        "task": "event_ordering:0",
+        "turns": [],
+        "pack": "dataset/data/prepared/beam-update-cases.json"
+      },
+      "checks": {
+        "add": "保存主题与来源顺序，不只保存最终摘要。",
+        "search": "验证五个阶段是否都覆盖并可排序；无证据映射时标记 ungraded。",
+        "answer": "遵守数量和顺序约束；不能用 rubric 补齐缺失内容。"
+      },
+      "watch": {
+        "add": "观察事件顺序字段是否保留。",
+        "search": "观察候选按时间/来源排序，记录未选阶段。",
+        "answer": "记录输出项数量、顺序和实际上下文。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "五个实现关注点及其出现顺序",
+          "use": "受约束顺序回答",
+          "sources": []
+        }
+      ]
+    },
+    "c2": {
+      "name": "C02 条件税务分解与未知信息",
+      "q": "第二笔和解金中哪些部分应纳税？",
+      "source": "来源：CL-bench Life · settlement 任务 · rubric 仅评估侧",
+      "leftId": "可计算部分",
+      "left": "每月 500 美元中损失扶养 65、一般损害 435；利息 2,000",
+      "link": "条件分支",
+      "rightId": "未知条件",
+      "right": "一般损害是否因身体伤害而来未提供",
+      "add": "保留文件规则、金额、适用条件和来源；不能把上一笔和解性质迁移到新一笔。",
+      "search": "同时召回计算规则和税务条件，避免只返回金额或上一案例标签。",
+      "answer": "明确 65 美元与 2,000 美元规则；435 美元必须条件化回答，先指出缺少索赔性质。",
+      "trap": "把新和解自动当成 wrongful-death，或对 435 美元给绝对结论。",
+      "document": "clbench-conditional-taxonomy.md",
+      "mark": "?",
+      "data": {
+        "dataset": "life",
+        "record": "75121251-319e-f2d7-985c-112d0f76579f",
+        "task": "75121251-319e-f2d7-985c-112d0f76579f",
+        "turns": [],
+        "pack": "dataset/data/prepared/clbench-life-extra.json"
+      },
+      "checks": {
+        "add": "将规则、数字和条件拆开保存并标出处。",
+        "search": "检查规则证据与当前实例证据是否都在，不能拿 rubric 当记忆。",
+        "answer": "展示计算并保留条件未知；这是条件推理，不是单值分类。"
+      },
+      "watch": {
+        "add": "观察结构化金额与条件是否共同进入记忆。",
+        "search": "观察候选是否覆盖规则、文档和当前实例。",
+        "answer": "记录采用的证据和条件分支，不以格式完整代替正确性。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "损失扶养 13% = 65 美元",
+          "use": "非应税规则",
+          "sources": []
+        },
+        {
+          "fact": "一般损害 435 美元",
+          "use": "条件分支",
+          "sources": []
+        },
+        {
+          "fact": "延期利息 2,000 美元",
+          "use": "应税规则",
+          "sources": []
+        }
+      ],
+      "studies": [
+        {
+          "run_id": "hundred30-23-clbench-life",
+          "dataset_pack_sha256": "402acdbabab99f95f247ac814a1138ca3f58cebaa9477f7653dff8adf398bab2",
+          "title": "条件材料：找到了规则，还要判断它适用于哪件事",
+          "theory": {
+            "evidence": "给定文件区分loss of financial support与lost wages；新旧赔偿事实和有无身体伤害条件不同。",
+            "add": "保存条件、例外及文件来源；以前一次赔偿的事实不能自动继承到新一次。",
+            "search": "同时取规则和当前事件事实，缺条件就保留未知，不只检索词面相似的段落。",
+            "answer": "严格依给定材料作条件说明；尚缺事实时请求补充，不能把旧事件背景当新事件事实。"
+          },
+          "observed": "相关Non-Taxable条目已在交付证据中；Answer混淆两种损失，并把旧赔偿背景套入新赔偿。",
+          "limits": "这是材料遵循研究，不是现实税务意见；不以数据集表格替代现实法律。",
+          "next_experiment": "对照规则卡加适用条件/当前事实的原文组合，分开评估检索覆盖与Answer应用。",
+          "span_ids": [
+            "eb5023a194f84959aec67a437676db2a",
+            "6e269928e3a54dffb065e2eb875be8f4",
+            "baf3b1f8c9a743d8b468e8aaa3ab45df",
+            "ad4af185381c4b10957d455dc005aadd",
+            "204cefcff3be4deea0d7e71495459e35",
+            "001c8aa81f0547bcb3d2a65bcf79f201",
+            "e509a081ab4543fea6aea10c5127f9b2",
+            "5120f435c1314c9e9d2036754f471dcd",
+            "dd8fb42cd4364b768f51508143271061"
+          ],
+          "basis": "已保存原文、模型可见材料、Search交付、Answer与独立复核；非新实验"
+        }
+      ]
+    },
+    "pv3": {
+      "name": "PV03 敏感信息与最小化记忆",
+      "q": "保险理赔清单和传输敏感信息时应注意什么？",
+      "source": "来源：PersonaMem-v2 persona-737 / row-27 · sensitive_info 标注",
+      "leftId": "当前请求",
+      "left": "包含社会安全号码和保险材料准备",
+      "link": "任务可用 ≠ 长期画像",
+      "rightId": "保护边界",
+      "right": "提供安全建议，不把敏感号码作为长期偏好或回答上下文复述",
+      "add": "只保存必要的安全偏好或许可；原始号码属于当前任务敏感输入，不应沉淀为画像。",
+      "search": "若需要个性化，只召回安全相关的明确长期偏好；避免把原始敏感字段返回。",
+      "answer": "给出最小化、遮盖、官方渠道等建议；不重复泄露号码。",
+      "trap": "把输入中的号码写入记忆，或以人物画像字段解释当前请求。",
+      "document": "personamem-sensitive-minimization.md",
+      "mark": "⊙",
+      "data": {
+        "dataset": "persona",
+        "record": "persona-737",
+        "task": "row-27",
+        "turns": [],
+        "pack": "dataset/data/prepared/personamem-v2-research.json"
+      },
+      "checks": {
+        "add": "分离当前敏感任务和可长期保留的用户偏好，默认不保存原始标识。",
+        "search": "检查结果是否泄露敏感字段；需要时只返回脱敏规则。",
+        "answer": "回答不复述秘密；将安全建议和记忆使用边界分开。"
+      },
+      "watch": {
+        "add": "记录敏感字段是否被拒绝写入或被最小化。",
+        "search": "记录脱敏、过滤和候选来源；缺少隐私事件也要标未知。",
+        "answer": "记录最终上下文是否含敏感原文和响应是否泄露。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "当前请求含敏感信息",
+          "use": "触发最小化处理",
+          "sources": []
+        },
+        {
+          "fact": "保险材料与安全传输要求",
+          "use": "当前任务回答",
+          "sources": []
+        }
+      ]
+    },
+    "v33": {
+      "name": "V303 隐式反馈不等于永久厌恶",
+      "q": "应如何利用历史互动为用户排序内容？",
+      "source": "来源：PersonaMem-v3 · persona 36 推荐切片",
+      "leftId": "可见活动",
+      "left": "停留与观看行为，分别对应内容和时间",
+      "link": "反馈语义",
+      "rightId": "候选排序",
+      "right": "把互动作为线索并保留不确定性，不把一次跳过升级成永久拒绝",
+      "add": "保存动作、内容身份和时间；不直接保存作者生成的 implicit_negative 标签。",
+      "search": "按当前候选查找近期相关互动与显式反馈，区分看过、停留和明确喜欢。",
+      "answer": "可以解释排序依据，但不能从单一隐式动作断言用户厌恶。",
+      "trap": "把 hard negative 或跳过动作直接当作长期负偏好；把未来正反馈倒灌到历史。",
+      "document": "personamem-v3-feedback-caution.md",
+      "mark": "≈",
+      "data": {
+        "dataset": "pv3",
+        "record": "36:0017:recsys_2026-04-05_a2",
+        "task": "36:0017:recsys_2026-04-05_a2",
+        "turns": [
+          "event-325716",
+          "event-684397"
+        ],
+        "pack": "dataset/data/prepared/personamem-v3-research.json"
+      },
+      "checks": {
+        "add": "保留动作原值、时间与内容，不把推断标签升级成事实。",
+        "search": "只用 query 时刻之前的活动；区分近期互动和稳定偏好。",
+        "answer": "把推荐作为带不确定性的排序，不泄漏未来标签。"
+      },
+      "watch": {
+        "add": "观察时间切片、动作和内容身份是否完整。",
+        "search": "观察未来事件是否被排除，候选是否引用来源事件。",
+        "answer": "记录排序理由与不确定性；不可只看 top-1。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "query 前的两条互动事件",
+          "use": "排序线索",
+          "sources": [
+            "event-325716",
+            "event-684397"
+          ]
+        }
+      ]
+    },
+    "pv4": {
+      "name": "PV04 遗忘后的长期偏好不回流",
+      "q": "为新居礼物推荐什么？",
+      "source": "来源：PersonaMem-v2 persona-737 / row-29 · ask_to_forget 与距离标注",
+      "leftId": "历史偏好",
+      "left": "曾偏好手工艺品，但明确要求忘记",
+      "link": "撤回",
+      "rightId": "当前问题",
+      "right": "应给一般礼物建议，不重新使用已撤回偏好",
+      "add": "保存明确撤回事件及其作用域；删除/失效后不得从旧片段重新生成该偏好。",
+      "search": "当前查询可检索通用礼物信息，但不能返回被撤回的手工艺偏好。",
+      "answer": "给出不依赖已撤回偏好的实用建议，并不提及被忘记内容。",
+      "trap": "只删除一条摘要，旧对话仍被向量召回；或把“继续回答”误解为恢复长期偏好。",
+      "document": "personamem-sensitive-minimization.md",
+      "mark": "⌫",
+      "data": {
+        "dataset": "persona",
+        "record": "persona-737",
+        "task": "row-29",
+        "turns": [],
+        "pack": "dataset/data/prepared/personamem-v2-research.json"
+      },
+      "checks": {
+        "add": "把记忆撤回当作状态变更，检查旧来源、摘要和索引是否共同失效。",
+        "search": "检查结果不含撤回偏好；若返回旧证据必须报告删除失败。",
+        "answer": "回答不能引用撤回偏好，也不能假装已完成删除。"
+      },
+      "watch": {
+        "add": "记录撤回请求、删除范围和残留索引检查。",
+        "search": "记录过滤/删除结果与残留候选。",
+        "answer": "记录上下文是否含撤回内容和回答是否暗示其存在。"
+      },
+      "evidence_plan": [
+        {
+          "fact": "明确的 ask_to_forget 请求",
+          "use": "状态变更",
+          "sources": []
+        },
+        {
+          "fact": "当前 housewarming 查询",
+          "use": "撤回后回答",
+          "sources": []
+        }
+      ]
+    },
+    "r01": {
+      "name": "家庭活动：相似聊天挤掉了不同事件",
+      "q": "What activities has Melanie done with her family?",
+      "source": "locomo · conv-26 · qa-38；下文中文为研究转述",
+      "leftId": "必要证据",
+      "left": "陶艺、绘画、露营、博物馆、游泳、徒步分散在不同会话；同一次露营也有多段回应。",
+      "link": "保存 → 找全 → 约束结论",
+      "rightId": "可回答条件",
+      "right": "列出有原文支持的不同活动，不把一段丰富的露营描述当作完整答案。",
+      "mark": "→",
+      "add": "保存活动事件及人物；祝贺和复述不能代替事件本身，也不能每次都变成新的活动。",
+      "search": "把问题视为活动集合；按不同事件覆盖检索，并用缺口查询寻找未覆盖的活动类别。",
+      "answer": "列出有原文支持的不同活动，不把一段丰富的露营描述当作完整答案。",
+      "trap": "这是召回及候选覆盖问题，不能归因于最终装箱；标注来源的字面覆盖也不等同于全部事实覆盖。",
+      "path": [
+        "保存活动事件及人物；祝贺和复述不能代替事件本身，也不能每次都变成新的活动。",
+        "把问题视为活动集合；按不同事件覆盖检索，并用缺口查询寻找未覆盖的活动类别。",
+        "列出有原文支持的不同活动，不把一段丰富的露营描述当作完整答案。"
+      ],
+      "document": "2026-10-30-real-evidence-studies.md",
+      "data": {
+        "dataset": "locomo",
+        "pack": "dataset/data/prepared/locomo-full.json",
+        "record": "conv-26",
+        "task": "qa-38",
+        "turns": [
+          "D8:4",
+          "D8:6",
+          "D9:1",
+          "D6:4",
+          "D1:18",
+          "D3:14"
+        ]
+      },
+      "checks": {
+        "add": "保存活动事件及人物；祝贺和复述不能代替事件本身，也不能每次都变成新的活动。",
+        "search": "把问题视为活动集合；按不同事件覆盖检索，并用缺口查询寻找未覆盖的活动类别。",
+        "answer": "列出有原文支持的不同活动，不把一段丰富的露营描述当作完整答案。"
+      },
+      "watch": {
+        "add": "读取真实 Add 与 Reflection 轨迹；不以成功状态代替内容质量。",
+        "search": "对照候选、模型输入与最终交付。",
+        "answer": "独立展示机器评分与 Codex 复核。"
+      },
+      "evidence_plan": [],
+      "studies": [
+        {
+          "run_id": "hundred30-00-locomo",
+          "dataset_pack_sha256": "7e686f5d42161c463682b1f141074ed476b29900b7fd90f6c55cd31a65a395cc",
+          "title": "家庭活动：相似聊天挤掉了不同事件",
+          "theory": {
+            "evidence": "陶艺、绘画、露营、博物馆、游泳、徒步分散在不同会话；同一次露营也有多段回应。",
+            "add": "保存活动事件及人物；祝贺和复述不能代替事件本身，也不能每次都变成新的活动。",
+            "search": "把问题视为活动集合；按不同事件覆盖检索，并用缺口查询寻找未覆盖的活动类别。",
+            "answer": "列出有原文支持的不同活动，不把一段丰富的露营描述当作完整答案。"
+          },
+          "observed": "24张候选集中于露营及相关闲聊；Select选5条且未提出补查。6段标注来源中2段未召回，4段召回中仅1段完整进入可见候选。最终装箱没有再丢条目，回答漏陶艺、绘画、游泳。",
+          "limits": "这是召回及候选覆盖问题，不能归因于最终装箱；标注来源的字面覆盖也不等同于全部事实覆盖。",
+          "next_experiment": "同一冻结库对照事件多样化候选；必要活动覆盖上升，同时控制闲聊比例和模型调用数。",
+          "span_ids": [
+            "7ed96097f85d44ac86e9546340325108",
+            "3d8a319cb7534fb38289c259100e2cf3",
+            "20ab16b5314d43338b5a0db9b9f800bd",
+            "eebe7ab74ce042db9eaa7087b74a650a",
+            "81a3dd5d2dab41a4bb5c8b7eadb09950",
+            "139dc0427edd40a18cf2134b57ba198a"
+          ],
+          "basis": "已保存原文、模型可见材料、Search交付、Answer与独立复核；非新实验"
+        }
+      ]
+    },
+    "r04": {
+      "name": "波士顿会面：想去不等于已经见面",
+      "q": "Based on the conversation, did Calvin and Dave have a meeting in Boston between August and November 2023? Answer in yes or no.",
+      "source": "locomo · conv-50 · qa-42；下文中文为研究转述",
+      "leftId": "必要证据",
+      "left": "Calvin提到会见艺术家；Dave表达希望以后前往，人物与事件状态不同。",
+      "link": "保存 → 找全 → 约束结论",
+      "rightId": "可回答条件",
+      "right": "不能从两人都提到波士顿推导他们在那里见过面。",
+      "mark": "→",
+      "add": "保留说话者、参与者和“希望/计划/已发生”的语气。",
+      "search": "寻找双方实际会面证据，同时保留否定问题前提的未来意愿片段。",
+      "answer": "不能从两人都提到波士顿推导他们在那里见过面。",
+      "trap": "此题不全是检索失败；外部Answer对已有证据的误用要单独记录。",
+      "path": [
+        "保留说话者、参与者和“希望/计划/已发生”的语气。",
+        "寻找双方实际会面证据，同时保留否定问题前提的未来意愿片段。",
+        "不能从两人都提到波士顿推导他们在那里见过面。"
+      ],
+      "document": "2026-10-30-real-evidence-studies.md",
+      "data": {
+        "dataset": "locomo",
+        "pack": "dataset/data/prepared/locomo-full.json",
+        "record": "conv-50",
+        "task": "qa-42",
+        "turns": []
+      },
+      "checks": {
+        "add": "保留说话者、参与者和“希望/计划/已发生”的语气。",
+        "search": "寻找双方实际会面证据，同时保留否定问题前提的未来意愿片段。",
+        "answer": "不能从两人都提到波士顿推导他们在那里见过面。"
+      },
+      "watch": {
+        "add": "读取真实 Add 与 Reflection 轨迹；不以成功状态代替内容质量。",
+        "search": "对照候选、模型输入与最终交付。",
+        "answer": "独立展示机器评分与 Codex 复核。"
+      },
+      "evidence_plan": [],
+      "studies": [
+        {
+          "run_id": "hundred30-02-locomo",
+          "dataset_pack_sha256": "70e4857c95dd75d10d15ddfed554d0d09b070229554e65445e529f32b36b7e6f",
+          "title": "波士顿会面：想去不等于已经见面",
+          "theory": {
+            "evidence": "Calvin提到会见艺术家；Dave表达希望以后前往，人物与事件状态不同。",
+            "add": "保留说话者、参与者和“希望/计划/已发生”的语气。",
+            "search": "寻找双方实际会面证据，同时保留否定问题前提的未来意愿片段。",
+            "answer": "不能从两人都提到波士顿推导他们在那里见过面。"
+          },
+          "observed": "交付材料包含未来意愿与不同人物的活动；Answer仍回答两人已会面。",
+          "limits": "此题不全是检索失败；外部Answer对已有证据的误用要单独记录。",
+          "next_experiment": "用同一证据测试更清楚的人物/状态标题；禁止把新增解释包装成原文事实。",
+          "span_ids": [
+            "86eb0ad7c3184b4cb54eae5565669979",
+            "df59ccf35b0d499cbb6c980458a53351",
+            "64c8d6b8cd9649a38986fe4c8c90fd3c",
+            "275162e040e041c1af26d3adc9b17222",
+            "f7f69cb853654954931b08b442d774e3",
+            "9900c825628d4286af6c3b11dd743299"
+          ],
+          "basis": "已保存原文、模型可见材料、Search交付、Answer与独立复核；非新实验"
+        }
+      ]
+    },
+    "r05": {
+      "name": "开始读书的日期：会话日期不等于事件起点",
+      "q": "When did Jon start reading \"The Lean Startup\"?",
+      "source": "locomo · conv-30 · qa-21；下文中文为研究转述",
+      "leftId": "必要证据",
+      "left": "5月27日说正在读某书；参考答案精度为2023年5月。",
+      "link": "保存 → 找全 → 约束结论",
+      "rightId": "可回答条件",
+      "right": "可以说明当时在读或月份范围；不能断言恰在5月27日开始。",
+      "mark": "→",
+      "add": "同时保留会话锚点与原句时间表达，不自动补成开始日期。",
+      "search": "呈现原句“正在读”及时间，说明证据能支持的粒度。",
+      "answer": "可以说明当时在读或月份范围；不能断言恰在5月27日开始。",
+      "trap": "需要区分标注容忍度与事实支持度；本地复核不是官方评分。",
+      "path": [
+        "同时保留会话锚点与原句时间表达，不自动补成开始日期。",
+        "呈现原句“正在读”及时间，说明证据能支持的粒度。",
+        "可以说明当时在读或月份范围；不能断言恰在5月27日开始。"
+      ],
+      "document": "2026-10-30-real-evidence-studies.md",
+      "data": {
+        "dataset": "locomo",
+        "pack": "dataset/data/prepared/locomo-full.json",
+        "record": "conv-30",
+        "task": "qa-21",
+        "turns": [
+          "D12:6"
+        ]
+      },
+      "checks": {
+        "add": "同时保留会话锚点与原句时间表达，不自动补成开始日期。",
+        "search": "呈现原句“正在读”及时间，说明证据能支持的粒度。",
+        "answer": "可以说明当时在读或月份范围；不能断言恰在5月27日开始。"
+      },
+      "watch": {
+        "add": "读取真实 Add 与 Reflection 轨迹；不以成功状态代替内容质量。",
+        "search": "对照候选、模型输入与最终交付。",
+        "answer": "独立展示机器评分与 Codex 复核。"
+      },
+      "evidence_plan": [],
+      "studies": [
+        {
+          "run_id": "hundred30-01-locomo",
+          "dataset_pack_sha256": "c37a95a25ade64e6b40e35aa12e2de18d7b2493e16da0519a4ad671f5f71b8da",
+          "title": "开始读书的日期：会话日期不等于事件起点",
+          "theory": {
+            "evidence": "5月27日说正在读某书；参考答案精度为2023年5月。",
+            "add": "同时保留会话锚点与原句时间表达，不自动补成开始日期。",
+            "search": "呈现原句“正在读”及时间，说明证据能支持的粒度。",
+            "answer": "可以说明当时在读或月份范围；不能断言恰在5月27日开始。"
+          },
+          "observed": "Answer把会话日期提升为精确开始日；月份吻合仍被独立复核判为有实质性过度精确。",
+          "limits": "需要区分标注容忍度与事实支持度；本地复核不是官方评分。",
+          "next_experiment": "正反控制：显式“今天开始”可精确；“正在读”及相对日期不强加精度。",
+          "span_ids": [
+            "176a0c02ca114d3cb168f69888fe738f",
+            "d7caa7107ace4d61b4ff97a668b1e173",
+            "fcbdc55c3db2484c98167d1040227c0f",
+            "3c204e07f7b5426687250bb0fea80398",
+            "b75e7f424adc4bf283e77452f1ae1184",
+            "2fe0758603454c64a136e20c8409f2b2"
+          ],
+          "basis": "已保存原文、模型可见材料、Search交付、Answer与独立复核；非新实验"
+        }
+      ]
+    },
+    "r06": {
+      "name": "冲刺结束：原计划、改期与实际完成",
+      "q": "When does my first sprint end?",
+      "source": "beam · 1 · information_extraction:0；下文中文为研究转述",
+      "leftId": "必要证据",
+      "left": "最初3月29日、后来目标3月31日、再后确认实际3月29日完成。",
+      "link": "保存 → 找全 → 约束结论",
+      "rightId": "可回答条件",
+      "right": "问实际结束应据完成报告；若问目标日期，答案才对应计划。",
+      "mark": "→",
+      "add": "把同一冲刺的计划、目标调整和完成报告保留为不同状态的陈述。",
+      "search": "按同一事件串联证据，清楚标注说话顺序与原句状态。",
+      "answer": "问实际结束应据完成报告；若问目标日期，答案才对应计划。",
+      "trap": "不能概括为“永远取最后一句”；晚来的回顾、假设或另一个冲刺仍要区分。",
+      "path": [
+        "把同一冲刺的计划、目标调整和完成报告保留为不同状态的陈述。",
+        "按同一事件串联证据，清楚标注说话顺序与原句状态。",
+        "问实际结束应据完成报告；若问目标日期，答案才对应计划。"
+      ],
+      "document": "2026-10-30-real-evidence-studies.md",
+      "data": {
+        "dataset": "beam",
+        "pack": "dataset/data/prepared/beam-smoke.json",
+        "record": "1",
+        "task": "information_extraction:0",
+        "turns": []
+      },
+      "checks": {
+        "add": "把同一冲刺的计划、目标调整和完成报告保留为不同状态的陈述。",
+        "search": "按同一事件串联证据，清楚标注说话顺序与原句状态。",
+        "answer": "问实际结束应据完成报告；若问目标日期，答案才对应计划。"
+      },
+      "watch": {
+        "add": "读取真实 Add 与 Reflection 轨迹；不以成功状态代替内容质量。",
+        "search": "对照候选、模型输入与最终交付。",
+        "answer": "独立展示机器评分与 Codex 复核。"
+      },
+      "evidence_plan": [],
+      "studies": [
+        {
+          "run_id": "hundred30-19-beam",
+          "dataset_pack_sha256": "23137cf4fcc427ef273c2232d5b2ba1944089728d547c2c37d858545a7ab1220",
+          "title": "冲刺结束：原计划、改期与实际完成",
+          "theory": {
+            "evidence": "最初3月29日、后来目标3月31日、再后确认实际3月29日完成。",
+            "add": "把同一冲刺的计划、目标调整和完成报告保留为不同状态的陈述。",
+            "search": "按同一事件串联证据，清楚标注说话顺序与原句状态。",
+            "answer": "问实际结束应据完成报告；若问目标日期，答案才对应计划。"
+          },
+          "observed": "三条相关卡已交付，但按检索顺序排列；Answer选择3月31日，忽略后面的实际完成报告。",
+          "limits": "不能概括为“永远取最后一句”；晚来的回顾、假设或另一个冲刺仍要区分。",
+          "next_experiment": "对同一事件的计划/改期/完成进行可读组合，对照原文卡与带状态标题的卡。",
+          "span_ids": [
+            "5f91a88756014145b9e6174f0afa2c7a",
+            "5de2c7fcfbd747cc8dd97e98ac140f74",
+            "92da29ab5eb74145a8856ffa14473b34",
+            "17ba3bc2aa5b45e4a30df609621ea5b8",
+            "d392fd061a0f436f8b6fc7cdb8e13c99",
+            "a3aaf6d1171e486c993811cbeb9aef00"
+          ],
+          "basis": "已保存原文、模型可见材料、Search交付、Answer与独立复核；非新实验"
+        }
+      ]
+    },
+    "r07": {
+      "name": "ESLint规则：助手示例不是用户已采用的事实",
+      "q": "What are the specific ESLint rules from the Airbnb style guide that I enforced in this project?",
+      "source": "beam · 2 · abstention:0；下文中文为研究转述",
+      "leftId": "必要证据",
+      "left": "助手给出Airbnb/ESLint配置示例，但用户未确认具体启用了哪些规则。",
+      "link": "保存 → 找全 → 约束结论",
+      "rightId": "可回答条件",
+      "right": "说明缺少项目实际规则的确认，可区分建议与已采用内容。",
+      "mark": "→",
+      "add": "保留assistant与user角色及采纳证据；建议只能作为建议保存。",
+      "search": "找实际采纳说明；找到配置建议不能替代用户执行声明。",
+      "answer": "说明缺少项目实际规则的确认，可区分建议与已采用内容。",
+      "trap": "不要一律丢弃助手内容：已共同确认的代码决定仍有价值。",
+      "path": [
+        "保留assistant与user角色及采纳证据；建议只能作为建议保存。",
+        "找实际采纳说明；找到配置建议不能替代用户执行声明。",
+        "说明缺少项目实际规则的确认，可区分建议与已采用内容。"
+      ],
+      "document": "2026-10-30-real-evidence-studies.md",
+      "data": {
+        "dataset": "beam",
+        "pack": "dataset/data/prepared/beam-update-cases.json",
+        "record": "2",
+        "task": "abstention:0",
+        "turns": []
+      },
+      "checks": {
+        "add": "保留assistant与user角色及采纳证据；建议只能作为建议保存。",
+        "search": "找实际采纳说明；找到配置建议不能替代用户执行声明。",
+        "answer": "说明缺少项目实际规则的确认，可区分建议与已采用内容。"
+      },
+      "watch": {
+        "add": "读取真实 Add 与 Reflection 轨迹；不以成功状态代替内容质量。",
+        "search": "对照候选、模型输入与最终交付。",
+        "answer": "独立展示机器评分与 Codex 复核。"
+      },
+      "evidence_plan": [],
+      "studies": [
+        {
+          "run_id": "hundred30-20-beam",
+          "dataset_pack_sha256": "ad46cbea66ceb9572ac36474994e11208944defb360a8ff40feb1f2f58c188ab",
+          "title": "ESLint规则：助手示例不是用户已采用的事实",
+          "theory": {
+            "evidence": "助手给出Airbnb/ESLint配置示例，但用户未确认具体启用了哪些规则。",
+            "add": "保留assistant与user角色及采纳证据；建议只能作为建议保存。",
+            "search": "找实际采纳说明；找到配置建议不能替代用户执行声明。",
+            "answer": "说明缺少项目实际规则的确认，可区分建议与已采用内容。"
+          },
+          "observed": "Answer把助手示例说成用户已实施；mini判对，Codex复核判错。",
+          "limits": "不要一律丢弃助手内容：已共同确认的代码决定仍有价值。",
+          "next_experiment": "成对测试：只有建议、明确采纳、明确拒绝；检查存储叙事和最终上下文的区别。",
+          "span_ids": [
+            "32118658492544ec8d24e735574bf232",
+            "422a89b264ec4046aab2346389eb5b5a",
+            "72dd336fad73483b9368515e73274b2d",
+            "edef6111024d414b8dc498f363ccfdd1",
+            "a0d09f2a7d42419aac119a8a42fb58b7",
+            "1f5ff4610d7a492c9df90655c473ce6e"
+          ],
+          "basis": "已保存原文、模型可见材料、Search交付、Answer与独立复核；非新实验"
+        }
+      ]
+    },
+    "r08": {
+      "name": "遗忘后回流：确认语句又把被遗忘习惯写回来了",
+      "q": "When traveling to a new city, where can I find free or low-cost indoor spaces with comfortable seating and Wi-Fi where I can relax and read for a while?",
+      "source": "personamem · persona-737 · row-34；下文中文为研究转述",
+      "leftId": "必要证据",
+      "left": "用户要求忘记常去公共图书馆；后续助手确认又复述了这项习惯。",
+      "link": "保存 → 找全 → 约束结论",
+      "rightId": "可回答条件",
+      "right": "可以按当前问题给公共场所建议，不能再声称基于用户已删除的习惯。",
+      "mark": "→",
+      "add": "保留遗忘意图及其作用范围；后续对同次遗忘的确认不应重新生成可检索习惯。",
+      "search": "不返回已经撤销的个人习惯，但允许一般图书馆知识或用户后来重新明确授权保存的事实。",
+      "answer": "可以按当前问题给公共场所建议，不能再声称基于用户已删除的习惯。",
+      "trap": "不能把“提到图书馆”一律过滤；问题在同一已撤销个人事实的重现。",
+      "path": [
+        "保留遗忘意图及其作用范围；后续对同次遗忘的确认不应重新生成可检索习惯。",
+        "不返回已经撤销的个人习惯，但允许一般图书馆知识或用户后来重新明确授权保存的事实。",
+        "可以按当前问题给公共场所建议，不能再声称基于用户已删除的习惯。"
+      ],
+      "document": "2026-10-30-real-evidence-studies.md",
+      "data": {
+        "dataset": "persona",
+        "pack": "dataset/data/prepared/personamem-v2-research.json",
+        "record": "persona-737",
+        "task": "row-34",
+        "turns": []
+      },
+      "checks": {
+        "add": "保留遗忘意图及其作用范围；后续对同次遗忘的确认不应重新生成可检索习惯。",
+        "search": "不返回已经撤销的个人习惯，但允许一般图书馆知识或用户后来重新明确授权保存的事实。",
+        "answer": "可以按当前问题给公共场所建议，不能再声称基于用户已删除的习惯。"
+      },
+      "watch": {
+        "add": "读取真实 Add 与 Reflection 轨迹；不以成功状态代替内容质量。",
+        "search": "对照候选、模型输入与最终交付。",
+        "answer": "独立展示机器评分与 Codex 复核。"
+      },
+      "evidence_plan": [],
+      "studies": [
+        {
+          "run_id": "hundred30-18-personamem",
+          "dataset_pack_sha256": "7fdc5ae1314f5b8e9d5fa9ad55a613995485948f17e086a4f0aa43d808f14b91",
+          "title": "遗忘后回流：确认语句又把被遗忘习惯写回来了",
+          "theory": {
+            "evidence": "用户要求忘记常去公共图书馆；后续助手确认又复述了这项习惯。",
+            "add": "保留遗忘意图及其作用范围；后续对同次遗忘的确认不应重新生成可检索习惯。",
+            "search": "不返回已经撤销的个人习惯，但允许一般图书馆知识或用户后来重新明确授权保存的事实。",
+            "answer": "可以按当前问题给公共场所建议，不能再声称基于用户已删除的习惯。"
+          },
+          "observed": "旧来源被屏蔽后，新Add中的确认句仍为活动来源，并作为第2条证据返回。实际答案的通用图书馆建议是否错误有歧义，复核记uncertain；记忆回流本身可确认。",
+          "limits": "不能把“提到图书馆”一律过滤；问题在同一已撤销个人事实的重现。",
+          "next_experiment": "先做遗忘→助手确认→Search的重放，再加入别人习惯、通用知识、未来新授权三类反控制。",
+          "span_ids": [
+            "77c12eeb62a2439d81462d17fb72f1c6",
+            "f5ae03cb9cdb4c80bcce4316435b93f3",
+            "ef47b116e42949139153f90d96a1aae5",
+            "710a8e259ea64855b8b950d9ac401ac3",
+            "ab017ef877f84a658b18645584639748",
+            "45af8e94380a4cacb518e3a8664e7c47"
+          ],
+          "basis": "已保存原文、模型可见材料、Search交付、Answer与独立复核；非新实验"
+        }
+      ]
+    },
+    "r09": {
+      "name": "牌局分析：牌面离开手牌标题，就失去归属",
+      "q": "ok, from those hands that went to showdown, could you tell me one thing I did well and one thing I can improve? Reference specific hands in your analysis. Additionally, for the area I can improve, pick one illustrative showdown hand and tell me what I should have done differently.",
+      "source": "clbench-life · 4ac7eaf6-948e-a848-93f3-38f512b8ac68 · 4ac7eaf6-948e-a848-93f3-38f512b8ac68；下文中文为研究转述",
+      "leftId": "必要证据",
+      "left": "牌局编号、持牌、行动与摊牌结果应属于同一手牌，不可跨事件拼接。",
+      "link": "保存 → 找全 → 约束结论",
+      "rightId": "可回答条件",
+      "right": "每条评价对应正确牌局；不能引用另一个编号，不能把check说成call。",
+      "mark": "→",
+      "add": "切分长文时继承最近的手牌标题/事件锚点，并保留来源范围。",
+      "search": "检索到牌面时补齐它的事件标题、关键行动和结局，必要时加载相邻原文。",
+      "answer": "每条评价对应正确牌局；不能引用另一个编号，不能把check说成call。",
+      "trap": "同时存在披露缺锚点和Answer误读；不能声称补标题能解决全部牌局推理。",
+      "path": [
+        "切分长文时继承最近的手牌标题/事件锚点，并保留来源范围。",
+        "检索到牌面时补齐它的事件标题、关键行动和结局，必要时加载相邻原文。",
+        "每条评价对应正确牌局；不能引用另一个编号，不能把check说成call。"
+      ],
+      "document": "2026-10-30-real-evidence-studies.md",
+      "data": {
+        "dataset": "life",
+        "pack": "dataset/data/prepared/clbench-life-smoke.json",
+        "record": "4ac7eaf6-948e-a848-93f3-38f512b8ac68",
+        "task": "4ac7eaf6-948e-a848-93f3-38f512b8ac68",
+        "turns": []
+      },
+      "checks": {
+        "add": "切分长文时继承最近的手牌标题/事件锚点，并保留来源范围。",
+        "search": "检索到牌面时补齐它的事件标题、关键行动和结局，必要时加载相邻原文。",
+        "answer": "每条评价对应正确牌局；不能引用另一个编号，不能把check说成call。"
+      },
+      "watch": {
+        "add": "读取真实 Add 与 Reflection 轨迹；不以成功状态代替内容质量。",
+        "search": "对照候选、模型输入与最终交付。",
+        "answer": "独立展示机器评分与 Codex 复核。"
+      },
+      "evidence_plan": [],
+      "studies": [
+        {
+          "run_id": "hundred30-22-clbench-life",
+          "dataset_pack_sha256": "6aabe619fa69793b20b3b3c5b514ea58ad001635a39a8adfa9a00360927161ee",
+          "title": "牌局分析：牌面离开手牌标题，就失去归属",
+          "theory": {
+            "evidence": "牌局编号、持牌、行动与摊牌结果应属于同一手牌，不可跨事件拼接。",
+            "add": "切分长文时继承最近的手牌标题/事件锚点，并保留来源范围。",
+            "search": "检索到牌面时补齐它的事件标题、关键行动和结局，必要时加载相邻原文。",
+            "answer": "每条评价对应正确牌局；不能引用另一个编号，不能把check说成call。"
+          },
+          "observed": "Qs Ts候选从Seat 2开始，缺少所在手牌标题；Answer将其归到错误编号。另一个Jd Ks片段已有正确编号，Answer仍引用错号，并误读河牌行动。",
+          "limits": "同时存在披露缺锚点和Answer误读；不能声称补标题能解决全部牌局推理。",
+          "next_experiment": "先以段落标题继承对照原切分，单独核查编号归属、动作原句与判断三项。",
+          "span_ids": [
+            "bcf83d1cd94141fea8a4e875d64bc1a0",
+            "24e7e7dc60ac47d886f34244d6968244",
+            "953aefb96ab54021a4989221911e51b4",
+            "37f98707c96d4c3e8736ef02cdf7f6db",
+            "a40a9a8b4c674c05aba93087db301044",
+            "35ecf478e4f24e1e9f3f53acedd76b86",
+            "5aae936a42bd4d6c84115ea04cfe126e",
+            "0538e5ea56a84d0d974baa5809182369",
+            "a26ef557d9bc405481404c2d048093e7"
+          ],
+          "basis": "已保存原文、模型可见材料、Search交付、Answer与独立复核；非新实验"
+        }
+      ]
+    },
+    "r12": {
+      "name": "隐含偏好：标准答案有要求，历史是否真的能推出？",
+      "q": "I’m thinking about getting a new car that’s reliable for daily commuting and occasional road trips—what models would you suggest that balance durability, comfort, and reasonable maintenance costs?",
+      "source": "personamem · persona-521 · row-17；下文中文为研究转述",
+      "leftId": "必要证据",
+      "left": "评分期望美国制造的汽车；可用历史主要是一般混动车政策提问。",
+      "link": "保存 → 找全 → 约束结论",
+      "rightId": "可回答条件",
+      "right": "可根据当前通勤与旅行需求回答，但不假装知道用户只偏好美国车。",
+      "mark": "→",
+      "add": "记录提问及真实表态；不能将讨论政策直接派生为用户国别偏好。",
+      "search": "检查偏好是否有明确支持；没有就呈现缺口，不为了匹配标签而补写。",
+      "answer": "可根据当前通勤与旅行需求回答，但不假装知道用户只偏好美国车。",
+      "trap": "此题不应简单列为必须修复的记忆失败，也不能反向把标注作为Add输入。",
+      "path": [
+        "记录提问及真实表态；不能将讨论政策直接派生为用户国别偏好。",
+        "检查偏好是否有明确支持；没有就呈现缺口，不为了匹配标签而补写。",
+        "可根据当前通勤与旅行需求回答，但不假装知道用户只偏好美国车。"
+      ],
+      "document": "2026-10-30-real-evidence-studies.md",
+      "data": {
+        "dataset": "persona",
+        "pack": "dataset/data/prepared/personamem-v2-research.json",
+        "record": "persona-521",
+        "task": "row-17",
+        "turns": []
+      },
+      "checks": {
+        "add": "记录提问及真实表态；不能将讨论政策直接派生为用户国别偏好。",
+        "search": "检查偏好是否有明确支持；没有就呈现缺口，不为了匹配标签而补写。",
+        "answer": "可根据当前通勤与旅行需求回答，但不假装知道用户只偏好美国车。"
+      },
+      "watch": {
+        "add": "读取真实 Add 与 Reflection 轨迹；不以成功状态代替内容质量。",
+        "search": "对照候选、模型输入与最终交付。",
+        "answer": "独立展示机器评分与 Codex 复核。"
+      },
+      "evidence_plan": [],
+      "studies": [
+        {
+          "run_id": "hundred30-17-personamem",
+          "dataset_pack_sha256": "c4ea576a164df2ddcdbe7afb8bb2dec53c5ae0a59bf639fbf95c054f1da6dc4f",
+          "title": "隐含偏好：标准答案有要求，历史是否真的能推出？",
+          "theory": {
+            "evidence": "评分期望美国制造的汽车；可用历史主要是一般混动车政策提问。",
+            "add": "记录提问及真实表态；不能将讨论政策直接派生为用户国别偏好。",
+            "search": "检查偏好是否有明确支持；没有就呈现缺口，不为了匹配标签而补写。",
+            "answer": "可根据当前通勤与旅行需求回答，但不假装知道用户只偏好美国车。"
+          },
+          "observed": "候选答案不满足参考偏好；查读历史后，这个偏好并不能被唯一推出，属于数据解释风险。",
+          "limits": "此题不应简单列为必须修复的记忆失败，也不能反向把标注作为Add输入。",
+          "next_experiment": "增加明确偏好/弱暗示/无偏好三类控制；评分报告同时记参考符合度与事实支持度。",
+          "span_ids": [
+            "64b75c11f23b4f47927bb9c00ac47beb",
+            "a01c35bab85a42c2aaf91681d2fdb844",
+            "2c79bac6b3384f96bb3b4d3e5e29d034",
+            "ea447a81ed46491e98803106b8ef3680",
+            "1c4aae3976214afe87c33ace5530e058",
+            "0378ff6a4e384003ac431b99622339cc",
+            "2f1b607ace9a45d487f3a23e0d517c6d",
+            "8ae499ecca2143e5b66a40db0b69b9e7",
+            "a560b2f07a8e481cb42adbc1e7aad56c"
+          ],
+          "basis": "已保存原文、模型可见材料、Search交付、Answer与独立复核；非新实验"
+        }
+      ]
+    },
+    "r13": {
+      "name": "宣传方式：答对核心词，却混进别的活动",
+      "q": "宣传工作将如何进行？",
+      "source": "perltqa · character-25 · dialogues:26_7_0#19:2；下文中文为研究转述",
+      "leftId": "必要证据",
+      "left": "问题针对特定讲座的宣传；人物还参与其他BIM和CardioHealth活动。",
+      "link": "保存 → 找全 → 约束结论",
+      "rightId": "可回答条件",
+      "right": "只说当前活动有依据的广告宣传等，不挪用另一个活动的日程。",
+      "mark": "→",
+      "add": "人物作为关联入口，事件名称和时间负责区分不同活动。",
+      "search": "围绕当前讲座找宣传方式；不能把同一人的其他活动全部当作补充答案。",
+      "answer": "只说当前活动有依据的广告宣传等，不挪用另一个活动的日程。",
+      "trap": "多取材料有时反而增加串事；需要检验事件边界，而非一味降低Select排除率。",
+      "path": [
+        "人物作为关联入口，事件名称和时间负责区分不同活动。",
+        "围绕当前讲座找宣传方式；不能把同一人的其他活动全部当作补充答案。",
+        "只说当前活动有依据的广告宣传等，不挪用另一个活动的日程。"
+      ],
+      "document": "2026-10-30-real-evidence-studies.md",
+      "data": {
+        "dataset": "perltqa",
+        "pack": "dataset/data/prepared/perltqa-zh-full.json",
+        "record": "character-25",
+        "task": "dialogues:26_7_0#19:2",
+        "turns": [
+          "dialogues:26_7_0#19"
+        ]
+      },
+      "checks": {
+        "add": "人物作为关联入口，事件名称和时间负责区分不同活动。",
+        "search": "围绕当前讲座找宣传方式；不能把同一人的其他活动全部当作补充答案。",
+        "answer": "只说当前活动有依据的广告宣传等，不挪用另一个活动的日程。"
+      },
+      "watch": {
+        "add": "读取真实 Add 与 Reflection 轨迹；不以成功状态代替内容质量。",
+        "search": "对照候选、模型输入与最终交付。",
+        "answer": "独立展示机器评分与 Codex 复核。"
+      },
+      "evidence_plan": [],
+      "studies": [
+        {
+          "run_id": "hundred30-16-perltqa",
+          "dataset_pack_sha256": "8f6f3838e9c2d3e104ab6eb97fea4e9fd91918a1265c6f4c2f198cb48b1a3d92",
+          "title": "宣传方式：答对核心词，却混进别的活动",
+          "theory": {
+            "evidence": "问题针对特定讲座的宣传；人物还参与其他BIM和CardioHealth活动。",
+            "add": "人物作为关联入口，事件名称和时间负责区分不同活动。",
+            "search": "围绕当前讲座找宣传方式；不能把同一人的其他活动全部当作补充答案。",
+            "answer": "只说当前活动有依据的广告宣传等，不挪用另一个活动的日程。"
+          },
+          "observed": "Answer核心宣传方式正确，却混入BIM三月与CardioHealth五月的信息。mini判对，独立复核因无关活动混入判错。",
+          "limits": "多取材料有时反而增加串事；需要检验事件边界，而非一味降低Select排除率。",
+          "next_experiment": "测试同人物多活动场景；以事件内召回和跨事件误混双指标验证。",
+          "span_ids": [
+            "1c11cd66bdbd4284bb19ea092be701a5",
+            "998707680e3645fd880a8bb04cc3fae4",
+            "00bdc76d5959481d86d68e685b12dbf8",
+            "29abf0d429ed4562887e7c1c15fb9485",
+            "970ed6781afd4e028660dae4a5f64fc7",
+            "f6c1b15b6cdc437284f9c9262db8bf61"
+          ],
+          "basis": "已保存原文、模型可见材料、Search交付、Answer与独立复核；非新实验"
+        }
+      ]
+    },
+    "r14": {
+      "name": "Flask-Login：更新与尚未澄清的冲突不同",
+      "q": "Have I integrated Flask-Login for session management in my project?",
+      "source": "beam · 1 · contradiction_resolution:1；下文中文为研究转述",
+      "leftId": "必要证据",
+      "left": "历史同时有从未用过Flask-Login和已集成v0.6.2的陈述；需要检查是否明确替代。",
+      "link": "保存 → 找全 → 约束结论",
+      "rightId": "可回答条件",
+      "right": "本题参考要求指出不一致并澄清，不能只挑一条说已集成。",
+      "mark": "→",
+      "add": "保留冲突原句及顺序，不因关键词相同就静默覆盖。",
+      "search": "将双方证据成组交付，区分明确更新和未解释的矛盾。",
+      "answer": "本题参考要求指出不一致并澄清，不能只挑一条说已集成。",
+      "trap": "若后来明确说“现在已改成”，应作为更新而非永远拒答；需要配对控制。",
+      "path": [
+        "保留冲突原句及顺序，不因关键词相同就静默覆盖。",
+        "将双方证据成组交付，区分明确更新和未解释的矛盾。",
+        "本题参考要求指出不一致并澄清，不能只挑一条说已集成。"
+      ],
+      "document": "2026-10-30-real-evidence-studies.md",
+      "data": {
+        "dataset": "beam",
+        "pack": "dataset/data/prepared/beam-smoke.json",
+        "record": "1",
+        "task": "contradiction_resolution:1",
+        "turns": []
+      },
+      "checks": {
+        "add": "保留冲突原句及顺序，不因关键词相同就静默覆盖。",
+        "search": "将双方证据成组交付，区分明确更新和未解释的矛盾。",
+        "answer": "本题参考要求指出不一致并澄清，不能只挑一条说已集成。"
+      },
+      "watch": {
+        "add": "读取真实 Add 与 Reflection 轨迹；不以成功状态代替内容质量。",
+        "search": "对照候选、模型输入与最终交付。",
+        "answer": "独立展示机器评分与 Codex 复核。"
+      },
+      "evidence_plan": [],
+      "studies": [
+        {
+          "run_id": "hundred30-19-beam",
+          "dataset_pack_sha256": "23137cf4fcc427ef273c2232d5b2ba1944089728d547c2c37d858545a7ab1220",
+          "title": "Flask-Login：更新与尚未澄清的冲突不同",
+          "theory": {
+            "evidence": "历史同时有从未用过Flask-Login和已集成v0.6.2的陈述；需要检查是否明确替代。",
+            "add": "保留冲突原句及顺序，不因关键词相同就静默覆盖。",
+            "search": "将双方证据成组交付，区分明确更新和未解释的矛盾。",
+            "answer": "本题参考要求指出不一致并澄清，不能只挑一条说已集成。"
+          },
+          "observed": "Answer过度肯定已集成；没有处理历史矛盾。",
+          "limits": "若后来明确说“现在已改成”，应作为更新而非永远拒答；需要配对控制。",
+          "next_experiment": "以同属性明确更新、不同作用域、直接冲突三种对照验证。",
+          "span_ids": [
+            "27f594ff897746cab31097bd0199a00d",
+            "3063379ef7ad4293ad439eacc18004c8",
+            "a80973472dcc42798e6dda20562aa94c",
+            "1d567d55c7a94f1e824a7e3d4915e297",
+            "744302541cc845b0bd565e2166d447f2",
+            "7820e87bdecc4ebdbee43b2eb99d205e",
+            "d764b4394b60435393a34733c8cbba1e",
+            "ae56c39489dd445dbeffdc8ffa2b173e",
+            "66f83aefed484b898cf79fbd430eac16"
+          ],
+          "basis": "已保存原文、模型可见材料、Search交付、Answer与独立复核；非新实验"
+        }
+      ]
+    }
+  },
+  "schemaVersion": 1,
+  "updated": "2026-10-30",
+  "defaultState": {
+    "dataset": "longmem",
+    "case": "lm4"
+  }
+}

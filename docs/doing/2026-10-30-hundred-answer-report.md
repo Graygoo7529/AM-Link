@@ -1,6 +1,6 @@
 # 第三版 100 题真实端到端诊断
 
-状态：本轮测试完成。起点 `4191890`，冻结计划 `benchmark/data/plans/clean30-hundred-answer/suite.json`，运行前缀 `hundred30`。2026-10-30 北京时间 10:11:19—10:52:04，三个独立历史并行，方法源码全程不变。
+状态：本轮测试完成。起点 `4191890`，冻结计划 `research/benchmark/data/plans/clean30-hundred-answer/suite.json`，运行前缀 `hundred30`。2026-10-30 北京时间 10:11:19—10:52:04，三个独立历史并行，方法源码全程不变。
 
 **新方法已能够稳定跑完这一批完整历史；复杂问题的答案质量仍未过关。** 780/780 Add、100/100 Search、100/100 Answer 成功；Reflection 726/732 批完成（99.18%）。这里的整理任务已从二期图更新改成小批导航笔记，因此不能与旧 26/75 直接解释为同任务准确率提升。
 
@@ -102,9 +102,9 @@ Persona737 / row-34 的 Search 返回了“我会忘记你经常去公共图书�
 ## 持久产物
 
 - 冻结清单、源码快照、公开配置、各历史完成凭据：上述计划目录。
-- 每份新库、完整 Add/Search 原文轨迹与模型输入输出：`benchmark/data/runs/hundred30-*`。
+- 每份新库、完整 Add/Search 原文轨迹与模型输入输出：`research/benchmark/data/runs/hundred30-*`。
 - `answers/hundred/`：仅真实检索上下文的 Answer；`evaluation.jsonl`：逐条判断；`evaluated-observations.json`：网页对接。
 - `analysis.json`、`final-audit.json`、`coverage.json` 与 `manual-audit.json`：汇总、完整性核查、字面证据阶段覆盖和独立 Codex 审读；均位于忽略目录。
-- [100 题逐题浏览页](../../visualization/data/local/hundred.html)：可按数据集/复核结论筛选，查看题目、实际答案、两套评判、参考及 Search 原文；无外部依赖，可在普通浏览器打开。
+- [100 题逐题浏览页](../../research/data/index.html)：可按数据集/复核结论筛选，查看题目、实际答案、两套评判、参考及 Search 原文；无外部依赖，可在普通浏览器打开。
 
 展示验收：原页面已实际打开并显示100题与汇总；最终增加阶段覆盖说明后，浏览器连接器自动审批以原文潜在敏感信息为由拒绝再次访问，未绕过。最终文件通过 JavaScript 语法检查，包含100份完整回答；可视化18项测试及3子测试通过。最终交互复验未完成，用户可直接本地打开。总览另生成六类各一题的有界步骤投影，全部原始记录保留。
