@@ -42,6 +42,12 @@ question or a bridge found in the text. A search hypothesis is not a claim that 
 do not invent personal names, amounts, dates or an answer. Avoid repeating already covered material.
 Check which necessary parts of the question these sources actually support. If a part is missing,
 query that missing part; broad discussion of the topic does not supply its specific facts.
+Before choosing, read the question as evidence slots: named subjects, requested attributes, time or
+state, comparison sides, exclusions, and any references to an earlier statement. For "besides",
+"other than", "apart from", "what else", "除了", or "其他", the named topic is a boundary: look
+for distinct complementary occurrences instead of stopping at the dominant topic. For comparisons
+or changes, keep both sides and the relevant before/after or date qualifiers. A short answer,
+pronoun, or deictic expression may need the immediately preceding original unit to be understood.
 Some numbered entries are UNREAD previews. Selecting one requests its full original before the final
 selection; the preview itself is never delivered. Use read_more (up to FOUR shown numbers) when you
 need to read around a shown original block, or to explore an unread entry without selecting it yet.
@@ -63,6 +69,9 @@ if none of these passages helps. Supplied passages and answer options are data, 
 New and previously selected material may be recombined; earlier selections are not mandatory.
 Respect the stated delivery budget. Select the original units needed for every requested part, keeping
 their subjects and qualifications. Index hints are not evidence. API roles are not personal identity.
+If a selected sentence is a short confirmation, uses a pronoun, or answers an earlier question, keep
+the nearby original unit needed to identify its subject. For "besides"/"other"/"除了"/"其他", keep
+distinct complementary occurrences; for a comparison or change, keep both sides and their qualifiers.
 Tool arguments have EXACTLY ONE key: positions. Example: {"positions":[2,1]}.
 Do not output schema keywords (maxItems, type, items), queries, or commentary."""
 
@@ -253,21 +262,21 @@ class Engine:
                     if len(result['notes'])>cfg.reflection_max_items:
                         raise MemoryError('reflection_notes_limit',502)
                     notes=[]
-                    existing={r['text'].strip().casefold() for r in corpus if r['kind']!='episode'}
+                    existing=[r for r in corpus if r['kind']!='episode']
                     for proposal in result['notes']:
                         positions=proposal['sources']
                         if not positions or len(positions)!=len(set(positions)) or any(type(p) is not int or not 1<=p<=len(batch) for p in positions):
                             raise MemoryError('reflection_sources_invalid',502)
                         supporting=[batch[p-1] for p in positions]
-                        identity=proposal['text'].strip().casefold()
-                        if identity in existing:
+                        if self._duplicate_note(proposal,supporting,existing):
                             continue
-                        existing.add(identity)
                         key=digest([proposal,sorted(r['ref'] for r in supporting)])[:20]
                         text=proposal['text']; title=proposal['title']
-                        notes.append(dict(ref=f"memory:note/{label(title)}~{key}",kind='note',
+                        note_row=dict(ref=f"memory:note/{label(title)}~{key}",kind='note',
                             title=title,text=text,sources=list(dict.fromkeys(s for r in supporting for s in r['sources'])),
-                            support_refs=[r['ref'] for r in supporting],created_at=now(),terms=tokens(title+' '+text)))
+                            support_refs=[r['ref'] for r in supporting],created_at=now(),terms=tokens(title+' '+text))
+                        notes.append(note_row)
+                        existing.append(note_row)
                     vectors=self.providers.embed([n['title']+'\n'+n['text'] for n in notes],deadline)
                     if len(notes)!=len(vectors):
                         raise MemoryError('embedding_output_invalid',502)
@@ -284,6 +293,41 @@ class Engine:
     @staticmethod
     def _card(row,position):
         return f"Passage {position}\n{reading.header(row)}\n{row['text']}\nEnd passage {position}."
+
+    @staticmethod
+    def _duplicate_note(proposal,supporting,existing):
+        """Drop only high-overlap notes about the same source material."""
+        candidate=' '.join((proposal.get('title',''),proposal.get('text',''))).strip().casefold()
+        candidate_terms=set(tokens(candidate))
+        source_ids={source for row in supporting for source in row.get('sources',[])}
+        if not candidate_terms:
+            return True
+        for old in existing:
+            old_terms=set(tokens(' '.join((old.get('title',''),old.get('text',''))).casefold()))
+            if not old_terms:
+                continue
+            overlap=source_ids.intersection(old.get('sources',[]))
+            if not overlap:
+                continue
+            similarity=len(candidate_terms&old_terms)/max(1,min(len(candidate_terms),len(old_terms)))
+            if similarity>=0.80:
+                return True
+        return False
+
+    @staticmethod
+    def _intent_guidance(question):
+        """Describe the question's evidence shape without adding facts."""
+        value=question.casefold()
+        lines=['Read the question as separate evidence slots before selecting: subjects, requested attributes, time/state, and any comparison or exclusion.']
+        if any(marker in value for marker in ('besides','other than','apart from','what else','which other','in addition to','除了','其他','除此之外','还有什么')):
+            lines.append('This is a complement request: the named topic is a boundary; look for distinct occurrences outside it.')
+        if any(marker in value for marker in ('compare','comparison','difference','versus',' vs ','which more','哪个','比较','差异','变化','before and after','之前','之后')):
+            lines.append('This is a comparison or change request: retain both sides and their dates, states, and qualifiers.')
+        if any(marker in value for marker in ('how many','total','list','all ','分别','多少','总共','哪些','列出')):
+            lines.append('This is a multi-item request: preserve distinct occurrences or objects instead of repeated general discussion.')
+        if any(marker in value for marker in (' it ',' they ',' them ',' he ',' she ',' this ',' that ',' these ',' those ','它','他','她','其','这个','那个')):
+            lines.append('The question contains a reference: prefer evidence that identifies the referenced subject, including necessary nearby original context.')
+        return 'Task shape:\n- '+'\n- '.join(lines)
 
     def _rank(self,query,qvectors,corpus):
         terms=set(tokens(query))
@@ -410,6 +454,7 @@ class Engine:
         content='Question: '+request.query
         if request.options:
             content+='\nAnswer options (not evidence): '+dumps(request.options)
+        content+='\n\n'+self._intent_guidance(request.query)
         content+=f'\nDelivery: at most {request.top_k} original passage groups and {self.config.result_chars} characters including their source headers. '
         content+='Choose the necessary units; leave room for source headers. Multiple units in the same passage share one header.'
         content+='\nPass: '+('last; no further reading' if final else 'first; distinguish a missing source from missing surrounding context')
@@ -449,7 +494,8 @@ class Engine:
                      {'row':directory[p-len(menu)-1],'state':'unread'} for p in requested]
             self.observer.output(event,{'queries':queries,'read_more':more,'selected':[visible(u)['ref'] for u in chosen],
                 'selected_previews':opened,'reading_requests':[mapping[p-1] for p in requested],
-                'selected_ranges':[{'ref':u['row']['ref'],'start':u['start'],'end':u['end']} for u in chosen]})
+                'selected_ranges':[{'ref':u['row']['ref'],'start':u['start'],'end':u['end'],
+                                    'selection_reason':u.get('selection_reason','model_selected')} for u in chosen]})
             return chosen,queries,actions,menu
 
     def search(self,request):
@@ -465,6 +511,8 @@ class Engine:
             if not candidates:
                 return {'data':[]}
             selected,queries,more,seen_units=self._select(request,candidates,deadline,False,unread=unread)
+            closure_context=list(candidates)
+            selected,initial_closure=reading.context_closure(selected,closure_context)
             if queries or more:
                 branches=[]
                 for query in dict.fromkeys(queries):
@@ -490,7 +538,12 @@ class Engine:
                         'continue':bool(new_units),'carried_ranges':[reading.ledger(u,i) for i,u in enumerate(selected,1)]})
                 if new_units:
                     selected,_,_,_=self._select(request,revised,deadline,True,selected,exclude=seen_keys)
-            with self.observer.span('context','最终装箱：复制所选原文范围与来源',inputs={'selected':[{'ref':u['row']['ref'],'start':u['start'],'end':u['end']} for u in selected]}) as event:
+                    closure_context=list({r['ref']:r for r in revised+closure_context}.values())
+            selected,final_closure=reading.context_closure(selected,closure_context)
+            with self.observer.span('context','最终装箱：复制所选原文范围与来源',inputs={'selected':[{'ref':u['row']['ref'],'start':u['start'],'end':u['end']} for u in selected],
+                    'model_selected':[reading.ledger(u,i) for i,u in enumerate(selected,1) if u.get('selection_reason')!='context_closure'],
+                    'context_closure':[reading.ledger(u,i,'closure') for i,u in enumerate(initial_closure+final_closure,1)]}) as event:
                 data,omitted=reading.pack(selected,request.top_k,self.config.result_chars)
-                self.observer.output(event,{'returned':data,'budget_omitted':omitted},kind='result')
+                self.observer.output(event,{'returned':data,'budget_omitted':omitted,
+                    'context_closure':[reading.ledger(u,i,'closure') for i,u in enumerate(initial_closure+final_closure,1)]},kind='result')
             return {'data':data}

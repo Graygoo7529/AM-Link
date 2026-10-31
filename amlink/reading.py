@@ -138,14 +138,83 @@ def preview(row,question,limit=300):
     return excerpt(best['text'],limit)
 
 
-def ledger(unit,position,state='read'):
-    row=unit['row']
-    return dict(position=position,state=state,ref=row['ref'],sources=row['sources'],
-                start=unit['start'],end=unit['end'],sequence=row.get('sequence'),role=row['role'],time=row['time'])
-
-
 def unit_key(unit):
     return (unit['row']['ref'],unit['start'],unit['end'])
+
+
+_CONTEXT_PRONOUN=re.compile(
+    r"(?:\b(?:it|they|them|he|she|her|his|their|this|that|these|those|another|one)\b|"
+    r"它|他|她|其|这|那|这些|那些|上述|这个|那个)",
+    re.I,
+)
+_CONTEXT_OPENING=re.compile(
+    r"^(?:yes|yeah|no|i\s+(?:did|do|have|had|was|am|went|got|like|prefer|remember)|"
+    r"we\s+(?:did|have|had|were|went)|是的|不是|我(?:有|在|去|喜欢|记得)|我们)",
+    re.I,
+)
+
+
+def needs_context(text):
+    """Whether an original unit is likely to need its immediately preceding unit."""
+    value=' '.join(text.strip().split())
+    if not value:
+        return False
+    return bool(_CONTEXT_PRONOUN.search(value) or _CONTEXT_OPENING.search(value))
+
+
+def context_closure(selected,context=()):
+    """Add the nearest preceding original unit for unresolved conversational context.
+
+    The same episode is preferred. If it has no preceding unit, an already
+    disclosed, immediately preceding episode in the same session may supply
+    one unit. Returned additions are exact source slices and carry a reason so
+    observation can distinguish model choice from deterministic context repair.
+    """
+    result=list(selected)
+    known={unit_key(unit) for unit in result}
+    additions=[]
+    for unit in list(selected):
+        if not needs_context(unit['text']):
+            continue
+        all_units=units(unit['row'])
+        index=next((i for i,candidate in enumerate(all_units)
+                    if unit_key(candidate)==unit_key(unit)),None)
+        scope='same_episode'
+        if index is not None and index>0:
+            previous=all_units[index-1]
+        else:
+            episodes=[row for row in context if row.get('kind')=='episode'
+                      and row.get('ref')!=unit['row'].get('ref')
+                      and row.get('session_id')==unit['row'].get('session_id')]
+            neighbors=nearby(unit['row'],episodes)
+            previous_rows=[row for row in neighbors
+                           if row.get('end',0)<=unit['row'].get('start',0)
+                           or row.get('sequence',0)<unit['row'].get('sequence',0)]
+            if not previous_rows:
+                continue
+            previous_row=max(previous_rows,key=lambda row:(row.get('sequence',0),row.get('end',0)))
+            previous=units(previous_row)[-1]
+            scope='adjacent_episode'
+        key=unit_key(previous)
+        if key in known:
+            continue
+        known.add(key)
+        additions.append(previous|{'selection_reason':'context_closure',
+                                   'closure_for':unit_key(unit),
+                                   'closure_scope':scope})
+    result.extend(additions)
+    return result,additions
+
+
+def ledger(unit,position,state='read'):
+    row=unit['row']
+    result=dict(position=position,state=state,ref=row['ref'],sources=row['sources'],
+                start=unit['start'],end=unit['end'],sequence=row.get('sequence'),role=row['role'],time=row['time'])
+    if unit.get('selection_reason'):
+        result['selection_reason']=unit['selection_reason']
+        result['closure_for']=unit.get('closure_for')
+        result['closure_scope']=unit.get('closure_scope')
+    return result
 
 
 def render_group(group,position):

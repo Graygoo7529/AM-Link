@@ -1,4 +1,4 @@
-# AM-Link 0.3.2-continuation
+# AM-Link 0.3.3-evidence-closure
 
 当前方法见[根设计](../DESIGN.md)。模型默认且必须使用 gpt-4o-mini、text-embedding-v4/1024维。
 

@@ -27,6 +27,40 @@ def test_short_paragraphs_preserve_verbatim_text_and_boundaries():
     for u in units:assert u['text']==text[u['start']-100:u['end']-100]
 
 
+def test_context_closure_keeps_antecedent_for_short_answer():
+    text='# Question\nWhat did I watch?\n\n# Reply\nYes, I watched it with her.'
+    row={'ref':'memory:episode/test','text':text,'start':0,'end':len(text),
+         'role':'user','sources':['source:test'],'time':0}
+    units=reading.units(row)
+    assert len(units)==2
+    selected,additions=reading.context_closure([units[1]])
+    assert [u['text'].strip() for u in additions]==['# Question\nWhat did I watch?']
+    assert {reading.unit_key(u) for u in selected}=={reading.unit_key(units[0]),reading.unit_key(units[1])}
+    assert additions[0]['selection_reason']=='context_closure'
+
+
+def test_context_closure_never_crosses_episode():
+    text='Yes, I watched it.'
+    row={'ref':'memory:episode/second','text':text,'start':0,'end':len(text),
+         'role':'user','sources':['source:second'],'time':0}
+    selected,additions=reading.context_closure([reading.units(row)[0]])
+    assert additions==[] and len(selected)==1
+
+
+def test_context_closure_uses_only_disclosed_immediate_previous_episode():
+    previous_text='What did I watch?'
+    current_text='Yes, I watched it.'
+    previous={'ref':'memory:episode/previous','text':previous_text,'start':0,'end':len(previous_text),
+              'role':'user','sources':['source:previous'],'session_id':'s','sequence':1,
+              'kind':'episode','time':0}
+    current={'ref':'memory:episode/current','text':current_text,'start':0,'end':len(current_text),
+             'role':'assistant','sources':['source:current'],'session_id':'s','sequence':2,
+             'kind':'episode','time':0}
+    selected,additions=reading.context_closure([reading.units(current)[0]],[previous,current])
+    assert [u['text'] for u in additions]==[previous_text]
+    assert additions[0]['closure_scope']=='adjacent_episode'
+
+
 def test_unread_preview_opens_new_original_and_keeps_prior_evidence(build):
     e,p,s=build(candidate_limit=1)
     e.add(request('a','Known purchase: a pump for 18.',session='first'))

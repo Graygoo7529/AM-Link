@@ -136,6 +136,26 @@ def test_reflection_accumulates_and_returns_originals(build):
     assert all('memory:episode/' in r['id'] for r in search(e))
     assert any('Maya visited Paris.' in r['content'] for r in search(e))
 
+
+def test_reflection_drops_same_source_near_duplicate_notes(build):
+    e,p,s=build(reflection_batch=1,reflection_min_adds=1)
+    p.script['organize_memory']=lambda c,sc:{'notes':[
+        {'title':'Paris trip','text':'Maya visited Paris in June.','sources':[1]},
+        {'title':'Paris visit','text':'Maya visited Paris in June','sources':[1]},
+    ]}
+    e.add(request('a','Maya visited Paris in June.'))
+    notes=[r for r in s.corpus('u') if r['kind']=='note']
+    assert len(notes)==1
+
+
+def test_select_prompt_exposes_question_evidence_shape(build):
+    e,p,s=build()
+    e.add(request(text='Yoga, painting, and swimming are my activities.'))
+    search(e,'Besides yoga, what other activities do I have?')
+    prompt=next(content for name,content in p.calls if name=='select_memory')
+    assert 'distinct occurrences outside it' in prompt
+    assert 'named topic is a boundary' in prompt
+
 def test_failed_batch_does_not_block_or_retry_old_material(build):
     e,p,s=build(reflection_batch=2); p.fail_tool='organize_memory'
     e.add(request('a')); assert e.add(request('b','June trip.'))['success']
