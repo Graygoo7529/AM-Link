@@ -1,5 +1,17 @@
 # 项目记忆
 
+## 服务器已部署（2026-10-31，优先于下方部署准备记录）
+
+用户已提交稳定版`1f9136563bdc3d56d0425d57000739adb8dc0379`并明确授权部署。现网为`0.3.4-continuity / DB301 / passages-v2`，`https://121.43.49.84/amlink/`；Add/Search路径在此前缀下，Health必须用`/amlink/health`，原`/health`属于原有网站。先读`docs/doing/2026-10-31-server-deployment.md`与`deploy/README.md`。本轮生产源码未改，仅更新部署文档；未自动提交、未申请官方Smoke/Full。
+
+实际发布包为`amlink/data/releases/1f91365/amlink-0.3.4-continuity.tar.gz`，SHA256`1bea272338b0b5a3d8da0701ceb7fac189c1091c9cf06049157da6b900665114`；干净提交、21项文件哈希核验通过，区别于下方旧未提交包。Ubuntu24.04、隔离Python3.13.14、锁定21项Linux依赖已验证；单进程systemd开机启动，仅127.0.0.1:8080。库在`/var/lib/amlink/memory.sqlite3`，代码`/opt/amlink/current`，配置`/etc/amlink/amlink.env`。本期新Bearer接口密钥保存本地忽略的`docs/private/amlink-server.env`，不要输出或提交其中模型密钥。SSH已固定host key，不改系统Python或本机依赖。
+
+表单填写用独立私有清单`docs/private/amlink-submission.md`只包含接口密钥与地址/版本，不包含模型凭据；优先给用户该文件链接。
+
+内部与公网两套真实模型合成smoke通过（鉴权、4份并发相同Add幂等、冲突重放拒绝、隔离、更新值可检索）；另16用户两批共32/32Add、16/16Search、16/16整理，最慢第二批Add19.565秒、Search9.274秒，进程组内存峰值约85.7MiB。重启后同一合成用户检索成功、DB完整性ok；当前18个部署合成用户、260原文/episode、95note、36凭据，没有官方数据。无错误重试、无Answer、无研究I/O记录；不要声称已验证长历史full容量或精确模型用量。
+
+可信IP HTTPS已验证，AM-Link的HTTP入口308转HTTPS；原站/hello、/health响应hash不变。复用既有6小时证书续期定时器，最近执行成功；当前证书至11月4日08:18:42UTC，需正常续期。最新官方机器契约Add并发16–64、Search16–256，不沿用旧4/1建议。网关1800秒且不重发，方法1740秒；服务崩溃重启不等于请求重试。官方二期结束后不强制持续公开接口，官方数据生命周期仍须按任务完成后的30天条款处理。证据与脚本在忽略的`amlink/data/deployment31/`，原站配置备份在服务器`/root/amlink-deploy-20261031/public-web.before`；回退不删除库、不覆盖未来站点改动。
+
 ## 当前交付（2026-10-31，优先于下方历史状态）
 
 生产唯一版本为 **0.3.4-continuity / DB301 / passages-v2**。先读 `docs/doing/2026-10-31-continuity-budget-implementation.md`、`docs/phase-3/2026-10-31-continuity-budget-execution-plan.md` 与 `deploy/README.md`。用户要求收敛稳定版本、准备服务器部署；本轮未提交、未部署、未申请官方评测。

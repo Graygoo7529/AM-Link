@@ -4,6 +4,8 @@
 
 最新：[连续检索与稳定版本实施核对](doing/2026-10-31-continuity-budget-implementation.md)、[执行计划](phase-3/2026-10-31-continuity-budget-execution-plan.md)、[部署说明](../deploy/README.md)。最终发布包与历史实验使用不同源码身份，工程完成不代表语义质量通过。下方是此前阶段记录。
 
+已实际部署固定提交`1f91365`：[服务器部署记录、真实验证与提交接口](doing/2026-10-31-server-deployment.md)。官方Smoke/Full未开始。
+
 1. [方法设计与Add/Search](../DESIGN.md)
    · [此前：两组真实验证与后续方向](doing/2026-10-30-intent-validation-findings.md)、[执行计划核对](phase-3/2026-10-30-intent-validation-plan.md)、[成本与中断台账](doing/2026-10-30-intent-validation-ledger.md)、[四个新案例](../research/cases/2026-10-30-intent-studies.md)；提示对照未证明稳定整体收益，生产未改。
    · [此前分析：从主题相关到回答所需的证据选择](phase-3/2026-10-30-selection-mechanism-review.md)（只读复核、轨迹更正与待讨论方向）
@@ -22,4 +24,4 @@
 
 过期二期计划与执行台账已移至 [研究归档](../archive/research/20261030-consolidation/README.md)，代码与同期设计另有 [r11完整归档](../archive/phase-2/20261029-clean-rebuild/)。历史“当前状态”不可覆盖今天事实。
 
-2026-10-31重新核验官方[接入指南](https://agentmemoryleaderboard.ai/api-guide)：模型限制、同步Add、30分钟期限、user_id范围、Top K与调用方重试均已对照本版。运行与提交事项见部署说明；尚未实际部署或通过官方smoke。
+2026-10-31重新核验官方[接入指南](https://agentmemoryleaderboard.ai/api-guide)：模型限制、同步Add、30分钟期限、user_id范围、Top K与调用方重试均已对照本版。最新机器契约最低Add/Search并发均为16，已完成相应合成检查；实际部署完成，尚未通过官方Smoke。
