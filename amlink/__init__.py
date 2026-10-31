@@ -1,1 +1,1 @@
-__version__ = "0.3.3-evidence-closure"
+__version__ = "0.3.4-continuity"

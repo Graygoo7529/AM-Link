@@ -208,7 +208,7 @@ def test_two_pass_search_from_observed_link(build):
     e.add(request('b','Rowan lives in Ghent.',session='two'))
     rows=[r for r in s.corpus('u') if r['kind']=='episode']
     looked_up=[]
-    def query(q,c,d):
+    def query(q,c,d,**kwargs):
         looked_up.append(q)
         return [next(r for r in rows if ('Ghent' if q=='Rowan lives' else 'Maya') in r['text'])|{'score':1}]
     e._query=query
@@ -220,6 +220,14 @@ def test_two_pass_search_from_observed_link(build):
     search(e,'Where does the friend of Maya live?')
     assert count[0]==1 and sum(name=='finalize_evidence' for name,_ in p.calls)==1
     assert looked_up==['Where does the friend of Maya live?','Rowan lives']
+    first=next(content for name,content in p.calls if name=='select_memory')
+    final=next(content for name,content in p.calls if name=='finalize_evidence')
+    assert 'Stable ref: memory:episode/' in first
+    assert 'Estimated delivery cost for shown units' in first
+    assert 'Retrieval continuity ledger' in final
+    assert 'Previously selected ranges to preserve' in final
+    assert 'Stable refs identify the same range across passes' in final
+    assert 'branch_query' in final and '补主体或指代桥接' in final
 
 def test_source_time_is_readable_and_unchanged(build):
     e,p,s=build(); e.add(request(text='I went yesterday.'))

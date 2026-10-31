@@ -66,7 +66,7 @@ def test_unread_preview_opens_new_original_and_keeps_prior_evidence(build):
     e.add(request('a','Known purchase: a pump for 18.',session='first'))
     e.add(request('b','Another purchase: a lamp for 37.',session='second'))
     rows=[r for r in s.corpus('u') if r['kind']=='episode']
-    e._query=lambda q,c,d:[r|{'score':1-i*.1} for i,r in enumerate(rows)]
+    e._query=lambda q,c,d,**kwargs:[r|{'score':1-i*.1} for i,r in enumerate(rows)]
     def first(content,schema):
         n=int(re.search(r'\[(\d+)\] UNREAD preview',content)[1])
         return {'positions':[1],'queries':[],'read_more':[n]}
@@ -83,7 +83,7 @@ def test_selected_preview_must_be_opened_and_finalized_before_delivery(build):
     e,p,s=build(candidate_limit=1)
     for i in range(3):e.add(request(str(i),f'Private fact {i}.',session=str(i)))
     rows=[r for r in s.corpus('u') if r['kind']=='episode']
-    e._query=lambda q,c,d:[r|{'score':1} for r in rows]
+    e._query=lambda q,c,d,**kwargs:[r|{'score':1} for r in rows]
     p.script['select_memory']=lambda c,sc:{'positions':[int(re.search(r'\[(\d+)\] UNREAD preview',c)[1])],'queries':[]}
     p.script['finalize_evidence']=lambda c,sc:{'positions':[]}
     assert search(e)==[]

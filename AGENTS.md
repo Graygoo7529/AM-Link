@@ -1,5 +1,27 @@
 # 项目记忆
 
+## 当前交付（2026-10-31，优先于下方历史状态）
+
+生产唯一版本为 **0.3.4-continuity / DB301 / passages-v2**。先读 `docs/doing/2026-10-31-continuity-budget-implementation.md`、`docs/phase-3/2026-10-31-continuity-budget-execution-plan.md` 与 `deploy/README.md`。用户要求收敛稳定版本、准备服务器部署；本轮未提交、未部署、未申请官方评测。
+
+已实施：Select模型可见语义ref、CARRIED标识、实际选择/补读/查询的连续性账本、候选路径与预计交付成本；仍只用局部整数positions。分支命中合并保留所有路径、note提示不被query标签遮蔽、补查用途传入Query观测。账本不是模型隐含推理或已满足证据槽认证；成本是保守估计，不保证集合完整。
+
+本轮百题continuity31：六类26完整历史，780/780 Add、100/100 Search、801/810整理、99/100 GPT-5.4 Answer完成。127次Select/27次末轮；351携入/220保留/131未再选择，不等于131错误；55read_more位置。2条query建议都重复原问题，实际无额外Query。3题装箱省略86个单位，不是86组。成本提示没有证明改善，不报新准确率。百题源码含随后撤回的Reflection提示/schema，不能称最终包逐字相同的100题验收。
+
+裁剪实验退出生产：cap四历史39/39Add、7/9Search，两次schema失败；三轮固定12候选区间协议分别5/12、8/12、8/12合法，第三轮成功调用均选整块。代码/测试已撤回，原始I/O和三版源码保存在忽略的 `research/data/continuity31-excerpts/`。没有默认关闭的区间功能或兜底。capfix沙箱15网络失败、0/15Add和空库6Search单列，不能算完整历史。额外更严Reflection提示/schema也已撤回，原提交前数量/来源验证及诊断保留。
+
+最终冻结源码 stable31 三类完整历史：38/38 Add、15/15 Search、37/38整理；1次note数量超限，未丢原文。168真实模型响应，无网络失败；15次交付原文范围/预算与源码哈希复核通过，未运行Answer。159回归＋5子测试通过。发布包从独立目录启动真实HTTP，鉴权、格式、4份并发同请求幂等、换内容拒绝、原文更新、隔离和重启后检索通过；新库2来源/2episode/2凭据/2working/0reflection。临时服务已停。
+
+部署包在 `amlink/data/releases/amlink-0.3.4-continuity.tar.gz`；21个清单文件＋manifest，含固定依赖、单进程systemd/nginx配置、包核验与合成HTTP smoke脚本；不含研究/数据/凭据。SHA256 `08975d7da9a927864d766a0f327ae1f8ca464ecaba7bdac8f53ecd4ff3c4106f`。基线f67e9ed且工作区未提交，manifest如实标记，不能把该commit当完整包身份。Python3.13/Windows已验证；Linux安装、TLS、官方full容量和官方smoke尚未验证。部署准备只支持Textual。
+
+本轮已观测5,123模型尝试/5,108响应，32,935,932输入字符、7,942,791输入tokens/317,342输出tokens、缓存51,968；15差额是网络失败。HTTP生产入口不记模型I/O，两个进程合计预算上界60调用/60万字符；全轮保守上界5,183调用/33,535,932字符，未超6,200/6,000万。凭据、默认库和本机依赖未变，不再需要为已授权公开数据与端点重复询问。正式官方数据不能混入公开研究库。真实原文浏览器访问禁令仍有效，只做文件/静态检查。
+
+2026-10-31核验官方指南：学术榜mini/v4、同步Add立即可检索、user_id隔离、top_k100与30分钟期限；调用方重试。完整材料截止10月31日23:59 UTC+8，评测截止11月4日23:59。部署/提交时以官网复核为准。
+
+研究页已重新构建：11数据集、41案例、45研究登记、165运行/544问题条目；全部材料身份校验通过，含重复与失败，不是统一准确率分母。
+
+## 下方为此前阶段记录（保留原轮分母与结论）
+
 ## 当前轮更新（2026-10-31）
 
 本轮按 `docs/phase-3/2026-10-31-search-evidence-improvement-plan.md` 实施了 Search 证据闭合、Select 任务形状提示和 Reflection 同来源近似去重。当前 `amlink/` 版本为 `0.3.3-evidence-closure`；`context_closure` 优先在同一 episode 内、必要时从已披露的同会话即时前一 episode 为代词/短确认/承接句补原文单位，模型选择与程序闭合在观测中分开记录。Search/Add 对外契约、原子接收、无内部重试和默认模型配置不变。`.venv\\Scripts\\python.exe -m pytest amlink/tests -q -ra` 结果为 63 passed。
@@ -17,6 +39,8 @@
 Reflection 806/810 成功，4 次 schema/source/note-limit 错误没有使 Add 失败，但说明长尾整理协议仍不稳定。完整分析见 `docs/doing/2026-10-31-fresh100-current-method-findings.md`。当前最明确的下一步是把已有观测和 `carry` 转成模型可读的检索连续性账本，并离线验证最终装箱的证据槽闭合；本轮尚未改变生产 Add/Search。
 
 研究页面已重新构建并登记本轮：11 datasets、41 cases、45 studies、131 runs、414 questions；页面和运行工件都位于忽略的数据路径，未改历史分母。
+
+根因归纳和下一阶段方向见 `docs/phase-3/2026-10-31-root-causes-and-improvement-directions.md`；优先级是连续性账本、模型可见稳定 ref、交付预算前移和 Reflection 来源导航稳定，不恢复自由 BFS 或 Search 内 Answer。
 
 ## 当前状态（2026-10-30）
 

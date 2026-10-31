@@ -52,6 +52,21 @@ def test_navigation_does_not_take_all_primary_slots(build):
     assert offered[0]['score']==0 and offered[0]['routes'][0]['kind']=='note'
 
 
+def test_query_provenance_keeps_note_navigation_hint(build):
+    e,_,s=build()
+    e.add(request('a','Maya visited Paris.'))
+    row=episodes(s)[0]
+    paths=[{'kind':'branch_query','query':'Maya travels','purpose':'navigation'},
+           {'kind':'branch_query','query':'Maya location','purpose':'comparison'}]
+    note={'ref':'memory:note/trip','kind':'note','title':'Trip navigation',
+          'support_refs':[row['ref']],'score':1,'query_route':paths[0],'query_routes':paths}
+    offered,_=e._disclose([note],[row,note])
+    assert offered[0]['routes'][0]['kind']=='note'
+    assert offered[0]['routes'][0]['query_routes']==paths
+    _,content,_=e._menu(offered)
+    assert 'Index hints (not evidence): Trip navigation' in content
+
+
 def test_old_note_search_scope_excludes_current_original_competition(build):
     e,p,s=build(reflection_batch=2)
     e.add(request('a','Orchid project shipped.'));e.add(request('b','Orchid project completed.'))

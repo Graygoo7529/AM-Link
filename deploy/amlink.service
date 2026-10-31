@@ -1,0 +1,28 @@
+[Unit]
+Description=AM-Link memory API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=amlink
+Group=amlink
+WorkingDirectory=/opt/amlink/current
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/amlink/venv/bin/python -m amlink --env-file /etc/amlink/amlink.env --host 127.0.0.1 --port 8080
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=1800
+KillSignal=SIGTERM
+StateDirectory=amlink
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/amlink
+
+[Install]
+WantedBy=multi-user.target

@@ -142,6 +142,27 @@ def unit_key(unit):
     return (unit['row']['ref'],unit['start'],unit['end'])
 
 
+def model_ref(unit):
+    """Stable, semantic reference for one exact original range.
+
+    The local position used by a Select tool is intentionally ephemeral.  This
+    reference is safe to repeat in the narrative and the observation ledger so
+    that a later Select can recognize the same source range.
+    """
+    row=unit['row']
+    base=row['ref'].rsplit('#',1)[0]
+    return f"{base}#{unit['start']}:{unit['end']}"
+
+
+def delivery_cost(unit):
+    """Conservative per-unit delivery estimate used before Select.
+
+    A final package shares a passage header between units, so this is an
+    upper-bound estimate rather than a promise of the exact packed size.
+    """
+    return len(render_group([unit],1))+64
+
+
 _CONTEXT_PRONOUN=re.compile(
     r"(?:\b(?:it|they|them|he|she|her|his|their|this|that|these|those|another|one)\b|"
     r"它|他|她|其|这|那|这些|那些|上述|这个|那个)",
