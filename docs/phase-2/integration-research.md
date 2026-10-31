@@ -30,6 +30,8 @@
 
 ## Add/Search 边界
 
+2026-10-30本轮专项核对：官方[API指南](https://agentmemoryleaderboard.ai/api-guide)搜索索引明确query为original benchmark question，可有options，没有独立intent或answerability字段；本地schemas一致。直接页面访问超时，因此本轮依据官方索引内容与本地合同，不声称重新核验全部运行规则。问题本身表达任务意图；Search返回证据，不要求提交内部充分性说明或最终答案。实测与含义见[验证报告](../doing/2026-10-30-intent-validation-findings.md)。
+
 文本接口外壳基本沿用一期：Add 接收 `request_id/messages/user_id/session_id`，成功返回 `success=true` 和原样三个 ID；Search 接收 `query/user_id/top_k`、可选顶层 `options`，返回按相关性排序的 `data`，其中 `id/content` 必需。原文写入后立即可检索，Search 只返回证据；正式 `top_k=100`，超过数量会报协议错误。
 
 普通文本分块以 20 条消息或 2,000 个 Adapter 计数的词为边界；Streaming 按增量单元写入，同一问题可能在不同记忆阶段重复检索。单次 Add/Search 最长 30 分钟。同步为默认；202 仅适用于已经审核绑定状态查询地址的版本。

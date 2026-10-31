@@ -41,6 +41,18 @@
       "id": "continuation30-public-r1",
       "label": "continuation · 六类18历史61题",
       "plan": "research/benchmark/data/plans/continuation30-public-r1"
+    },
+    {
+      "description": "四类6份完整历史168 Add；两臂同一24题，各自新库。保留mini评分与独立复核；r2观测缺失中断不入分母，生产未改。",
+      "id": "intent30-new-baseline-r3",
+      "label": "intent30 · 基线 · 24题配对",
+      "plan": "research/benchmark/data/plans/intent30-new-baseline-r3"
+    },
+    {
+      "description": "四类6份完整历史168 Add；两臂同一24题，各自新库。保留mini评分与独立复核；r2观测缺失中断不入分母，生产未改。",
+      "id": "intent30-new-increment-r3",
+      "label": "intent30 · 仅整理增量提示 · 24题配对",
+      "plan": "research/benchmark/data/plans/intent30-new-increment-r3"
     }
   ],
   "version": 1

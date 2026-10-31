@@ -2564,6 +2564,352 @@
         "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。"
       }
     },
+    "r16": {
+      "add": "保留原文、说话日期和会话邻接。",
+      "answer": "比较年份并保留原句精度；身份不明不能猜。",
+      "checks": {
+        "add": "保留原文、说话日期和会话邻接。",
+        "answer": "比较年份并保留原句精度；身份不明不能猜。",
+        "search": "共同选择命名上下文与领养时间，不把代词句独立丢弃。"
+      },
+      "data": {
+        "dataset": "locomo",
+        "pack": "dataset/data/prepared/locomo-full.json",
+        "record": "conv-48",
+        "task": "qa-55",
+        "turns": []
+      },
+      "document": "2026-10-30-intent-studies.md",
+      "evidence_plan": [
+        {
+          "fact": "命名语境＋两年／去年",
+          "sources": [],
+          "use": "共同选择命名上下文与领养时间，不把代词句独立丢弃。"
+        }
+      ],
+      "left": "命名语境＋两年／去年",
+      "leftId": "需要的依据",
+      "link": "身份与时间共同支持比较",
+      "mark": "→",
+      "name": "R16 领养先后：时间与所指一起交付",
+      "q": "两只宠物，哪只更晚领养？",
+      "right": "两条领养信息对应不同宠物",
+      "rightId": "应保持的关系",
+      "search": "共同选择命名上下文与领养时间，不把代词句独立丢弃。",
+      "source": "locomo · conv-48 · 本轮完整历史配对",
+      "studies": [
+        {
+          "basis": "模型真实输入输出、Search交付与保存Answer；docs/doing/2026-10-30-intent-validation-findings.md",
+          "dataset_pack_sha256": "2842dd07872676f71e83201bccd3f09e485df24d274f32aee53ba1c84a9e6085",
+          "limits": "两臂同一公开历史、单次真实运行；不是独立泛化成绩。生产方法未改；完整模型I/O可读。",
+          "next_experiment": "围绕任务所需事实、所指前文和适用范围组织共同证据；先验证再实施，不加案例关键词特例。",
+          "observed": "基线保留第10块去年领养并答对；增量组同样读到10号却没选，最终无法确定。",
+          "run_id": "intent30-baseline-r3-00-locomo",
+          "span_ids": [
+            "16fce6c3253b444885554352e6cf0fd6",
+            "89cefdaf67f9468dadadb4b0084dea9b",
+            "5b7788d353f94331af94bfab9d1724cf",
+            "8c7551437e414c3fb724deab0971c670"
+          ],
+          "theory": {
+            "add": "保留原文、说话日期和会话邻接。",
+            "answer": "比较年份并保留原句精度；身份不明不能猜。",
+            "evidence": "命名语境＋两年／去年；两条领养信息对应不同宠物",
+            "search": "共同选择命名上下文与领养时间，不把代词句独立丢弃。"
+          },
+          "title": "intent30：原提示基线"
+        },
+        {
+          "basis": "模型真实输入输出、Search交付与保存Answer；docs/doing/2026-10-30-intent-validation-findings.md",
+          "dataset_pack_sha256": "2842dd07872676f71e83201bccd3f09e485df24d274f32aee53ba1c84a9e6085",
+          "limits": "两臂同一公开历史、单次真实运行；不是独立泛化成绩。生产方法未改；完整模型I/O可读。",
+          "next_experiment": "围绕任务所需事实、所指前文和适用范围组织共同证据；先验证再实施，不加案例关键词特例。",
+          "observed": "基线保留第10块去年领养并答对；增量组同样读到10号却没选，最终无法确定。",
+          "run_id": "intent30-increment-r3-00-locomo",
+          "span_ids": [
+            "19ca78b9392f4c23b6c87982875f474a",
+            "bab66779459c4587a525a3383e0e82ba",
+            "93a0ae19ff6d43ffae9e8feb247193da",
+            "d05bace29a014fcca4adf5df104bcf62"
+          ],
+          "theory": {
+            "add": "保留原文、说话日期和会话邻接。",
+            "answer": "比较年份并保留原句精度；身份不明不能猜。",
+            "evidence": "命名语境＋两年／去年；两条领养信息对应不同宠物",
+            "search": "共同选择命名上下文与领养时间，不把代词句独立丢弃。"
+          },
+          "title": "intent30：仅Reflection增量提示"
+        }
+      ],
+      "trap": "基线保留第10块去年领养并答对；增量组同样读到10号却没选，最终无法确定。",
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。"
+      }
+    },
+    "r17": {
+      "add": "保存不同活动事实，导航避免只重写同主题。",
+      "answer": "按已知活动列举，不把局部清单称完整。",
+      "checks": {
+        "add": "保存不同活动事实，导航避免只重写同主题。",
+        "answer": "按已知活动列举，不把局部清单称完整。",
+        "search": "理解排除已知主题的意图，以其它活动表达查询并组合证据。"
+      },
+      "data": {
+        "dataset": "locomo",
+        "pack": "dataset/data/prepared/locomo-full.json",
+        "record": "conv-48",
+        "task": "qa-88",
+        "turns": []
+      },
+      "document": "2026-10-30-intent-studies.md",
+      "evidence_plan": [
+        {
+          "fact": "问题排除已知瑜伽",
+          "sources": [],
+          "use": "理解排除已知主题的意图，以其它活动表达查询并组合证据。"
+        }
+      ],
+      "left": "问题排除已知瑜伽",
+      "leftId": "需要的依据",
+      "link": "向其它活动展开",
+      "mark": "→",
+      "name": "R17 除此之外：检索不要困在已知主题",
+      "q": "除了瑜伽，Deborah还有什么活动？",
+      "right": "骑车／看展／冲浪／园艺原文已存",
+      "rightId": "应保持的关系",
+      "search": "理解排除已知主题的意图，以其它活动表达查询并组合证据。",
+      "source": "locomo · conv-48 · 本轮完整历史配对",
+      "studies": [
+        {
+          "basis": "模型真实输入输出、Search交付与保存Answer；docs/doing/2026-10-30-intent-validation-findings.md",
+          "dataset_pack_sha256": "2842dd07872676f71e83201bccd3f09e485df24d274f32aee53ba1c84a9e6085",
+          "limits": "两臂同一公开历史、单次真实运行；不是独立泛化成绩。生产方法未改；完整模型I/O可读。",
+          "next_experiment": "围绕任务所需事实、所指前文和适用范围组织共同证据；先验证再实施，不加案例关键词特例。",
+          "observed": "两组Query和可见目录都缺其它具体活动，虽库内有原文及部分note；没有进一步query。",
+          "run_id": "intent30-baseline-r3-00-locomo",
+          "span_ids": [
+            "8020c4bd3e7e45c384feebf538e1901c",
+            "70dd9dc8fb0c41ee9af565b85f658ecd",
+            "cfbb9a0dd2224938848baa5efcdcdadc",
+            "d34180e31b1b441792b877fec76b4263",
+            "1b341b4bf88741b3b19f85184f3f6fb1",
+            "e8dd68bc66c0468db228d28390980f33"
+          ],
+          "theory": {
+            "add": "保存不同活动事实，导航避免只重写同主题。",
+            "answer": "按已知活动列举，不把局部清单称完整。",
+            "evidence": "问题排除已知瑜伽；骑车／看展／冲浪／园艺原文已存",
+            "search": "理解排除已知主题的意图，以其它活动表达查询并组合证据。"
+          },
+          "title": "intent30：原提示基线"
+        },
+        {
+          "basis": "模型真实输入输出、Search交付与保存Answer；docs/doing/2026-10-30-intent-validation-findings.md",
+          "dataset_pack_sha256": "2842dd07872676f71e83201bccd3f09e485df24d274f32aee53ba1c84a9e6085",
+          "limits": "两臂同一公开历史、单次真实运行；不是独立泛化成绩。生产方法未改；完整模型I/O可读。",
+          "next_experiment": "围绕任务所需事实、所指前文和适用范围组织共同证据；先验证再实施，不加案例关键词特例。",
+          "observed": "两组Query和可见目录都缺其它具体活动，虽库内有原文及部分note；没有进一步query。",
+          "run_id": "intent30-increment-r3-00-locomo",
+          "span_ids": [
+            "5309a13c971742448f16c74776d0c78d",
+            "aefa3e16bade4f3591ffd9a026d5c2d1",
+            "07e346e4fad045f9a985e0f81bf82550",
+            "ff7ba612b31c4f1a906060be86b90544"
+          ],
+          "theory": {
+            "add": "保存不同活动事实，导航避免只重写同主题。",
+            "answer": "按已知活动列举，不把局部清单称完整。",
+            "evidence": "问题排除已知瑜伽；骑车／看展／冲浪／园艺原文已存",
+            "search": "理解排除已知主题的意图，以其它活动表达查询并组合证据。"
+          },
+          "title": "intent30：仅Reflection增量提示"
+        }
+      ],
+      "trap": "两组Query和可见目录都缺其它具体活动，虽库内有原文及部分note；没有进一步query。",
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。"
+      }
+    },
+    "r18": {
+      "add": "保留连续对话，区分书籍与电影喜好。",
+      "answer": "依据电影原文列举，不以喜欢书籍替代电影。",
+      "checks": {
+        "add": "保留连续对话，区分书籍与电影喜好。",
+        "answer": "依据电影原文列举，不以喜欢书籍替代电影。",
+        "search": "片名问句与本人回答共同保留，不能只选含态度的句子。"
+      },
+      "data": {
+        "dataset": "locomo",
+        "pack": "dataset/data/prepared/locomo-full.json",
+        "record": "conv-43",
+        "task": "qa-65",
+        "turns": []
+      },
+      "document": "2026-10-30-intent-studies.md",
+      "evidence_plan": [
+        {
+          "fact": "看过哈利波特电影吗？",
+          "sources": [],
+          "use": "片名问句与本人回答共同保留，不能只选含态度的句子。"
+        }
+      ],
+      "left": "看过哈利波特电影吗？",
+      "leftId": "需要的依据",
+      "link": "前文给对象，回答给态度",
+      "mark": "→",
+      "name": "R18 电影喜好：展开后又丢掉前文",
+      "q": "Tim喜欢哪些奇幻电影？",
+      "right": "看过，喜欢与原著比较",
+      "rightId": "应保持的关系",
+      "search": "片名问句与本人回答共同保留，不能只选含态度的句子。",
+      "source": "locomo · conv-43 · 本轮完整历史配对",
+      "studies": [
+        {
+          "basis": "模型真实输入输出、Search交付与保存Answer；docs/doing/2026-10-30-intent-validation-findings.md",
+          "dataset_pack_sha256": "2503ab990f855d0603d1f8b7160de503412f2f4f4ce6fa3d8e95655b42fa1852",
+          "limits": "两臂同一公开历史、单次真实运行；不是独立泛化成绩。生产方法未改；完整模型I/O可读。",
+          "next_experiment": "围绕任务所需事实、所指前文和适用范围组织共同证据；先验证再实施，不加案例关键词特例。",
+          "observed": "增量组正确请求50号哈利波特问句并展开，末轮却删掉问句、只留12号代词回答；基线也缺哈利波特电影依据。",
+          "run_id": "intent30-baseline-r3-01-locomo",
+          "span_ids": [
+            "35212259caea465396501fc0d0441b5d",
+            "431a7fe85c2348d58fb556976bd6a1a2",
+            "413dd4e4e2c846478c9b0c688afa1ddb",
+            "71f04f0fd72a4af09b51624b42782278",
+            "09deab2d06a9469087e067088e22847e",
+            "fb103a1d57c441f9b68a95674295772c"
+          ],
+          "theory": {
+            "add": "保留连续对话，区分书籍与电影喜好。",
+            "answer": "依据电影原文列举，不以喜欢书籍替代电影。",
+            "evidence": "看过哈利波特电影吗？；看过，喜欢与原著比较",
+            "search": "片名问句与本人回答共同保留，不能只选含态度的句子。"
+          },
+          "title": "intent30：原提示基线"
+        },
+        {
+          "basis": "模型真实输入输出、Search交付与保存Answer；docs/doing/2026-10-30-intent-validation-findings.md",
+          "dataset_pack_sha256": "2503ab990f855d0603d1f8b7160de503412f2f4f4ce6fa3d8e95655b42fa1852",
+          "limits": "两臂同一公开历史、单次真实运行；不是独立泛化成绩。生产方法未改；完整模型I/O可读。",
+          "next_experiment": "围绕任务所需事实、所指前文和适用范围组织共同证据；先验证再实施，不加案例关键词特例。",
+          "observed": "增量组正确请求50号哈利波特问句并展开，末轮却删掉问句、只留12号代词回答；基线也缺哈利波特电影依据。",
+          "run_id": "intent30-increment-r3-01-locomo",
+          "span_ids": [
+            "c4a9c9d7a4d24974bd9a0266f1de97b8",
+            "cf910679d28a4949b4c205518ac6829a",
+            "4bf0558565ba42bd83d2a454e5a7794f",
+            "df82e35e0eed4e73898ff0345fa2a9cc",
+            "b7fea58a41994064a8192a52eab460df",
+            "30c1ed38040a4c48a74546b876354078"
+          ],
+          "theory": {
+            "add": "保留连续对话，区分书籍与电影喜好。",
+            "answer": "依据电影原文列举，不以喜欢书籍替代电影。",
+            "evidence": "看过哈利波特电影吗？；看过，喜欢与原著比较",
+            "search": "片名问句与本人回答共同保留，不能只选含态度的句子。"
+          },
+          "title": "intent30：仅Reflection增量提示"
+        }
+      ],
+      "trap": "增量组正确请求50号哈利波特问句并展开，末轮却删掉问句、只留12号代词回答；基线也缺哈利波特电影依据。",
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。"
+      }
+    },
+    "r19": {
+      "add": "将文件原文、旧问答与实例属性分别保留。",
+      "answer": "按已知条件作分析，缺实例性质就保留条件分支。",
+      "checks": {
+        "add": "将文件原文、旧问答与实例属性分别保留。",
+        "answer": "按已知条件作分析，缺实例性质就保留条件分支。",
+        "search": "交付所需规则和限制，避免只召回旧助手结论。"
+      },
+      "data": {
+        "dataset": "life",
+        "pack": "dataset/data/prepared/clbench-life-extra.json",
+        "record": "75121251-319e-f2d7-985c-112d0f76579f",
+        "task": "75121251-319e-f2d7-985c-112d0f76579f",
+        "turns": []
+      },
+      "document": "2026-10-30-intent-studies.md",
+      "evidence_plan": [
+        {
+          "fact": "文件中的条件规则",
+          "sources": [],
+          "use": "交付所需规则和限制，避免只召回旧助手结论。"
+        }
+      ],
+      "left": "文件中的条件规则",
+      "leftId": "需要的依据",
+      "link": "规则与适用条件分开",
+      "mark": "→",
+      "name": "R19 新实例：旧结论不能直接套用",
+      "q": "根据文件判断另一笔款项的分类",
+      "right": "新实例的具体性质仍未知",
+      "rightId": "应保持的关系",
+      "search": "交付所需规则和限制，避免只召回旧助手结论。",
+      "source": "clbench-life · 75121251-319e-f2d7-985c-112d0f76579f · 本轮完整历史配对",
+      "studies": [
+        {
+          "basis": "模型真实输入输出、Search交付与保存Answer；docs/doing/2026-10-30-intent-validation-findings.md",
+          "dataset_pack_sha256": "402acdbabab99f95f247ac814a1138ca3f58cebaa9477f7653dff8adf398bab2",
+          "limits": "两臂同一公开历史、单次真实运行；不是独立泛化成绩。生产方法未改；完整模型I/O可读。",
+          "next_experiment": "围绕任务所需事实、所指前文和适用范围组织共同证据；先验证再实施，不加案例关键词特例。",
+          "observed": "增量组补回样本文件中loss of support规则，但两组仍把上一笔款项的定性套给新款项；不属于现实税务建议。",
+          "run_id": "intent30-baseline-r3-05-clbench-life",
+          "span_ids": [
+            "56dad369314c48ddb6d8406ca60cb1c7",
+            "a3488a012b7849cc889c557e4aa15984",
+            "21ab8727bb0f4eac99ca11f2e3d9cd63",
+            "3803bae57fb441eda39d6f8cacc48f7b",
+            "aec02b24422a40a893ab3e2a957b768d",
+            "62f5cdb44fde4f4eb6ed4bda30b355ed"
+          ],
+          "theory": {
+            "add": "将文件原文、旧问答与实例属性分别保留。",
+            "answer": "按已知条件作分析，缺实例性质就保留条件分支。",
+            "evidence": "文件中的条件规则；新实例的具体性质仍未知",
+            "search": "交付所需规则和限制，避免只召回旧助手结论。"
+          },
+          "title": "intent30：原提示基线"
+        },
+        {
+          "basis": "模型真实输入输出、Search交付与保存Answer；docs/doing/2026-10-30-intent-validation-findings.md",
+          "dataset_pack_sha256": "402acdbabab99f95f247ac814a1138ca3f58cebaa9477f7653dff8adf398bab2",
+          "limits": "两臂同一公开历史、单次真实运行；不是独立泛化成绩。生产方法未改；完整模型I/O可读。",
+          "next_experiment": "围绕任务所需事实、所指前文和适用范围组织共同证据；先验证再实施，不加案例关键词特例。",
+          "observed": "增量组补回样本文件中loss of support规则，但两组仍把上一笔款项的定性套给新款项；不属于现实税务建议。",
+          "run_id": "intent30-increment-r3-05-clbench-life",
+          "span_ids": [
+            "f9054f32be094f739363132092c2f80c",
+            "6f89fc602e564b12aa17c0dca5fe1762",
+            "399df5418b4a4acfa19c82ab8b61a751",
+            "f0fed43075534b2d88ac90b5455a3fe5",
+            "43bab26a1a404969bac8424cbe98b597",
+            "77c4a08bccbb4e63b06f2500e3366f1d"
+          ],
+          "theory": {
+            "add": "将文件原文、旧问答与实例属性分别保留。",
+            "answer": "按已知条件作分析，缺实例性质就保留条件分支。",
+            "evidence": "文件中的条件规则；新实例的具体性质仍未知",
+            "search": "交付所需规则和限制，避免只召回旧助手结论。"
+          },
+          "title": "intent30：仅Reflection增量提示"
+        }
+      ],
+      "trap": "增量组补回样本文件中loss of support规则，但两组仍把上一笔款项的定性套给新款项；不属于现实税务建议。",
+      "watch": {
+        "add": "输入 → 保存/更新产物及出处；成功后是否立即可检索。",
+        "answer": "实际采用的上下文 → 回答 → 评分依据；缺少记录时标记未知。",
+        "search": "候选 → 分数/过滤 → 返回结果；保留未选中候选与原因（若实现提供）。"
+      }
+    },
     "v31": {
       "add": "仅取事件 timestamp < 问题 timestamp；独立保存动作与内容身份，排除未来与生成标签。",
       "answer": "作者首选候选 15；其未来正反馈只用于评估，不能作为回答时的证据。",
@@ -2753,7 +3099,8 @@
         "c1",
         "c2",
         "r09",
-        "r15"
+        "r15",
+        "r19"
       ],
       "downloadNote": "完整 JSONL 已保存并校验；使用评测用途许可，不写入 Git。",
       "links": [
@@ -2775,7 +3122,10 @@
         "l4",
         "r01",
         "r04",
-        "r05"
+        "r05",
+        "r16",
+        "r17",
+        "r18"
       ],
       "downloadNote": "文本 JSON 已齐；本机没有图片本体。",
       "links": [

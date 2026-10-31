@@ -5,6 +5,7 @@ Graygoo7529 的原创记忆系统，面向 Agent Memory Leaderboard，只提供 
 2026-10-30：当前方法 `0.3.2-continuation` 已实施单一引用、连贯原文阅读块和未读候选续读；六类18完整历史555/555 Add、61/61 Search/Answer、604/606整理。真实效果与限制见[实施核对](docs/doing/2026-10-30-reading-continuation-implementation.md)和[台账](docs/doing/2026-10-30-reading-continuation-run-ledger.md)。接口完成不代表回答全对；尚未部署或正式参赛。
 
 - [方法设计与Add/Search](DESIGN.md) · [运行方法](amlink/README.md)
+- [最新：96组件＋24题配对真实验证](docs/doing/2026-10-30-intent-validation-findings.md) · [所指前文、排除意图与新实例案例](research/cases/2026-10-30-intent-studies.md)。本轮提示变化未证明整体收益，生产未改。
 - [记忆研究室：唯一页面](research/data/index.html) · [如何加载与更新](research/README.md)
 - [项目复盘与下一轮方法方案](docs/phase-3/2026-10-30-evidence-method-review.md)
 - [根因复核](docs/phase-3/2026-10-30-mechanism-audit-and-directions.md) · [改进执行计划](docs/phase-3/2026-10-30-reading-contract-execution-plan.md)
