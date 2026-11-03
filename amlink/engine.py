@@ -518,10 +518,26 @@ class Engine:
             content+='\n\nUNREAD candidates (selecting requests the full original, not delivery of this preview):\n'+directory_text
         properties={'positions':positions_schema(len(menu)+len(directory))}
         if not final:
-            properties['queries']={'type':'array','items':{'type':'string'}}
+            properties['queries']={'type':'array','items':{'type':'string'},'maxItems':2,
+                'description':'Zero, one, or two plain text strings: [] or ["query"] or ["query 1", "query 2"]. Never objects, never more than two strings.'}
             properties['read_more']=positions_schema(len(menu)+len(directory))
-            properties['read_more']['description']+=' Open unread candidates or surrounding context of read blocks; at most four numbers; [] when unnecessary.'
+            properties['read_more']['maxItems']=4
+            properties['read_more']['description']+=' Request additional reading for at most FOUR current-menu labels, not every candidate needing reading. Choose no more than four; use [] when unnecessary.'
+        # Constrain only Select's local menu; other tools keep their own contracts.
+        count=len(menu)+len(directory)
+        for name in ('positions','read_more'):
+            if name in properties:
+                if count:
+                    properties[name]['items']['enum']=list(range(1,count+1))
+                    properties[name]['items']['description']=f'One printed [N] label from THIS call: 1 to {count}. Never 0, source-text numbers, or labels from another call.'
+                else:
+                    properties[name]['maxItems']=0
+                    properties[name]['description']='No positions are offered in this pass; return [] only.'
         schema=object_schema(properties)
+        schema['description']=(f'Current menu: labels 1 to {count} only; 0 is invalid. ' if count else
+            'Current menu is empty; return no positions. ')+(
+            'Return positions only.' if final else
+            'Before submitting, check every label against this menu and count the arrays: queries <= 2; read_more <= 4.')
         mapping=[reading.ledger(u,i) for i,u in enumerate(menu,1)]+[
             reading.ledger({'row':r,'start':r['start'],'end':r['end']},len(menu)+i,'unread') for i,r in enumerate(directory,1)]
         with self.observer.span('select','Select：原文阅读、候选续读与交付预算',inputs={'question':request.query,'passages':content,
